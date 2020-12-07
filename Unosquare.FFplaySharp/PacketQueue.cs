@@ -146,7 +146,7 @@ namespace Unosquare.FFplaySharp
                     }
                     else
                     {
-                        IsAvailableEvent.Wait(10); // 50);
+                        IsAvailableEvent.Wait(10);
                     }
                 }
             }

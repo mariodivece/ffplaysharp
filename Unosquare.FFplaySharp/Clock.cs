@@ -51,7 +51,7 @@ namespace Unosquare.FFplaySharp
 
         public double Get()
         {
-            if (RelatedSerial != Serial)
+            if (SerialProvider != this && RelatedSerial != Serial)
                 return double.NaN;
 
             if (IsPaused)

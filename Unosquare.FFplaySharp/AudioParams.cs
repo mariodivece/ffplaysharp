@@ -2,7 +2,6 @@
 {
     using FFmpeg.AutoGen;
 
-
     public class AudioParams
     {
         public int Frequency { get; set; }

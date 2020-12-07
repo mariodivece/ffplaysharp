@@ -128,7 +128,7 @@
             public int last_audio_stream;
             public int last_subtitle_stream;
 
-            public AutoResetEvent continue_read_thread;
+            public AutoResetEvent continue_read_thread = new(false);
         }
 
         /* options specified by the user */
@@ -885,7 +885,7 @@
                 }
             }
 
-            ffmpeg.av_log(null, ffmpeg.AV_LOG_TRACE, $"video: delay={delay,-6:0.####} A-V={-diff,-6:0.####}\n");
+            ffmpeg.av_log(null, ffmpeg.AV_LOG_TRACE, $"video: delay={delay,-8:0.####} A-V={-diff,-8:0.####}\n");
 
             return delay;
         }
@@ -1083,9 +1083,9 @@
                         av_diff = get_master_clock(@is) - @is.audclk.Get();
 
                     var buf = new StringBuilder();
-                    buf.Append($"{get_master_clock(@is),-6:0.####} ");
+                    buf.Append($"{get_master_clock(@is),-8:0.####} ");
                     buf.Append((@is.audio_st != null && @is.video_st != null) ? "A-V" : (@is.video_st != null ? "M-V" : (@is.audio_st != null ? "M-A" : "   ")));
-                    buf.Append($":{av_diff,-6:0.####} ");
+                    buf.Append($":{av_diff,-8:0.####} ");
                     buf.Append($"fd={(@is.frame_drops_early + @is.frame_drops_late)} ");
                     buf.Append($"aq={(aqsize / 1024)}KB ");
                     buf.Append($"vq={(vqsize / 1024)}KB ");
@@ -1862,7 +1862,7 @@
             @is.audio_clock_serial = af.Serial;
             if (Debugger.IsAttached)
             {
-                Console.WriteLine($"audio: delay={(@is.audio_clock - last_audio_clock),-6:0.####} clock={@is.audio_clock,-6:0.####} clock0={audio_clock0,-6:0.####}");
+                Console.WriteLine($"audio: delay={(@is.audio_clock - last_audio_clock),-8:0.####} clock={@is.audio_clock,-8:0.####} clock0={audio_clock0,-8:0.####}");
                 last_audio_clock = @is.audio_clock;
             }
 
@@ -2496,7 +2496,7 @@
                         stream_has_enough_packets(@is.subtitle_st, @is.subtitle_stream, @is.subtitleq))))
                 {
                     /* wait 10 ms */
-                    @is.continue_read_thread.WaitOne(); // 10);
+                    @is.continue_read_thread.WaitOne(10);
                     continue;
                 }
                 if (!@is.paused &&
@@ -2536,7 +2536,7 @@
                             break;
                     }
 
-                    @is.continue_read_thread.WaitOne(); // 10);
+                    @is.continue_read_thread.WaitOne(10);
 
                     continue;
                 }
@@ -2607,12 +2607,6 @@
             @is.pictq = new(@is.videoq, Constants.VIDEO_PICTURE_QUEUE_SIZE, true);
             @is.subpq = new(@is.subtitleq, Constants.SUBPICTURE_QUEUE_SIZE, false);
             @is.sampq = new(@is.audioq, Constants.SAMPLE_QUEUE_SIZE, true);
-
-            if ((@is.continue_read_thread = new AutoResetEvent(false)) == null)
-            {
-                ffmpeg.av_log(null, ffmpeg.AV_LOG_FATAL, $"SDL_CreateCond(): ({nameof(AutoResetEvent)})\n");
-                goto fail;
-            }
 
             @is.vidclk = new Clock(@is.videoq);
             @is.audclk = new Clock(@is.audioq);
@@ -3036,7 +3030,7 @@
         public static void MainPort(string[] args)
         {
             audio_disable = true;
-            // subtitle_disable = true;
+            subtitle_disable = true;
 
             uint flags;
             // VideoState @is;
