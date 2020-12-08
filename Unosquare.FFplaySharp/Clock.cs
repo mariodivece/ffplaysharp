@@ -29,7 +29,7 @@ namespace Unosquare.FFplaySharp
             Set(double.NaN, -1);
         }
 
-        public void SetAt(double pts, int serial, double time)
+        public void Set(double pts, int serial, double time)
         {
             Pts = pts;
             LastUpdated = time;
@@ -40,35 +40,38 @@ namespace Unosquare.FFplaySharp
         public void Set(double pts, int serial)
         {
             var time = ffmpeg.av_gettime_relative() / 1000000.0;
-            SetAt(pts, serial, time);
+            Set(pts, serial, time);
         }
 
         public void SetSpeed(double speed)
         {
-            Set(Get(), Serial);
+            Set(Time, Serial);
             SpeedRatio = speed;
         }
 
-        public double Get()
+        public double Time
         {
-            if (SerialProvider != this && RelatedSerial != Serial)
-                return double.NaN;
+            get
+            {
+                if (SerialProvider != this && RelatedSerial != Serial)
+                    return double.NaN;
 
-            if (IsPaused)
-            {
-                return Pts;
-            }
-            else
-            {
-                var time = ffmpeg.av_gettime_relative() / 1000000.0;
-                return PtsDrift + time - (time - LastUpdated) * (1.0 - SpeedRatio);
+                if (IsPaused)
+                {
+                    return Pts;
+                }
+                else
+                {
+                    var time = ffmpeg.av_gettime_relative() / 1000000.0;
+                    return PtsDrift + time - (time - LastUpdated) * (1.0 - SpeedRatio);
+                }
             }
         }
 
         public void SyncToSlave(Clock slave)
         {
-            var clock = Get();
-            var slave_clock = slave.Get();
+            var clock = Time;
+            var slave_clock = slave.Time;
             if (!double.IsNaN(slave_clock) && (double.IsNaN(clock) || Math.Abs(clock - slave_clock) > Constants.AV_NOSYNC_THRESHOLD))
                 Set(slave_clock, slave.Serial);
         }
