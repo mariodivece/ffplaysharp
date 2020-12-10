@@ -58,6 +58,8 @@
         }
 
         public SwsContext* ConvertContext;
+
+        public new VideoDecoder Decoder { get; set; }
     }
 
     public unsafe sealed class AudioComponent : FilteringMediaComponent
@@ -73,6 +75,8 @@
         public AudioParams SourceSpec = new();
         public AudioParams FilterSpec = new();
         public AudioParams TargetSpec = new();
+
+        public new AudioDecoder Decoder { get; set; }
     }
 
     public unsafe sealed class SubtitleComponent : MediaComponent
@@ -84,5 +88,7 @@
         }
 
         public SwsContext* ConvertContext;
+
+        public new SubtitleDecoder Decoder { get; set; }
     }
 }

@@ -3,11 +3,7 @@
     using FFmpeg.AutoGen;
     using SDL2;
     using System;
-    using System.Collections.Generic;
     using System.Diagnostics;
-    using System.Linq;
-    using System.Runtime.InteropServices;
-    using System.Text;
     using System.Threading;
 
     public static unsafe class PortedProgram
@@ -21,27 +17,10 @@
         static long audio_callback_time;
         static long last_mouse_left_click;
 
-        const int FF_QUIT_EVENT = (int)SDL.SDL_EventType.SDL_USEREVENT + 2;
+        
 
         static MediaContainer GlobalVideoState;
         static MediaRenderer SdlRenderer;
-
-        static bool cmp_audio_fmts(AVSampleFormat fmt1, long channel_count1, AVSampleFormat fmt2, long channel_count2)
-        {
-            /* If channel count == 1, planar and non-planar formats are the same */
-            if (channel_count1 == 1 && channel_count2 == 1)
-                return ffmpeg.av_get_packed_sample_fmt(fmt1) != ffmpeg.av_get_packed_sample_fmt(fmt2);
-            else
-                return channel_count1 != channel_count2 || fmt1 != fmt2;
-        }
-
-        static ulong get_valid_channel_layout(ulong channel_layout, int channels)
-        {
-            if (channel_layout != 0 && ffmpeg.av_get_channel_layout_nb_channels(channel_layout) == channels)
-                return channel_layout;
-            else
-                return 0;
-        }
 
         static void stream_component_close(MediaContainer container, int stream_index)
         {
@@ -169,17 +148,17 @@
         }
 
         /* seek in the stream */
-        static void stream_seek(MediaContainer @is, long pos, long rel, int seek_by_bytes)
+        static void stream_seek(MediaContainer container, long pos, long rel, int seek_by_bytes)
         {
-            if (!@is.seek_req)
+            if (!container.seek_req)
             {
-                @is.seek_pos = pos;
-                @is.seek_rel = rel;
-                @is.seek_flags &= ~ffmpeg.AVSEEK_FLAG_BYTE;
+                container.seek_pos = pos;
+                container.seek_rel = rel;
+                container.seek_flags &= ~ffmpeg.AVSEEK_FLAG_BYTE;
                 if (seek_by_bytes != 0)
-                    @is.seek_flags |= ffmpeg.AVSEEK_FLAG_BYTE;
-                @is.seek_req = true;
-                @is.continue_read_thread.Set();
+                    container.seek_flags |= ffmpeg.AVSEEK_FLAG_BYTE;
+                container.seek_req = true;
+                container.continue_read_thread.Set();
             }
         }
 
@@ -210,416 +189,6 @@
             if (container.paused)
                 container.stream_toggle_pause();
             container.step = 1;
-        }
-
-        static int queue_picture(MediaContainer container, AVFrame* src_frame, double pts, double duration, long pos, int serial)
-        {
-            var vp = container.Video.Frames.PeekWriteable();
-
-            if (vp == null) return -1;
-
-            vp.Sar = src_frame->sample_aspect_ratio;
-            vp.uploaded = false;
-
-            vp.Width = src_frame->width;
-            vp.Height = src_frame->height;
-            vp.Format = src_frame->format;
-
-            vp.Pts = pts;
-            vp.Duration = duration;
-            vp.Position = pos;
-            vp.Serial = serial;
-
-            SdlRenderer.set_default_window_size(container, vp.Width, vp.Height, vp.Sar);
-
-            ffmpeg.av_frame_move_ref(vp.FramePtr, src_frame);
-            container.Video.Frames.Push();
-            return 0;
-        }
-
-        static int get_video_frame(MediaContainer container, out AVFrame* frame)
-        {
-            frame = null;
-            int got_picture;
-
-            if ((got_picture = container.Video.Decoder.DecodeFrame(out frame, out _)) < 0)
-                return -1;
-
-            if (got_picture != 0)
-            {
-                double dpts = double.NaN;
-
-                if (frame->pts != ffmpeg.AV_NOPTS_VALUE)
-                    dpts = ffmpeg.av_q2d(container.Video.Stream->time_base) * frame->pts;
-
-                frame->sample_aspect_ratio = ffmpeg.av_guess_sample_aspect_ratio(container.ic, container.Video.Stream, frame);
-
-                if (container.Options.framedrop > 0 || (container.Options.framedrop != 0 && container.MasterSyncMode != ClockSync.Video))
-                {
-                    if (frame->pts != ffmpeg.AV_NOPTS_VALUE)
-                    {
-                        double diff = dpts - container.MasterTime;
-                        if (!double.IsNaN(diff) && Math.Abs(diff) < Constants.AV_NOSYNC_THRESHOLD &&
-                            diff - container.frame_last_filter_delay < 0 &&
-                            container.Video.Decoder.PacketSerial == container.VideoClock.Serial &&
-                            container.Video.Packets.Count != 0)
-                        {
-                            container.frame_drops_early++;
-                            ffmpeg.av_frame_unref(frame);
-                            got_picture = 0;
-                        }
-                    }
-                }
-            }
-
-            return got_picture;
-        }
-
-        static int configure_video_filters(AVFilterGraph* graph, MediaContainer container, string vfilters, AVFrame* frame)
-        {
-            // enum AVPixelFormat pix_fmts[FF_ARRAY_ELEMS(sdl_texture_format_map)];
-            var pix_fmts = new List<int>(MediaRenderer.sdl_texture_map.Count);
-            string sws_flags_str = string.Empty;
-            string buffersrc_args = string.Empty;
-            int ret;
-            AVFilterContext* filt_src = null, filt_out = null, last_filter = null;
-            AVCodecParameters* codecpar = container.Video.Stream->codecpar;
-            AVRational fr = ffmpeg.av_guess_frame_rate(container.ic, container.Video.Stream, null);
-            AVDictionaryEntry* e = null;
-
-            for (var i = 0; i < SdlRenderer.renderer_info.num_texture_formats; i++)
-            {
-                foreach (var kvp in MediaRenderer.sdl_texture_map)
-                {
-                    if (kvp.Value == SdlRenderer.renderer_info.texture_formats[i])
-                    {
-                        pix_fmts.Add((int)kvp.Key);
-                    }
-                }
-            }
-
-            //pix_fmts.Add(AVPixelFormat.AV_PIX_FMT_NONE);
-
-            while ((e = ffmpeg.av_dict_get(container.Options.sws_dict, "", e, ffmpeg.AV_DICT_IGNORE_SUFFIX)) != null)
-            {
-                var key = Marshal.PtrToStringUTF8((IntPtr)e->key);
-                var value = Marshal.PtrToStringUTF8((IntPtr)e->value);
-                if (key == "sws_flags")
-                    sws_flags_str = $"flags={value}:{sws_flags_str}";
-                else
-                    sws_flags_str = $"{key}={value}:{sws_flags_str}";
-            }
-
-            if (string.IsNullOrWhiteSpace(sws_flags_str))
-                sws_flags_str = null;
-
-            graph->scale_sws_opts = sws_flags_str != null ? ffmpeg.av_strdup(sws_flags_str) : null;
-            buffersrc_args = $"video_size={frame->width}x{frame->height}:pix_fmt={frame->format}:time_base={container.Video.Stream->time_base.num}/{container.Video.Stream->time_base.den}:pixel_aspect={codecpar->sample_aspect_ratio.num}/{Math.Max(codecpar->sample_aspect_ratio.den, 1)}";
-
-            if (fr.num != 0 && fr.den != 0)
-                buffersrc_args = $"{buffersrc_args}:frame_rate={fr.num}/{fr.den}";
-
-            if ((ret = ffmpeg.avfilter_graph_create_filter(&filt_src,
-                                                    ffmpeg.avfilter_get_by_name("buffer"),
-                                                    "ffplay_buffer", buffersrc_args, null,
-                                                    graph)) < 0)
-                goto fail;
-
-            ret = ffmpeg.avfilter_graph_create_filter(&filt_out,
-                                               ffmpeg.avfilter_get_by_name("buffersink"),
-                                               "ffplay_buffersink", null, null, graph);
-            if (ret < 0)
-                goto fail;
-
-            if ((ret = Helpers.av_opt_set_int_list(filt_out, "pix_fmts", pix_fmts.ToArray(), ffmpeg.AV_OPT_SEARCH_CHILDREN)) < 0)
-                goto fail;
-
-            last_filter = filt_out;
-            if (container.Options.autorotate)
-            {
-                double theta = Helpers.get_rotation(container.Video.Stream);
-
-                if (Math.Abs(theta - 90) < 1.0)
-                {
-                    if (!Helpers.INSERT_FILT("transpose", "clock", ref graph, ref ret, ref last_filter))
-                        goto fail;
-                }
-                else if (Math.Abs(theta - 180) < 1.0)
-                {
-                    if (!Helpers.INSERT_FILT("hflip", null, ref graph, ref ret, ref last_filter))
-                        goto fail;
-
-                    if (!Helpers.INSERT_FILT("vflip", null, ref graph, ref ret, ref last_filter))
-                        goto fail;
-                }
-                else if (Math.Abs(theta - 270) < 1.0)
-                {
-                    if (!Helpers.INSERT_FILT("transpose", "cclock", ref graph, ref ret, ref last_filter))
-                        goto fail;
-                }
-                else if (Math.Abs(theta) > 1.0)
-                {
-                    if (!Helpers.INSERT_FILT("rotate", $"{theta}*PI/180", ref graph, ref ret, ref last_filter))
-                        goto fail;
-                }
-            }
-
-            if ((ret = MediaContainer.configure_filtergraph(graph, vfilters, filt_src, last_filter)) < 0)
-                goto fail;
-
-            container.Video.InputFilter = filt_src;
-            container.Video.OutputFilter = filt_out;
-
-        fail:
-            return ret;
-        }
-
-        
-
-        static void audio_thread(object arg)
-        {
-            var container = arg as MediaContainer;
-
-            FrameHolder af;
-            var last_serial = -1;
-            long dec_channel_layout;
-            bool reconfigure;
-            int got_frame = 0;
-            AVRational tb;
-            int ret = 0;
-
-            var frame = ffmpeg.av_frame_alloc();
-
-            const int bufLength = 1024;
-            var buf1 = stackalloc byte[bufLength];
-            var buf2 = stackalloc byte[bufLength];
-
-            do
-            {
-                if ((got_frame = container.Audio.Decoder.DecodeFrame(out frame, out _)) < 0)
-                    goto the_end;
-
-                if (got_frame != 0)
-                {
-                    tb = new() { num = 1, den = frame->sample_rate };
-
-                    dec_channel_layout = (long)get_valid_channel_layout(frame->channel_layout, frame->channels);
-
-                    reconfigure =
-                        cmp_audio_fmts(container.Audio.FilterSpec.SampleFormat, container.Audio.FilterSpec.Channels,
-                                       (AVSampleFormat)frame->format, frame->channels) ||
-                        container.Audio.FilterSpec.Layout != dec_channel_layout ||
-                        container.Audio.FilterSpec.Frequency != frame->sample_rate ||
-                        container.Audio.Decoder.PacketSerial != last_serial;
-
-                    if (reconfigure)
-                    {
-                        ffmpeg.av_get_channel_layout_string(buf1, bufLength, -1, (ulong)container.Audio.FilterSpec.Layout);
-                        ffmpeg.av_get_channel_layout_string(buf2, bufLength, -1, (ulong)dec_channel_layout);
-                        ffmpeg.av_log(null, ffmpeg.AV_LOG_DEBUG,
-                           $"Audio frame changed from " +
-                           $"rate:{container.Audio.FilterSpec.Frequency} ch:{container.Audio.FilterSpec.Channels} fmt:{ffmpeg.av_get_sample_fmt_name(container.Audio.FilterSpec.SampleFormat)} layout:{Marshal.PtrToStringUTF8((IntPtr)buf1)} serial:{last_serial} to " +
-                           $"rate:{frame->sample_rate} ch:{frame->channels} fmt:{ffmpeg.av_get_sample_fmt_name((AVSampleFormat)frame->format)} layout:{Marshal.PtrToStringUTF8((IntPtr)buf2)} serial:{container.Audio.Decoder.PacketSerial}\n");
-
-                        container.Audio.FilterSpec.SampleFormat = (AVSampleFormat)frame->format;
-                        container.Audio.FilterSpec.Channels = frame->channels;
-                        container.Audio.FilterSpec.Layout = dec_channel_layout;
-                        container.Audio.FilterSpec.Frequency = frame->sample_rate;
-                        last_serial = container.Audio.Decoder.PacketSerial;
-
-                        if ((ret = container.configure_audio_filters(true)) < 0)
-                            goto the_end;
-                    }
-
-                    if ((ret = ffmpeg.av_buffersrc_add_frame(container.Audio.InputFilter, frame)) < 0)
-                        goto the_end;
-
-                    while ((ret = ffmpeg.av_buffersink_get_frame_flags(container.Audio.OutputFilter, frame, 0)) >= 0)
-                    {
-                        tb = ffmpeg.av_buffersink_get_time_base(container.Audio.OutputFilter);
-
-                        if ((af = container.Audio.Frames.PeekWriteable()) == null)
-                            goto the_end;
-
-                        af.Pts = (frame->pts == ffmpeg.AV_NOPTS_VALUE) ? double.NaN : frame->pts * ffmpeg.av_q2d(tb);
-                        af.Position = frame->pkt_pos;
-                        af.Serial = container.Audio.Decoder.PacketSerial;
-                        af.Duration = ffmpeg.av_q2d(new AVRational() { num = frame->nb_samples, den = frame->sample_rate });
-
-                        ffmpeg.av_frame_move_ref(af.FramePtr, frame);
-                        container.Audio.Frames.Push();
-
-                        if (container.Audio.Packets.Serial != container.Audio.Decoder.PacketSerial)
-                            break;
-                    }
-                    if (ret == ffmpeg.AVERROR_EOF)
-                        container.Audio.Decoder.HasFinished = container.Audio.Decoder.PacketSerial;
-                }
-            } while (ret >= 0 || ret == ffmpeg.AVERROR(ffmpeg.EAGAIN) || ret == ffmpeg.AVERROR_EOF);
-        the_end:
-            fixed (AVFilterGraph** agraph = &container.agraph)
-                ffmpeg.avfilter_graph_free(agraph);
-            ffmpeg.av_frame_free(&frame);
-            // return ret;
-        }
-
-
-
-        static void video_thread(object arg)
-        {
-            var container = arg as MediaContainer;
-            AVFrame* frame = null; // ffmpeg.av_frame_alloc();
-            double pts;
-            double duration;
-            int ret;
-            AVRational tb = container.Video.Stream->time_base;
-            AVRational frame_rate = ffmpeg.av_guess_frame_rate(container.ic, container.Video.Stream, null);
-
-            AVFilterGraph* graph = null;
-            AVFilterContext* filt_out = null, filt_in = null;
-            int last_w = 0;
-            int last_h = 0;
-            int last_format = -2;
-            int last_serial = -1;
-            int last_vfilter_idx = 0;
-
-            for (; ; )
-            {
-                ret = get_video_frame(container, out frame);
-                if (ret < 0)
-                    goto the_end;
-
-                if (ret == 0)
-                    continue;
-
-
-                if (last_w != frame->width
-                    || last_h != frame->height
-                    || last_format != frame->format
-                    || last_serial != container.Video.Decoder.PacketSerial
-                    || last_vfilter_idx != container.vfilter_idx)
-                {
-                    var lastFormat = ffmpeg.av_get_pix_fmt_name((AVPixelFormat)last_format);
-                    lastFormat ??= "none";
-
-                    var frameFormat = ffmpeg.av_get_pix_fmt_name((AVPixelFormat)frame->format);
-                    frameFormat ??= "none";
-
-                    ffmpeg.av_log(null, ffmpeg.AV_LOG_DEBUG,
-                           $"Video frame changed from size:{last_w}x%{last_h} format:{lastFormat} serial:{last_serial} to " +
-                           $"size:{frame->width}x{frame->height} format:{frameFormat} serial:{container.Video.Decoder.PacketSerial}\n");
-
-                    ffmpeg.avfilter_graph_free(&graph);
-                    graph = ffmpeg.avfilter_graph_alloc();
-                    if (graph == null)
-                    {
-                        ret = ffmpeg.AVERROR(ffmpeg.ENOMEM);
-                        goto the_end;
-                    }
-                    graph->nb_threads = container.Options.filter_nbthreads;
-                    if ((ret = configure_video_filters(graph, container, container.Options.vfilters_list.Count > 0
-                        ? container.Options.vfilters_list[container.vfilter_idx]
-                        : null, frame)) < 0)
-                    {
-                        var evt = new SDL.SDL_Event()
-                        {
-                            type = (SDL.SDL_EventType)FF_QUIT_EVENT,
-                        };
-
-                        // evt.user.data1 = GCHandle.ToIntPtr(VideoStateHandle);
-                        SDL.SDL_PushEvent(ref evt);
-                        goto the_end;
-                    }
-
-                    filt_in = container.Video.InputFilter;
-                    filt_out = container.Video.OutputFilter;
-                    last_w = frame->width;
-                    last_h = frame->height;
-                    last_format = frame->format;
-                    last_serial = container.Video.Decoder.PacketSerial;
-                    last_vfilter_idx = container.vfilter_idx;
-                    frame_rate = ffmpeg.av_buffersink_get_frame_rate(filt_out);
-                }
-
-                ret = ffmpeg.av_buffersrc_add_frame(filt_in, frame);
-                if (ret < 0)
-                    goto the_end;
-
-                while (ret >= 0)
-                {
-                    container.frame_last_returned_time = ffmpeg.av_gettime_relative() / 1000000.0;
-
-                    ret = ffmpeg.av_buffersink_get_frame_flags(filt_out, frame, 0);
-                    if (ret < 0)
-                    {
-                        if (ret == ffmpeg.AVERROR_EOF)
-                            container.Video.Decoder.HasFinished = container.Video.Decoder.PacketSerial;
-                        ret = 0;
-                        break;
-                    }
-
-                    container.frame_last_filter_delay = ffmpeg.av_gettime_relative() / 1000000.0 - container.frame_last_returned_time;
-                    if (Math.Abs(container.frame_last_filter_delay) > Constants.AV_NOSYNC_THRESHOLD / 10.0)
-                        container.frame_last_filter_delay = 0;
-
-                    tb = ffmpeg.av_buffersink_get_time_base(filt_out);
-                    duration = (frame_rate.num != 0 && frame_rate.den != 0 ? ffmpeg.av_q2d(new AVRational() { num = frame_rate.den, den = frame_rate.num }) : 0);
-                    pts = (frame->pts == ffmpeg.AV_NOPTS_VALUE) ? double.NaN : frame->pts * ffmpeg.av_q2d(tb);
-                    ret = queue_picture(container, frame, pts, duration, frame->pkt_pos, container.Video.Decoder.PacketSerial);
-                    ffmpeg.av_frame_unref(frame);
-
-                    if (container.Video.Packets.Serial != container.Video.Decoder.PacketSerial)
-                        break;
-                }
-
-                if (ret < 0)
-                    goto the_end;
-            }
-        the_end:
-
-            ffmpeg.avfilter_graph_free(&graph);
-            ffmpeg.av_frame_free(&frame);
-            return; // 0;
-        }
-
-        static void subtitle_thread(object arg)
-        {
-            var @is = arg as MediaContainer;
-            FrameHolder sp;
-            int got_subtitle;
-            double pts;
-
-            for (; ; )
-            {
-                if ((sp = @is.Subtitle.Frames.PeekWriteable()) == null)
-                    return; // 0;
-
-                if ((got_subtitle = @is.Subtitle.Decoder.DecodeFrame(out _, out var spsub)) < 0)
-                    break;
-                else
-                    sp.SubtitlePtr = spsub;
-
-                pts = 0;
-
-                if (got_subtitle != 0 && sp.SubtitlePtr->format == 0)
-                {
-                    if (sp.SubtitlePtr->pts != ffmpeg.AV_NOPTS_VALUE)
-                        pts = sp.SubtitlePtr->pts / (double)ffmpeg.AV_TIME_BASE;
-                    sp.Pts = pts;
-                    sp.Serial = @is.Subtitle.Decoder.PacketSerial;
-                    sp.Width = @is.Subtitle.Decoder.CodecContext->width;
-                    sp.Height = @is.Subtitle.Decoder.CodecContext->height;
-                    sp.uploaded = false;
-
-                    /* now we can update the picture count */
-                    @is.Subtitle.Frames.Push();
-                }
-                else if (got_subtitle != 0)
-                {
-                    ffmpeg.avsubtitle_free(sp.SubtitlePtr);
-                }
-            }
-            return; // 0
         }
 
         /* copy samples for viewing in editor window */
@@ -1074,7 +643,7 @@
             }
             if ((t = ffmpeg.av_dict_get(opts, "", null, ffmpeg.AV_DICT_IGNORE_SUFFIX)) != null)
             {
-                var key = Marshal.PtrToStringUTF8((IntPtr)t->key);
+                var key = Helpers.PtrToString(t->key);
                 ffmpeg.av_log(null, ffmpeg.AV_LOG_ERROR, $"Option {key} not found.\n");
                 ret = ffmpeg.AVERROR_OPTION_NOT_FOUND;
                 goto fail;
@@ -1089,7 +658,7 @@
                         AVFilterContext* sink;
                         container.Audio.FilterSpec.Frequency = avctx->sample_rate;
                         container.Audio.FilterSpec.Channels = avctx->channels;
-                        container.Audio.FilterSpec.Layout = (long)get_valid_channel_layout(avctx->channel_layout, avctx->channels);
+                        container.Audio.FilterSpec.Layout = (long)Helpers.get_valid_channel_layout(avctx->channel_layout, avctx->channels);
                         container.Audio.FilterSpec.SampleFormat = avctx->sample_fmt;
                         if ((ret = container.configure_audio_filters(false)) < 0)
                             goto fail;
@@ -1123,7 +692,7 @@
                     container.Audio.StreamIndex = stream_index;
                     container.Audio.Stream = ic->streams[stream_index];
 
-                    container.Audio.Decoder = new(container.Audio, avctx);
+                    container.Audio.Decoder = new(container, avctx);
                     if ((container.ic->iformat->flags & (ffmpeg.AVFMT_NOBINSEARCH | ffmpeg.AVFMT_NOGENSEARCH | ffmpeg.AVFMT_NO_BYTE_SEEK)) != 0 &&
                         container.ic->iformat->read_seek.Pointer == IntPtr.Zero)
                     {
@@ -1131,26 +700,23 @@
                         container.Audio.Decoder.StartPtsTimeBase = container.Audio.Stream->time_base;
                     }
 
-                    if ((ret = container.Audio.Decoder.Start(audio_thread, "audio_decoder", container)) < 0)
-                        goto @out;
+                    container.Audio.Decoder.Start();
                     SdlRenderer.PauseAudio();
                     break;
                 case AVMediaType.AVMEDIA_TYPE_VIDEO:
                     container.Video.StreamIndex = stream_index;
                     container.Video.Stream = ic->streams[stream_index];
 
-                    container.Video.Decoder = new(container.Video, avctx);
-                    if ((ret = container.Video.Decoder.Start(video_thread, "video_decoder", container)) < 0)
-                        goto @out;
+                    container.Video.Decoder = new(container, avctx, SdlRenderer);
+                    container.Video.Decoder.Start();
                     container.queue_attachments_req = true;
                     break;
                 case AVMediaType.AVMEDIA_TYPE_SUBTITLE:
                     container.Subtitle.StreamIndex = stream_index;
                     container.Subtitle.Stream = ic->streams[stream_index];
 
-                    container.Subtitle.Decoder = new(container.Subtitle, avctx); ;
-                    if ((ret = container.Subtitle.Decoder.Start(subtitle_thread, "subtitle_decoder", container)) < 0)
-                        goto @out;
+                    container.Subtitle.Decoder = new(container, avctx); ;
+                    container.Subtitle.Decoder.Start();
                     break;
                 default:
                     break;
@@ -1170,8 +736,6 @@
             var container = GlobalVideoState;
             return container.abort_request ? 1 : 0;
         }
-
-
 
         static bool is_realtime(AVFormatContext* ic)
         {
@@ -1557,7 +1121,7 @@
             if (ret != 0)
             {
                 SDL.SDL_Event evt = new();
-                evt.type = (SDL.SDL_EventType)FF_QUIT_EVENT;
+                evt.type = (SDL.SDL_EventType)Constants.FF_QUIT_EVENT;
                 // evt.user.data1 = GCHandle.ToIntPtr(VideoStateHandle);
                 SDL.SDL_PushEvent(ref evt);
             }
@@ -1990,7 +1554,7 @@
                         }
                         break;
                     case (int)SDL.SDL_EventType.SDL_QUIT:
-                    case FF_QUIT_EVENT:
+                    case Constants.FF_QUIT_EVENT:
                         do_exit(container);
                         break;
                     default:

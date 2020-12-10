@@ -1,6 +1,7 @@
 ﻿namespace Unosquare.FFplaySharp
 {
     using FFmpeg.AutoGen;
+    using SDL2;
     using System;
 
     public static class Constants
@@ -60,5 +61,7 @@
         public static readonly int FRAME_QUEUE_SIZE = Math.Max(SAMPLE_QUEUE_SIZE, Math.Max(VIDEO_PICTURE_QUEUE_SIZE, SUBPICTURE_QUEUE_SIZE));
 
         public static readonly AVRational AV_TIME_BASE_Q = new() { num = 1, den = ffmpeg.AV_TIME_BASE };
+
+        public const int FF_QUIT_EVENT = (int)SDL.SDL_EventType.SDL_USEREVENT + 2;
     }
 }

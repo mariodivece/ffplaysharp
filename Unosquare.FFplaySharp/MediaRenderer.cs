@@ -274,7 +274,7 @@ namespace Unosquare.FFplaySharp
                     if (renderer != IntPtr.Zero)
                     {
                         if (SDL.SDL_GetRendererInfo(renderer, out renderer_info) == 0)
-                            ffmpeg.av_log(null, ffmpeg.AV_LOG_VERBOSE, $"Initialized {Marshal.PtrToStringUTF8(renderer_info.name)} renderer.\n");
+                            ffmpeg.av_log(null, ffmpeg.AV_LOG_VERBOSE, $"Initialized {Helpers.PtrToString(renderer_info.name)} renderer.\n");
                     }
                 }
                 if (window == IntPtr.Zero || renderer == IntPtr.Zero || renderer_info.num_texture_formats <= 0)

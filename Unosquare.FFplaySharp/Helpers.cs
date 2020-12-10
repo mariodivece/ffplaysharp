@@ -50,6 +50,23 @@
 
         public static int av_clip(int number, int min, int max) => number < min ? min : number > max ? max : number;
 
+        public static bool cmp_audio_fmts(AVSampleFormat fmt1, long channel_count1, AVSampleFormat fmt2, long channel_count2)
+        {
+            /* If channel count == 1, planar and non-planar formats are the same */
+            if (channel_count1 == 1 && channel_count2 == 1)
+                return ffmpeg.av_get_packed_sample_fmt(fmt1) != ffmpeg.av_get_packed_sample_fmt(fmt2);
+            else
+                return channel_count1 != channel_count2 || fmt1 != fmt2;
+        }
+
+        public static ulong get_valid_channel_layout(ulong channel_layout, int channels)
+        {
+            if (channel_layout != 0 && ffmpeg.av_get_channel_layout_nb_channels(channel_layout) == channels)
+                return channel_layout;
+            else
+                return 0;
+        }
+
         public static unsafe void FFSWAP(ref AVFilterContext** array, int a, int b)
         {
             var temp = array[b];
