@@ -310,8 +310,8 @@ namespace Unosquare.FFplaySharp
             if (container.width != 0)
                 video_open(container);
 
-            SDL.SDL_SetRenderDrawColor(renderer, 0, 0, 0, 255);
-            SDL.SDL_RenderClear(renderer);
+            _ = SDL.SDL_SetRenderDrawColor(renderer, 0, 0, 0, 255);
+            _ = SDL.SDL_RenderClear(renderer);
             if (container.Audio.Stream != null && container.show_mode != ShowMode.Video)
                 video_audio_display(container);
             else if (container.Video.Stream != null)

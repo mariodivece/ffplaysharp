@@ -1123,7 +1123,7 @@
                     container.Audio.StreamIndex = stream_index;
                     container.Audio.Stream = ic->streams[stream_index];
 
-                    container.Audio.Decoder = new(avctx, container.Audio.Packets, container.continue_read_thread, container.Options.decoder_reorder_pts);
+                    container.Audio.Decoder = new(container.Audio, avctx);
                     if ((container.ic->iformat->flags & (ffmpeg.AVFMT_NOBINSEARCH | ffmpeg.AVFMT_NOGENSEARCH | ffmpeg.AVFMT_NO_BYTE_SEEK)) != 0 &&
                         container.ic->iformat->read_seek.Pointer == IntPtr.Zero)
                     {
@@ -1139,7 +1139,7 @@
                     container.Video.StreamIndex = stream_index;
                     container.Video.Stream = ic->streams[stream_index];
 
-                    container.Video.Decoder = new(avctx, container.Video.Packets, container.continue_read_thread, container.Options.decoder_reorder_pts);
+                    container.Video.Decoder = new(container.Video, avctx);
                     if ((ret = container.Video.Decoder.Start(video_thread, "video_decoder", container)) < 0)
                         goto @out;
                     container.queue_attachments_req = true;
@@ -1148,7 +1148,7 @@
                     container.Subtitle.StreamIndex = stream_index;
                     container.Subtitle.Stream = ic->streams[stream_index];
 
-                    container.Subtitle.Decoder = new(avctx, container.Subtitle.Packets, container.continue_read_thread, container.Options.decoder_reorder_pts);
+                    container.Subtitle.Decoder = new(container.Subtitle, avctx); ;
                     if ((ret = container.Subtitle.Decoder.Start(subtitle_thread, "subtitle_decoder", container)) < 0)
                         goto @out;
                     break;
@@ -2005,7 +2005,7 @@
             var o = new ProgramOptions
             {
                 input_filename = @"C:\Users\unosp\OneDrive\ffme-testsuite\video-subtitles-03.mkv",
-                audio_disable = true,
+                audio_disable = false,
                 subtitle_disable = true
             };
 

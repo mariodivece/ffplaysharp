@@ -26,11 +26,11 @@
         public Clock VideoClock;
         public Clock ExternalClock;
 
-        public AudioComponent Audio { get; } = new();
+        public AudioComponent Audio { get; }
 
-        public VideoComponent Video { get; } = new();
+        public VideoComponent Video { get; }
 
-        public SubtitleComponent Subtitle { get; } = new();
+        public SubtitleComponent Subtitle { get; }
 
         public ClockSync ClockSyncMode;
 
@@ -94,6 +94,9 @@
         public MediaContainer(ProgramOptions options)
         {
             Options = options ?? new();
+            Audio = new(this);
+            Video = new(this);
+            Subtitle = new(this);
         }
 
         public ProgramOptions Options { get; }
@@ -146,7 +149,7 @@
             var afilters = Options.afilters;
             var sample_fmts = new[] { (int)AVSampleFormat.AV_SAMPLE_FMT_S16 };
             var sample_rates = new[] { 0 };
-            var channel_layouts = new[] { 0 };
+            var channel_layouts = new[] { 0L };
             var channels = new[] { 0 };
 
             AVFilterContext* filt_asrc = null, filt_asink = null;
@@ -164,8 +167,8 @@
 
             while ((e = ffmpeg.av_dict_get(Options.swr_opts, "", e, ffmpeg.AV_DICT_IGNORE_SUFFIX)) != null)
             {
-                var key = Marshal.PtrToStringUTF8((IntPtr)e->key);
-                var value = Marshal.PtrToStringUTF8((IntPtr)e->value);
+                var key = Helpers.PtrToString((IntPtr)e->key);
+                var value = Helpers.PtrToString((IntPtr)e->value);
                 aresample_swr_opts = $"{key}={value}:{aresample_swr_opts}";
             }
 

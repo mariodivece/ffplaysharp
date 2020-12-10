@@ -121,8 +121,20 @@
 
         public static unsafe int av_opt_set_int_list(void* obj, string name, int[] val, int flags)
         {
+            // TODO: audio not working with this function enabled. ???
+            // return 0;
+
             fixed (int* ptr = &val[0])
                 return ffmpeg.av_opt_set_bin(obj, name, (byte*)ptr, val.Length * sizeof(int), flags);
+        }
+
+        public static unsafe int av_opt_set_int_list(void* obj, string name, long[] val, int flags)
+        {
+            // TODO: audio not working with this function enabled. ???
+            // return 0;
+
+            fixed (long* ptr = &val[0])
+                return ffmpeg.av_opt_set_bin(obj, name, (byte*)ptr, val.Length * sizeof(long), flags);
         }
 
         public static unsafe byte* strchr(byte* str, char search)
@@ -147,10 +159,9 @@
             return ret;
         }
 
-        public static unsafe string PtrToString(byte* ptr)
-        {
-            return Marshal.PtrToStringUTF8((IntPtr)ptr);
-        }
+        public static unsafe string PtrToString(byte* ptr) => PtrToString((IntPtr)ptr);
+
+        public static unsafe string PtrToString(IntPtr ptr) => Marshal.PtrToStringUTF8(ptr);
 
         public static unsafe AVDictionary* filter_codec_opts(AVDictionary* opts, AVCodecID codec_id,
                                     AVFormatContext* s, AVStream* st, AVCodec* codec)
@@ -219,20 +230,17 @@
 
         public static unsafe AVDictionary** setup_find_stream_info_opts(AVFormatContext* s, AVDictionary* codec_opts)
         {
-            int i;
-            AVDictionary** opts;
-
             if (s->nb_streams == 0)
                 return null;
 
-            opts = (AVDictionary**)ffmpeg.av_mallocz_array(s->nb_streams, (ulong)sizeof(IntPtr));
+            var opts = (AVDictionary**)ffmpeg.av_mallocz_array(s->nb_streams, (ulong)sizeof(IntPtr));
             if (opts == null)
             {
                 ffmpeg.av_log(null, ffmpeg.AV_LOG_ERROR, "Could not alloc memory for stream options.\n");
                 return null;
             }
 
-            for (i = 0; i < s->nb_streams; i++)
+            for (var i = 0; i < s->nb_streams; i++)
                 opts[i] = filter_codec_opts(codec_opts, s->streams[i]->codecpar->codec_id, s, s->streams[i], null);
 
             return opts;

@@ -3,13 +3,20 @@
     using FFmpeg.AutoGen;
     using System;
 
-    public unsafe class MediaComponent
+    public abstract unsafe class MediaComponent
     {
+        protected MediaComponent(MediaContainer container)
+        {
+            Container = container;
+        }
+
+        public MediaContainer Container { get; }
+
         public PacketQueue Packets { get; } = new();
 
         public FrameQueue Frames;
 
-        public MediaDecoder Decoder;
+        public MediaDecoder Decoder { get; set; }
 
         public AVStream* Stream;
 
@@ -30,19 +37,37 @@
         }
     }
 
-    public unsafe class FilteringMediaComponent : MediaComponent
+    public abstract unsafe class FilteringMediaComponent : MediaComponent
     {
+        protected FilteringMediaComponent(MediaContainer container)
+            : base(container)
+        {
+            // placeholder
+        }
+
         public AVFilterContext* InputFilter;
         public AVFilterContext* OutputFilter;
     }
 
-    public unsafe class VideoComponent : FilteringMediaComponent
+    public unsafe sealed class VideoComponent : FilteringMediaComponent
     {
+        public VideoComponent(MediaContainer container)
+            : base(container)
+        {
+            // placeholder
+        }
+
         public SwsContext* ConvertContext;
     }
 
-    public unsafe class AudioComponent : FilteringMediaComponent
+    public unsafe sealed class AudioComponent : FilteringMediaComponent
     {
+        public AudioComponent(MediaContainer container)
+            : base(container)
+        {
+            // placeholder
+        }
+
         public SwrContext* ConvertContext;
 
         public AudioParams SourceSpec = new();
@@ -50,8 +75,14 @@
         public AudioParams TargetSpec = new();
     }
 
-    public unsafe class SubtitleComponent : MediaComponent
+    public unsafe sealed class SubtitleComponent : MediaComponent
     {
+        public SubtitleComponent(MediaContainer container)
+            : base(container)
+        {
+            // placeholder
+        }
+
         public SwsContext* ConvertContext;
     }
 }

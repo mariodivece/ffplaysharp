@@ -15,18 +15,21 @@
         private AVRational NextPtsTimeBase;
         private Thread Worker;
 
-        public MediaDecoder(AVCodecContext* codecContext, PacketQueue packets, AutoResetEvent emptyQueueEvent, int reorderPts)
+        public MediaDecoder(MediaComponent component, AVCodecContext* codecContext)
         {
+            Component = component;
             CodecContext = codecContext;
-            Packets = packets;
-            EmptyQueueEvent = emptyQueueEvent;
+            Packets = component.Packets;
+            EmptyQueueEvent = component.Container.continue_read_thread;
             StartPts = ffmpeg.AV_NOPTS_VALUE;
             PacketSerial = -1;
-            ReorderPts = reorderPts;
+            ReorderPts = component.Container.Options.decoder_reorder_pts;
             StartPtsTimeBase = new();
         }
 
         public AVCodecContext* CodecContext;
+
+        public MediaComponent Component { get; }
 
         public int PacketSerial { get; private set; }
 
