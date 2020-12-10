@@ -2001,12 +2001,12 @@
 
         public static void MainPort(string[] args)
         {
-
             var o = new ProgramOptions
             {
                 input_filename = @"C:\Users\unosp\OneDrive\ffme-testsuite\video-subtitles-03.mkv",
                 audio_disable = false,
-                subtitle_disable = true
+                subtitle_disable = true,
+                // av_sync_type = ClockSync.Video
             };
 
             Helpers.LoadNativeLibraries();
