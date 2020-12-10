@@ -121,10 +121,8 @@
 
         public static unsafe int av_opt_set_int_list(void* obj, string name, int[] val, int flags)
         {
-            // TODO: Getting duplicated pixel formats
-            return 0;
             fixed (int* ptr = &val[0])
-                return ffmpeg.av_opt_set_bin(obj, name, (byte*)ptr, val.Length * sizeof(IntPtr), flags);
+                return ffmpeg.av_opt_set_bin(obj, name, (byte*)ptr, val.Length * sizeof(int), flags);
         }
 
         public static unsafe byte* strchr(byte* str, char search)
