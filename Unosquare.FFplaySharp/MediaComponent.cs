@@ -8,11 +8,12 @@
         protected MediaComponent(MediaContainer container)
         {
             Container = container;
+            Packets = new(this);
         }
 
         public MediaContainer Container { get; }
 
-        public PacketQueue Packets { get; } = new();
+        public PacketQueue Packets { get; }
 
         public FrameQueue Frames;
 

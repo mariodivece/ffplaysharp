@@ -2,15 +2,15 @@
 using SDL2;
 using System;
 using System.Collections.Generic;
-using System.Linq;
-using System.Runtime.InteropServices;
+using System.Diagnostics;
 using System.Text;
-using System.Threading.Tasks;
 
 namespace Unosquare.FFplaySharp
 {
     public unsafe class MediaRenderer
     {
+        public long audio_callback_time;
+
         public int default_width = 640;
         public int default_height = 480;
 
@@ -20,6 +20,7 @@ namespace Unosquare.FFplaySharp
         public uint audio_dev;
         public string window_title;
 
+
         private int screen_left = SDL.SDL_WINDOWPOS_CENTERED;
         private int screen_top = SDL.SDL_WINDOWPOS_CENTERED;
         private bool is_full_screen;
@@ -27,6 +28,8 @@ namespace Unosquare.FFplaySharp
 
         public int screen_width = 0;
         public int screen_height = 0;
+
+        public MediaContainer Container { get; private set; }
 
         public static readonly Dictionary<AVPixelFormat, uint> sdl_texture_map = new()
         {
@@ -51,18 +54,6 @@ namespace Unosquare.FFplaySharp
             { AVPixelFormat.AV_PIX_FMT_UYVY422, SDL.SDL_PIXELFORMAT_UYVY },
             { AVPixelFormat.AV_PIX_FMT_NONE, SDL.SDL_PIXELFORMAT_UNKNOWN },
         };
-
-
-        public void fill_rectangle(int x, int y, int w, int h)
-        {
-            SDL.SDL_Rect rect;
-            rect.x = x;
-            rect.y = y;
-            rect.w = w;
-            rect.h = h;
-            if (w > 0 && h > 0)
-                _ = SDL.SDL_RenderFillRect(renderer, ref rect);
-        }
 
         public int realloc_texture(ref IntPtr texture, uint new_format, int new_width, int new_height, SDL.SDL_BlendMode blendmode, bool init_texture)
         {
@@ -215,6 +206,11 @@ namespace Unosquare.FFplaySharp
             }
         }
 
+        public void Link(MediaContainer container)
+        {
+            Container = container;
+        }
+
         public bool Initialize(ProgramOptions o)
         {
             if (o.display_disable)
@@ -228,10 +224,11 @@ namespace Unosquare.FFplaySharp
             }
             else
             {
+                const string AlsaBufferSizeName = "SDL_AUDIO_ALSA_SET_BUFFER_SIZE";
                 /* Try to work around an occasional ALSA buffer underflow issue when the
                  * period size is NPOT due to ALSA resampling by forcing the buffer size. */
-                if (Environment.GetEnvironmentVariable("SDL_AUDIO_ALSA_SET_BUFFER_SIZE") == null)
-                    Environment.SetEnvironmentVariable("SDL_AUDIO_ALSA_SET_BUFFER_SIZE", "1", EnvironmentVariableTarget.Process);
+                if (Environment.GetEnvironmentVariable(AlsaBufferSizeName) == null)
+                    Environment.SetEnvironmentVariable(AlsaBufferSizeName, "1", EnvironmentVariableTarget.Process);
             }
 
             if (o.display_disable)
@@ -671,17 +668,257 @@ namespace Unosquare.FFplaySharp
                 sdl_pix_fmt = sdl_texture_map[format];
         }
 
-        public void set_default_window_size(MediaContainer container, int width, int height, AVRational sar)
+        public void set_default_window_size(int width, int height, AVRational sar)
         {
             SDL.SDL_Rect rect = new();
-            int max_width = screen_width != 0 ? screen_width : int.MaxValue;
-            int max_height = screen_height != 0 ? screen_height : int.MaxValue;
-            if (max_width == int.MaxValue && max_height == int.MaxValue)
-                max_height = height;
-            calculate_display_rect(ref rect, 0, 0, max_width, max_height, width, height, sar);
+            var maxWidth = screen_width != 0 ? screen_width : int.MaxValue;
+            var maxHeight = screen_height != 0 ? screen_height : int.MaxValue;
+            if (maxWidth == int.MaxValue && maxHeight == int.MaxValue)
+                maxHeight = height;
+
+            calculate_display_rect(ref rect, 0, 0, maxWidth, maxHeight, width, height, sar);
             default_width = rect.w;
             default_height = rect.h;
         }
+
+        /* copy samples for viewing in editor window */
+        static void update_sample_display(MediaContainer container, short* samples, int samples_size)
+        {
+            int size, len;
+
+            size = samples_size / sizeof(short);
+            while (size > 0)
+            {
+                len = Constants.SAMPLE_ARRAY_SIZE - container.sample_array_index;
+                if (len > size)
+                    len = size;
+
+                fixed (short* targetAddress = &container.sample_array[container.sample_array_index])
+                    Buffer.MemoryCopy(samples, targetAddress, len * sizeof(short), len * sizeof(short));
+
+                samples += len;
+                container.sample_array_index += len;
+                if (container.sample_array_index >= Constants.SAMPLE_ARRAY_SIZE)
+                    container.sample_array_index = 0;
+                size -= len;
+            }
+        }
+
+        /* prepare a new audio buffer */
+        public void sdl_audio_callback(IntPtr opaque, IntPtr stream, int len)
+        {
+            int audio_size, len1;
+
+            audio_callback_time = ffmpeg.av_gettime_relative();
+
+            while (len > 0)
+            {
+                if (Container.audio_buf_index >= Container.audio_buf_size)
+                {
+                    audio_size = audio_decode_frame(Container);
+                    if (audio_size < 0)
+                    {
+                        /* if error, just output silence */
+                        Container.audio_buf = null;
+                        Container.audio_buf_size = (uint)(Constants.SDL_AUDIO_MIN_BUFFER_SIZE / Container.Audio.TargetSpec.FrameSize * Container.Audio.TargetSpec.FrameSize);
+                    }
+                    else
+                    {
+                        if (Container.show_mode != ShowMode.Video)
+                            update_sample_display(Container, (short*)Container.audio_buf, audio_size);
+                        Container.audio_buf_size = (uint)audio_size;
+                    }
+                    Container.audio_buf_index = 0;
+                }
+                len1 = (int)(Container.audio_buf_size - Container.audio_buf_index);
+                if (len1 > len)
+                    len1 = len;
+
+                if (!Container.muted && Container.audio_buf != null && Container.audio_volume == SDL.SDL_MIX_MAXVOLUME)
+                {
+                    var dest = (byte*)stream;
+                    var source = (Container.audio_buf + Container.audio_buf_index);
+                    for (var b = 0; b < len1; b++)
+                        dest[b] = source[b];
+                }
+                else
+                {
+                    var target = (byte*)stream;
+                    for (var b = 0; b < len1; b++)
+                        target[b] = 0;
+
+                    if (!Container.muted && Container.audio_buf != null)
+                        SDLNatives.SDL_MixAudioFormat((byte*)stream, Container.audio_buf + Container.audio_buf_index, SDL.AUDIO_S16SYS, (uint)len1, Container.audio_volume);
+                }
+
+                len -= len1;
+                stream += len1;
+                Container.audio_buf_index += len1;
+            }
+            Container.audio_write_buf_size = (int)(Container.audio_buf_size - Container.audio_buf_index);
+            /* Let's assume the audio driver that is used by SDL has two periods. */
+            if (!double.IsNaN(Container.audio_clock))
+            {
+                Container.AudioClock.Set(Container.audio_clock - (double)(2 * Container.audio_hw_buf_size + Container.audio_write_buf_size) / Container.Audio.TargetSpec.BytesPerSecond, Container.audio_clock_serial, audio_callback_time / 1000000.0);
+                Container.ExternalClock.SyncToSlave(Container.AudioClock);
+            }
+        }
+
+        /**
+* Decode one audio frame and return its uncompressed size.
+*
+* The processed audio frame is decoded, converted if required, and
+* stored in is->audio_buf, with size in bytes given by the return
+* value.
+*/
+        public int audio_decode_frame(MediaContainer container)
+        {
+            int data_size, resampled_data_size;
+            long dec_channel_layout;
+            double audio_clock0;
+            int wanted_nb_samples;
+            FrameHolder af;
+
+            if (container.paused)
+                return -1;
+
+            do
+            {
+                while (container.Audio.Frames.PendingCount == 0)
+                {
+                    if ((ffmpeg.av_gettime_relative() - audio_callback_time) > 1000000L * container.audio_hw_buf_size / container.Audio.TargetSpec.BytesPerSecond / 2)
+                        return -1;
+                    ffmpeg.av_usleep(1000);
+                }
+
+                if ((af = container.Audio.Frames.PeekReadable()) == null)
+                    return -1;
+
+                container.Audio.Frames.Next();
+
+            } while (af.Serial != container.Audio.Packets.Serial);
+
+            data_size = ffmpeg.av_samples_get_buffer_size(null, af.FramePtr->channels,
+                                                   af.FramePtr->nb_samples,
+                                                   (AVSampleFormat)af.FramePtr->format, 1);
+
+            dec_channel_layout =
+                (af.FramePtr->channel_layout != 0 && af.FramePtr->channels == ffmpeg.av_get_channel_layout_nb_channels(af.FramePtr->channel_layout))
+                ? (long)af.FramePtr->channel_layout
+                : ffmpeg.av_get_default_channel_layout(af.FramePtr->channels);
+            wanted_nb_samples = container.synchronize_audio(af.FramePtr->nb_samples);
+
+            if (af.FramePtr->format != (int)container.Audio.SourceSpec.SampleFormat ||
+                dec_channel_layout != container.Audio.SourceSpec.Layout ||
+                af.FramePtr->sample_rate != container.Audio.SourceSpec.Frequency ||
+                (wanted_nb_samples != af.FramePtr->nb_samples && container.Audio.ConvertContext == null))
+            {
+                fixed (SwrContext** is_swr_ctx = &container.Audio.ConvertContext)
+                    ffmpeg.swr_free(is_swr_ctx);
+
+                container.Audio.ConvertContext = ffmpeg.swr_alloc_set_opts(null,
+                                                 container.Audio.TargetSpec.Layout, container.Audio.TargetSpec.SampleFormat, container.Audio.TargetSpec.Frequency,
+                                                 dec_channel_layout, (AVSampleFormat)af.FramePtr->format, af.FramePtr->sample_rate,
+                                                 0, null);
+
+                if (container.Audio.ConvertContext == null || ffmpeg.swr_init(container.Audio.ConvertContext) < 0)
+                {
+                    ffmpeg.av_log(null, ffmpeg.AV_LOG_ERROR,
+                           $"Cannot create sample rate converter for conversion of {af.FramePtr->sample_rate} Hz " +
+                           $"{ffmpeg.av_get_sample_fmt_name((AVSampleFormat)af.FramePtr->format)} {af.FramePtr->channels} channels to " +
+                           $"{container.Audio.TargetSpec.Frequency} Hz {ffmpeg.av_get_sample_fmt_name(container.Audio.TargetSpec.SampleFormat)} {container.Audio.TargetSpec.Channels} channels!\n");
+
+                    fixed (SwrContext** is_swr_ctx = &container.Audio.ConvertContext)
+                        ffmpeg.swr_free(is_swr_ctx);
+
+                    return -1;
+                }
+                container.Audio.SourceSpec.Layout = dec_channel_layout;
+                container.Audio.SourceSpec.Channels = af.FramePtr->channels;
+                container.Audio.SourceSpec.Frequency = af.FramePtr->sample_rate;
+                container.Audio.SourceSpec.SampleFormat = (AVSampleFormat)af.FramePtr->format;
+            }
+
+            if (container.Audio.ConvertContext != null)
+            {
+                var @in = af.FramePtr->extended_data;
+
+                int out_count = (int)((long)wanted_nb_samples * container.Audio.TargetSpec.Frequency / af.FramePtr->sample_rate + 256);
+                int out_size = ffmpeg.av_samples_get_buffer_size(null, container.Audio.TargetSpec.Channels, out_count, container.Audio.TargetSpec.SampleFormat, 0);
+                int len2;
+                if (out_size < 0)
+                {
+                    ffmpeg.av_log(null, ffmpeg.AV_LOG_ERROR, "av_samples_get_buffer_size() failed\n");
+                    return -1;
+                }
+                if (wanted_nb_samples != af.FramePtr->nb_samples)
+                {
+                    if (ffmpeg.swr_set_compensation(container.Audio.ConvertContext, (wanted_nb_samples - af.FramePtr->nb_samples) * container.Audio.TargetSpec.Frequency / af.FramePtr->sample_rate,
+                                                wanted_nb_samples * container.Audio.TargetSpec.Frequency / af.FramePtr->sample_rate) < 0)
+                    {
+                        ffmpeg.av_log(null, ffmpeg.AV_LOG_ERROR, "swr_set_compensation() failed\n");
+                        return -1;
+                    }
+                }
+
+                if (container.audio_buf1 == null)
+                {
+                    container.audio_buf1 = (byte*)ffmpeg.av_mallocz((ulong)out_size);
+                    container.audio_buf1_size = (uint)out_size;
+                }
+
+                if (container.audio_buf1_size < out_size && container.audio_buf1 != null)
+                {
+                    ffmpeg.av_free(container.audio_buf1);
+                    container.audio_buf1 = (byte*)ffmpeg.av_mallocz((ulong)out_size);
+                    container.audio_buf1_size = (uint)out_size;
+                }
+
+                fixed (byte** @out = &container.audio_buf1)
+                    len2 = ffmpeg.swr_convert(container.Audio.ConvertContext, @out, out_count, @in, af.FramePtr->nb_samples);
+
+                if (len2 < 0)
+                {
+                    ffmpeg.av_log(null, ffmpeg.AV_LOG_ERROR, "swr_convert() failed\n");
+                    return -1;
+                }
+                if (len2 == out_count)
+                {
+                    ffmpeg.av_log(null, ffmpeg.AV_LOG_WARNING, "audio buffer is probably too small\n");
+                    if (ffmpeg.swr_init(container.Audio.ConvertContext) < 0)
+                    {
+                        fixed (SwrContext** is_swr_ctx = &container.Audio.ConvertContext)
+                            ffmpeg.swr_free(is_swr_ctx);
+                    }
+                }
+
+                container.audio_buf = container.audio_buf1;
+                resampled_data_size = len2 * container.Audio.TargetSpec.Channels * ffmpeg.av_get_bytes_per_sample(container.Audio.TargetSpec.SampleFormat);
+            }
+            else
+            {
+                container.audio_buf = af.FramePtr->data[0];
+                resampled_data_size = data_size;
+            }
+
+            audio_clock0 = container.audio_clock;
+
+            /* update the audio clock with the pts */
+            if (!double.IsNaN(af.Pts))
+                container.audio_clock = af.Pts + (double)af.FramePtr->nb_samples / af.FramePtr->sample_rate;
+            else
+                container.audio_clock = double.NaN;
+
+            container.audio_clock_serial = af.Serial;
+            if (Debugger.IsAttached)
+            {
+                Console.WriteLine($"audio: delay={(container.audio_clock - container.Options.last_audio_clock),-8:0.####} clock={container.audio_clock,-8:0.####} clock0={audio_clock0,-8:0.####}");
+                container.Options.last_audio_clock = container.audio_clock;
+            }
+
+            return resampled_data_size;
+        }
+
 
         static double compute_target_delay(double delay, MediaContainer container)
         {

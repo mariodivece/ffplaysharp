@@ -312,14 +312,11 @@
 
     public unsafe sealed class VideoDecoder : MediaDecoder
     {
-        public VideoDecoder(MediaContainer container, AVCodecContext* codecContext, MediaRenderer renderer)
+        public VideoDecoder(MediaContainer container, AVCodecContext* codecContext)
             : base(container.Video, codecContext)
         {
             Component = container.Video;
-            SdlRenderer = renderer;
         }
-
-        public MediaRenderer SdlRenderer { get; }
 
         public new VideoComponent Component { get; }
 
@@ -334,7 +331,7 @@
             double duration;
             int ret;
             AVRational tb = Component.Stream->time_base;
-            AVRational frame_rate = ffmpeg.av_guess_frame_rate(Container.ic, Component.Stream, null);
+            AVRational frame_rate = ffmpeg.av_guess_frame_rate(Container.InputContext, Component.Stream, null);
 
             AVFilterGraph* graph = null;
             AVFilterContext* filt_out = null, filt_in = null;
@@ -460,7 +457,7 @@
             vp.Position = pos;
             vp.Serial = serial;
 
-            SdlRenderer.set_default_window_size(Container, vp.Width, vp.Height, vp.Sar);
+            Container.Renderer.set_default_window_size(vp.Width, vp.Height, vp.Sar);
 
             ffmpeg.av_frame_move_ref(vp.FramePtr, src_frame);
             Component.Frames.Push();
@@ -482,7 +479,7 @@
                 if (frame->pts != ffmpeg.AV_NOPTS_VALUE)
                     dpts = ffmpeg.av_q2d(Component.Stream->time_base) * frame->pts;
 
-                frame->sample_aspect_ratio = ffmpeg.av_guess_sample_aspect_ratio(Container.ic, Component.Stream, frame);
+                frame->sample_aspect_ratio = ffmpeg.av_guess_sample_aspect_ratio(Container.InputContext, Component.Stream, frame);
 
                 if (Container.Options.framedrop > 0 || (Container.Options.framedrop != 0 && Container.MasterSyncMode != ClockSync.Video))
                 {
@@ -514,14 +511,14 @@
             int ret;
             AVFilterContext* filt_src = null, filt_out = null, last_filter = null;
             AVCodecParameters* codecpar = container.Video.Stream->codecpar;
-            AVRational fr = ffmpeg.av_guess_frame_rate(container.ic, container.Video.Stream, null);
+            AVRational fr = ffmpeg.av_guess_frame_rate(container.InputContext, container.Video.Stream, null);
             AVDictionaryEntry* e = null;
 
-            for (var i = 0; i < SdlRenderer.renderer_info.num_texture_formats; i++)
+            for (var i = 0; i < Container.Renderer.renderer_info.num_texture_formats; i++)
             {
                 foreach (var kvp in MediaRenderer.sdl_texture_map)
                 {
-                    if (kvp.Value == SdlRenderer.renderer_info.texture_formats[i])
+                    if (kvp.Value == Container.Renderer.renderer_info.texture_formats[i])
                     {
                         pix_fmts.Add((int)kvp.Key);
                     }

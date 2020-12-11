@@ -12,6 +12,13 @@ namespace Unosquare.FFplaySharp
         private PacketHolder First;
         private PacketHolder Last;
 
+        public PacketQueue(MediaComponent component)
+        {
+            Component = component;
+        }
+
+        public MediaComponent Component { get; }
+
         public int Count { get; private set; }
 
         public int Size { get; private set; }
@@ -31,12 +38,12 @@ namespace Unosquare.FFplaySharp
 
         public bool PutFlush() => Put(PacketHolder.FlushPacket);
 
-        public bool PutNull(int streamIndex)
+        public bool PutNull()
         {
             var packet = ffmpeg.av_packet_alloc();
             packet->data = null;
             packet->size = 0;
-            packet->stream_index = streamIndex;
+            packet->stream_index = Component.StreamIndex;
             return Put(packet);
         }
 
