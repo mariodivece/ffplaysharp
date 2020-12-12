@@ -740,7 +740,7 @@
                 if (len1 > len)
                     len1 = len;
 
-                if (!Container.muted && Container.audio_buf != null && Container.audio_volume == SDL.SDL_MIX_MAXVOLUME)
+                if (!Container.IsMuted && Container.audio_buf != null && Container.audio_volume == SDL.SDL_MIX_MAXVOLUME)
                 {
                     var dest = (byte*)stream;
                     var source = (Container.audio_buf + Container.audio_buf_index);
@@ -753,7 +753,7 @@
                     for (var b = 0; b < len1; b++)
                         target[b] = 0;
 
-                    if (!Container.muted && Container.audio_buf != null)
+                    if (!Container.IsMuted && Container.audio_buf != null)
                         SDLNatives.SDL_MixAudioFormat((byte*)stream, Container.audio_buf + Container.audio_buf_index, SDL.AUDIO_S16SYS, (uint)len1, Container.audio_volume);
                 }
 
@@ -782,7 +782,6 @@
             int data_size, resampled_data_size;
             long dec_channel_layout;
             double audio_clock0;
-            int wanted_nb_samples;
             FrameHolder af;
 
             if (container.IsPaused)
@@ -812,12 +811,12 @@
                 (af.FramePtr->channel_layout != 0 && af.FramePtr->channels == ffmpeg.av_get_channel_layout_nb_channels(af.FramePtr->channel_layout))
                 ? (long)af.FramePtr->channel_layout
                 : ffmpeg.av_get_default_channel_layout(af.FramePtr->channels);
-            wanted_nb_samples = container.synchronize_audio(af.FramePtr->nb_samples);
+            var wantedSampleCount = container.synchronize_audio(af.FramePtr->nb_samples);
 
             if (af.FramePtr->format != (int)container.Audio.SourceSpec.SampleFormat ||
                 dec_channel_layout != container.Audio.SourceSpec.Layout ||
                 af.FramePtr->sample_rate != container.Audio.SourceSpec.Frequency ||
-                (wanted_nb_samples != af.FramePtr->nb_samples && container.Audio.ConvertContext == null))
+                (wantedSampleCount != af.FramePtr->nb_samples && container.Audio.ConvertContext == null))
             {
                 var convertContext = container.Audio.ConvertContext;
                 ffmpeg.swr_free(&convertContext);
@@ -849,18 +848,18 @@
 
             if (container.Audio.ConvertContext != null)
             {
-                int out_count = (int)((long)wanted_nb_samples * container.Audio.TargetSpec.Frequency / af.FramePtr->sample_rate + 256);
-                int out_size = ffmpeg.av_samples_get_buffer_size(null, container.Audio.TargetSpec.Channels, out_count, container.Audio.TargetSpec.SampleFormat, 0);
+                int wantedOutputSize = wantedSampleCount * container.Audio.TargetSpec.Frequency / af.FramePtr->sample_rate + 256;
+                int out_size = ffmpeg.av_samples_get_buffer_size(null, container.Audio.TargetSpec.Channels, wantedOutputSize, container.Audio.TargetSpec.SampleFormat, 0);
                 int len2;
                 if (out_size < 0)
                 {
                     ffmpeg.av_log(null, ffmpeg.AV_LOG_ERROR, "av_samples_get_buffer_size() failed\n");
                     return -1;
                 }
-                if (wanted_nb_samples != af.FramePtr->nb_samples)
+                if (wantedSampleCount != af.FramePtr->nb_samples)
                 {
-                    if (ffmpeg.swr_set_compensation(container.Audio.ConvertContext, (wanted_nb_samples - af.FramePtr->nb_samples) * container.Audio.TargetSpec.Frequency / af.FramePtr->sample_rate,
-                                                wanted_nb_samples * container.Audio.TargetSpec.Frequency / af.FramePtr->sample_rate) < 0)
+                    if (ffmpeg.swr_set_compensation(container.Audio.ConvertContext, (wantedSampleCount - af.FramePtr->nb_samples) * container.Audio.TargetSpec.Frequency / af.FramePtr->sample_rate,
+                                                wantedSampleCount * container.Audio.TargetSpec.Frequency / af.FramePtr->sample_rate) < 0)
                     {
                         ffmpeg.av_log(null, ffmpeg.AV_LOG_ERROR, "swr_set_compensation() failed\n");
                         return -1;
@@ -882,7 +881,7 @@
 
                 var audioBufferIn = af.FramePtr->extended_data;
                 var audioBufferOut = container.audio_buf1;
-                len2 = ffmpeg.swr_convert(container.Audio.ConvertContext, &audioBufferOut, out_count, audioBufferIn, af.FramePtr->nb_samples);
+                len2 = ffmpeg.swr_convert(container.Audio.ConvertContext, &audioBufferOut, wantedOutputSize, audioBufferIn, af.FramePtr->nb_samples);
                 container.audio_buf1 = audioBufferOut;
                 af.FramePtr->extended_data = audioBufferIn;
 
@@ -891,7 +890,7 @@
                     ffmpeg.av_log(null, ffmpeg.AV_LOG_ERROR, "swr_convert() failed\n");
                     return -1;
                 }
-                if (len2 == out_count)
+                if (len2 == wantedOutputSize)
                 {
                     ffmpeg.av_log(null, ffmpeg.AV_LOG_WARNING, "audio buffer is probably too small\n");
                     if (ffmpeg.swr_init(container.Audio.ConvertContext) < 0)

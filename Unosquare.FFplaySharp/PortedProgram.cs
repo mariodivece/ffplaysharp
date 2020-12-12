@@ -40,11 +40,6 @@
             Environment.Exit(123);
         }
 
-        static void toggle_mute(MediaContainer container)
-        {
-            container.muted = !container.muted;
-        }
-
         static void update_volume(MediaContainer container, int sign, double step)
         {
             var volume_level = container.audio_volume > 0 ? (20 * Math.Log(container.audio_volume / (double)SDL.SDL_MIX_MAXVOLUME) / Math.Log(10)) : -1000.0;
@@ -126,7 +121,7 @@
                                 container.toggle_pause();
                                 break;
                             case SDL.SDL_Keycode.SDLK_m:
-                                toggle_mute(container);
+                                container.toggle_mute();
                                 break;
                             case SDL.SDL_Keycode.SDLK_KP_MULTIPLY:
                             case SDL.SDL_Keycode.SDLK_0:

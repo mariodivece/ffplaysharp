@@ -9,25 +9,29 @@
     public unsafe class MediaContainer
     {
         private bool WasPaused;
+        private bool IsPictureAttachmentPending;
 
         private Thread ReadingThread;
         public AVInputFormat* iformat = null;
-        public bool IsAbortRequested;
+        public bool IsAbortRequested { get; private set; }
         
         public bool IsPaused { get; private set; }
 
-        public bool queue_attachments_req;
+        
         private bool seek_req;
         private int seek_flags;
         public long seek_pos;
         private long seek_rel;
         private int read_pause_return;
         public AVFormatContext* InputContext = null;
+
         public bool IsRealtime { get; private set; }
 
-        public Clock AudioClock;
-        public Clock VideoClock;
-        public Clock ExternalClock;
+        public Clock AudioClock { get; private set; }
+        
+        public Clock VideoClock { get; private set; }
+        
+        public Clock ExternalClock { get; private set; }
 
         public AudioComponent Audio { get; }
 
@@ -35,7 +39,7 @@
 
         public SubtitleComponent Subtitle { get; }
 
-        public ClockSync ClockSyncMode { get; set; }
+        public ClockSync ClockSyncMode { get; private set; }
 
         public double audio_clock;
         public int audio_clock_serial;
@@ -51,7 +55,7 @@
         public int audio_buf_index; /* in bytes */
         public int audio_write_buf_size;
         public int audio_volume;
-        public bool muted;
+        public bool IsMuted { get; private set; }
         public int frame_drops_early;
         public int frame_drops_late;
 
@@ -63,7 +67,7 @@
         // RDFTContext* rdft;
         // int rdft_bits;
         // FFTSample* rdft_data;
-        public int xpos;
+        // public int xpos;
         public double last_vis_time;
         public IntPtr vis_texture; // TODO: remove (audio visualization texture)
         public IntPtr sub_texture;
@@ -185,7 +189,7 @@
             container.Options.startup_volume = Helpers.av_clip(container.Options.startup_volume, 0, 100);
             container.Options.startup_volume = Helpers.av_clip(SDL.SDL_MIX_MAXVOLUME * container.Options.startup_volume / 100, 0, SDL.SDL_MIX_MAXVOLUME);
             container.audio_volume = container.Options.startup_volume;
-            container.muted = false;
+            container.IsMuted = false;
             container.ClockSyncMode = container.Options.av_sync_type;
             container.StartReadThread();
             return container;
@@ -349,6 +353,11 @@
                 if (speed != 1.0)
                     ExternalClock.SetSpeed(speed + Constants.EXTERNAL_CLOCK_SPEED_STEP * (1.0 - speed) / Math.Abs(1.0 - speed));
             }
+        }
+
+        public void toggle_mute()
+        {
+            IsMuted = !IsMuted;
         }
 
         public void toggle_pause()
@@ -668,7 +677,7 @@
 
                     Video.Decoder = new(this, avctx);
                     Video.Decoder.Start();
-                    queue_attachments_req = true;
+                    IsPictureAttachmentPending = true;
                     break;
                 case AVMediaType.AVMEDIA_TYPE_SUBTITLE:
                     Subtitle.StreamIndex = stream_index;
@@ -787,10 +796,7 @@
             /* if not master, then we try to remove or add samples to correct the clock */
             if (MasterSyncMode != ClockSync.Audio)
             {
-                double diff, avg_diff;
-                int min_nb_samples, max_nb_samples;
-
-                diff = AudioClock.Time - MasterTime;
+                var diff = AudioClock.Time - MasterTime;
 
                 if (!double.IsNaN(diff) && Math.Abs(diff) < Constants.AV_NOSYNC_THRESHOLD)
                 {
@@ -803,14 +809,14 @@
                     else
                     {
                         /* estimate the A-V difference */
-                        avg_diff = audio_diff_cum * (1.0 - audio_diff_avg_coef);
+                        var avg_diff = audio_diff_cum * (1.0 - audio_diff_avg_coef);
 
                         if (Math.Abs(avg_diff) >= audio_diff_threshold)
                         {
                             wantedSampleCount = sampleCount + (int)(diff * Audio.SourceSpec.Frequency);
-                            min_nb_samples = (int)((sampleCount * (100 - Constants.SAMPLE_CORRECTION_PERCENT_MAX) / 100));
-                            max_nb_samples = (int)((sampleCount * (100 + Constants.SAMPLE_CORRECTION_PERCENT_MAX) / 100));
-                            wantedSampleCount = Helpers.av_clip(wantedSampleCount, min_nb_samples, max_nb_samples);
+                            var minSampleCount = (int)((sampleCount * (100 - Constants.SAMPLE_CORRECTION_PERCENT_MAX) / 100));
+                            var maxSampleCount = (int)((sampleCount * (100 + Constants.SAMPLE_CORRECTION_PERCENT_MAX) / 100));
+                            wantedSampleCount = Helpers.av_clip(wantedSampleCount, minSampleCount, maxSampleCount);
                         }
 
                         ffmpeg.av_log(
@@ -1132,13 +1138,13 @@
                         }
                     }
                     seek_req = false;
-                    queue_attachments_req = true;
+                    IsPictureAttachmentPending = true;
                     eof = false;
 
                     if (IsPaused)
                         step_to_next_frame();
                 }
-                if (queue_attachments_req)
+                if (IsPictureAttachmentPending)
                 {
                     if (Video.Stream != null && (Video.Stream->disposition & ffmpeg.AV_DISPOSITION_ATTACHED_PIC) != 0)
                     {
@@ -1147,7 +1153,7 @@
                         Video.Packets.PutNull();
                     }
 
-                    queue_attachments_req = false;
+                    IsPictureAttachmentPending = false;
                 }
 
                 /* if the queue are full, no need to read more */
