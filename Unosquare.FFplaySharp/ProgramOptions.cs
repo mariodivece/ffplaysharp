@@ -1,11 +1,7 @@
 ﻿namespace Unosquare.FFplaySharp
 {
     using FFmpeg.AutoGen;
-    using System;
     using System.Collections.Generic;
-    using System.Linq;
-    using System.Text;
-    using System.Threading.Tasks;
 
     public unsafe class ProgramOptions
     {
@@ -59,10 +55,6 @@
         public AVDictionary* format_opts;
         public AVDictionary* codec_opts;
         public AVDictionary* resample_opts;
-
-        // inlined static variables
-        public long last_time_status = 0;
-        public double last_audio_clock = 0;
 
         public void uninit_opts()
         {

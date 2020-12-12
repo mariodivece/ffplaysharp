@@ -40,12 +40,6 @@
             Environment.Exit(123);
         }
 
-        static void toggle_pause(MediaContainer container)
-        {
-            container.stream_toggle_pause();
-            container.step = 0;
-        }
-
         static void toggle_mute(MediaContainer container)
         {
             container.muted = !container.muted;
@@ -56,51 +50,6 @@
             var volume_level = container.audio_volume > 0 ? (20 * Math.Log(container.audio_volume / (double)SDL.SDL_MIX_MAXVOLUME) / Math.Log(10)) : -1000.0;
             var new_volume = (int)Math.Round(SDL.SDL_MIX_MAXVOLUME * Math.Pow(10.0, (volume_level + sign * step) / 20.0), 0);
             container.audio_volume = Helpers.av_clip(container.audio_volume == new_volume ? (container.audio_volume + sign) : new_volume, 0, SDL.SDL_MIX_MAXVOLUME);
-        }
-
-        static MediaContainer stream_open(ProgramOptions options, MediaRenderer renderer)
-        {
-            var container = new MediaContainer(options, renderer);
-
-            var o = container.Options;
-            container.Video.LastStreamIndex = container.Video.StreamIndex = -1;
-            container.Audio.LastStreamIndex = container.Audio.StreamIndex = -1;
-            container.Subtitle.LastStreamIndex = container.Subtitle.StreamIndex = -1;
-            container.filename = o.input_filename;
-            if (string.IsNullOrWhiteSpace(container.filename))
-                goto fail;
-
-            container.iformat = o.file_iformat;
-            container.ytop = 0;
-            container.xleft = 0;
-
-            /* start video display */
-            container.Video.Frames = new(container.Video.Packets, Constants.VIDEO_PICTURE_QUEUE_SIZE, true);
-            container.Subtitle.Frames = new(container.Subtitle.Packets, Constants.SUBPICTURE_QUEUE_SIZE, false);
-            container.Audio.Frames = new(container.Audio.Packets, Constants.SAMPLE_QUEUE_SIZE, true);
-
-            container.VideoClock = new Clock(container.Video.Packets);
-            container.AudioClock = new Clock(container.Audio.Packets);
-            container.ExternalClock = new Clock(container.ExternalClock);
-
-            container.audio_clock_serial = -1;
-            if (container.Options.startup_volume < 0)
-                ffmpeg.av_log(null, ffmpeg.AV_LOG_WARNING, $"-volume={container.Options.startup_volume} < 0, setting to 0\n");
-
-            if (container.Options.startup_volume > 100)
-                ffmpeg.av_log(null, ffmpeg.AV_LOG_WARNING, $"-volume={container.Options.startup_volume} > 100, setting to 100\n");
-
-            container.Options.startup_volume = Helpers.av_clip(container.Options.startup_volume, 0, 100);
-            container.Options.startup_volume = Helpers.av_clip(SDL.SDL_MIX_MAXVOLUME * container.Options.startup_volume / 100, 0, SDL.SDL_MIX_MAXVOLUME);
-            container.audio_volume = container.Options.startup_volume;
-            container.muted = false;
-            container.ClockSyncMode = container.Options.av_sync_type;
-            container.StartReadThread();
-            return container;
-
-        fail:
-            container.stream_close();
-            return null;
         }
 
         static void toggle_audio_display(MediaContainer container)
@@ -174,7 +123,7 @@
                                 break;
                             case SDL.SDL_Keycode.SDLK_p:
                             case SDL.SDL_Keycode.SDLK_SPACE:
-                                toggle_pause(container);
+                                container.toggle_pause();
                                 break;
                             case SDL.SDL_Keycode.SDLK_m:
                                 toggle_mute(container);
@@ -401,7 +350,7 @@
             if (!SdlRenderer.Initialize(o))
                 do_exit(null);
 
-            GlobalVideoState = stream_open(o, SdlRenderer);
+            GlobalVideoState = MediaContainer.stream_open(o, SdlRenderer);
             SdlRenderer.Link(GlobalVideoState);
 
             if (GlobalVideoState == null)

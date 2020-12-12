@@ -31,6 +31,10 @@
 
         public bool force_refresh;
 
+        // inlined static variables
+        public long last_time_status = 0;
+        public double last_audio_clock = 0;
+
         public MediaContainer Container { get; private set; }
 
         public static readonly Dictionary<AVPixelFormat, uint> sdl_texture_map = new()
@@ -574,7 +578,7 @@
                 double av_diff;
 
                 cur_time = ffmpeg.av_gettime_relative();
-                if (container.Options.last_time_status == 0 || (cur_time - container.Options.last_time_status) >= 30000)
+                if (last_time_status == 0 || (cur_time - last_time_status) >= 30000)
                 {
                     aqsize = 0;
                     vqsize = 0;
@@ -609,7 +613,7 @@
                     else
                         ffmpeg.av_log(null, ffmpeg.AV_LOG_INFO, $"{buf}\n");
 
-                    container.Options.last_time_status = cur_time;
+                    last_time_status = cur_time;
                 }
             }
         }
@@ -918,8 +922,8 @@
             container.audio_clock_serial = af.Serial;
             if (Debugger.IsAttached)
             {
-                Console.WriteLine($"audio: delay={(container.audio_clock - container.Options.last_audio_clock),-8:0.####} clock={container.audio_clock,-8:0.####} clock0={audio_clock0,-8:0.####}");
-                container.Options.last_audio_clock = container.audio_clock;
+                Console.WriteLine($"audio: delay={(container.audio_clock - last_audio_clock),-8:0.####} clock={container.audio_clock,-8:0.####} clock0={audio_clock0,-8:0.####}");
+                last_audio_clock = container.audio_clock;
             }
 
             return resampled_data_size;

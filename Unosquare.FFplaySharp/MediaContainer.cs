@@ -149,6 +149,53 @@
 
         public IReadOnlyList<MediaComponent> Components { get; }
 
+
+        public static MediaContainer stream_open(ProgramOptions options, MediaRenderer renderer)
+        {
+            var container = new MediaContainer(options, renderer);
+
+            var o = container.Options;
+            container.Video.LastStreamIndex = container.Video.StreamIndex = -1;
+            container.Audio.LastStreamIndex = container.Audio.StreamIndex = -1;
+            container.Subtitle.LastStreamIndex = container.Subtitle.StreamIndex = -1;
+            container.filename = o.input_filename;
+            if (string.IsNullOrWhiteSpace(container.filename))
+                goto fail;
+
+            container.iformat = o.file_iformat;
+            container.ytop = 0;
+            container.xleft = 0;
+
+            /* start video display */
+            container.Video.Frames = new(container.Video.Packets, Constants.VIDEO_PICTURE_QUEUE_SIZE, true);
+            container.Subtitle.Frames = new(container.Subtitle.Packets, Constants.SUBPICTURE_QUEUE_SIZE, false);
+            container.Audio.Frames = new(container.Audio.Packets, Constants.SAMPLE_QUEUE_SIZE, true);
+
+            container.VideoClock = new Clock(container.Video.Packets);
+            container.AudioClock = new Clock(container.Audio.Packets);
+            container.ExternalClock = new Clock(container.ExternalClock);
+
+            container.audio_clock_serial = -1;
+            if (container.Options.startup_volume < 0)
+                ffmpeg.av_log(null, ffmpeg.AV_LOG_WARNING, $"-volume={container.Options.startup_volume} < 0, setting to 0\n");
+
+            if (container.Options.startup_volume > 100)
+                ffmpeg.av_log(null, ffmpeg.AV_LOG_WARNING, $"-volume={container.Options.startup_volume} > 100, setting to 100\n");
+
+            container.Options.startup_volume = Helpers.av_clip(container.Options.startup_volume, 0, 100);
+            container.Options.startup_volume = Helpers.av_clip(SDL.SDL_MIX_MAXVOLUME * container.Options.startup_volume / 100, 0, SDL.SDL_MIX_MAXVOLUME);
+            container.audio_volume = container.Options.startup_volume;
+            container.muted = false;
+            container.ClockSyncMode = container.Options.av_sync_type;
+            container.StartReadThread();
+            return container;
+
+        fail:
+            container.stream_close();
+            return null;
+        }
+
+
         public int configure_audio_filters(bool force_output_format)
         {
             var afilters = Options.afilters;
@@ -302,6 +349,12 @@
                 if (speed != 1.0)
                     ExternalClock.SetSpeed(speed + Constants.EXTERNAL_CLOCK_SPEED_STEP * (1.0 - speed) / Math.Abs(1.0 - speed));
             }
+        }
+
+        public void toggle_pause()
+        {
+            stream_toggle_pause();
+            step = 0;
         }
 
         public void stream_toggle_pause()
