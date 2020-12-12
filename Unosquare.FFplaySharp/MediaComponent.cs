@@ -25,6 +25,13 @@
 
         public int LastStreamIndex;
 
+        public abstract AVMediaType MediaType { get; }
+
+        public bool IsAudio => MediaType == AVMediaType.AVMEDIA_TYPE_AUDIO;
+        public bool IsVideo => MediaType == AVMediaType.AVMEDIA_TYPE_VIDEO;
+
+        public bool IsSubtitle => MediaType == AVMediaType.AVMEDIA_TYPE_SUBTITLE;
+
         public bool HasEnoughPackets
         {
             get
@@ -35,6 +42,18 @@
                    Packets.Count > Constants.MIN_FRAMES && (Packets.Duration == 0 ||
                    ffmpeg.av_q2d(Stream->time_base) * Packets.Duration > 1.0);
             }
+        }
+
+        public virtual void Close()
+        {
+            if (StreamIndex < 0 || StreamIndex >= Container.InputContext->nb_streams)
+                return;
+
+            Decoder?.Abort();
+            Decoder?.Dispose();
+            Container.InputContext->streams[StreamIndex]->discard = AVDiscard.AVDISCARD_ALL;
+            Stream = null;
+            StreamIndex = -1;
         }
     }
 
@@ -61,6 +80,8 @@
         public SwsContext* ConvertContext;
 
         public new VideoDecoder Decoder { get; set; }
+
+        public override AVMediaType MediaType => AVMediaType.AVMEDIA_TYPE_VIDEO;
     }
 
     public unsafe sealed class AudioComponent : FilteringMediaComponent
@@ -78,6 +99,33 @@
         public AudioParams TargetSpec = new();
 
         public new AudioDecoder Decoder { get; set; }
+
+        public override AVMediaType MediaType => AVMediaType.AVMEDIA_TYPE_AUDIO;
+
+        public override void Close()
+        {
+            if (StreamIndex < 0 || StreamIndex >= Container.InputContext->nb_streams)
+                return;
+
+            Decoder?.Abort();
+            Container.Renderer.CloseAudio();
+            Decoder?.Dispose();
+
+            var contextPointer = ConvertContext;
+            ffmpeg.swr_free(&contextPointer);
+            ConvertContext = null;
+
+            if (Container.audio_buf1 != null)
+                ffmpeg.av_free(Container.audio_buf1);
+
+            Container.audio_buf1 = null;
+            Container.audio_buf1_size = 0;
+            Container.audio_buf = null;
+
+            Container.InputContext->streams[StreamIndex]->discard = AVDiscard.AVDISCARD_ALL;
+            Stream = null;
+            StreamIndex = -1;
+        }
     }
 
     public unsafe sealed class SubtitleComponent : MediaComponent
@@ -91,5 +139,7 @@
         public SwsContext* ConvertContext;
 
         public new SubtitleDecoder Decoder { get; set; }
+
+        public override AVMediaType MediaType => AVMediaType.AVMEDIA_TYPE_SUBTITLE;
     }
 }

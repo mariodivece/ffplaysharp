@@ -138,20 +138,20 @@
 
         public static unsafe int av_opt_set_int_list(void* obj, string name, int[] val, int flags)
         {
-            // TODO: audio not working with this function enabled. ???
-            // return 0;
+            var pinnedValues = stackalloc int[val.Length];
+            for (var i = 0; i < val.Length; i++)
+                pinnedValues[i] = val[i];
 
-            fixed (int* ptr = &val[0])
-                return ffmpeg.av_opt_set_bin(obj, name, (byte*)ptr, val.Length * sizeof(int), flags);
+            return ffmpeg.av_opt_set_bin(obj, name, (byte*)pinnedValues, val.Length * sizeof(int), flags);
         }
 
         public static unsafe int av_opt_set_int_list(void* obj, string name, long[] val, int flags)
         {
-            // TODO: audio not working with this function enabled. ???
-            // return 0;
+            var pinnedValues = stackalloc long[val.Length];
+            for (var i = 0; i < val.Length; i++)
+                pinnedValues[i] = val[i];
 
-            fixed (long* ptr = &val[0])
-                return ffmpeg.av_opt_set_bin(obj, name, (byte*)ptr, val.Length * sizeof(long), flags);
+            return ffmpeg.av_opt_set_bin(obj, name, (byte*)pinnedValues, val.Length * sizeof(long), flags);
         }
 
         public static unsafe byte* strchr(byte* str, char search)

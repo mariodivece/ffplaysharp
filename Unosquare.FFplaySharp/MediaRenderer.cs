@@ -3,6 +3,7 @@ using SDL2;
 using System;
 using System.Collections.Generic;
 using System.Diagnostics;
+using System.Runtime.InteropServices;
 using System.Text;
 
 namespace Unosquare.FFplaySharp
@@ -693,8 +694,8 @@ namespace Unosquare.FFplaySharp
                 if (len > size)
                     len = size;
 
-                fixed (short* targetAddress = &container.sample_array[container.sample_array_index])
-                    Buffer.MemoryCopy(samples, targetAddress, len * sizeof(short), len * sizeof(short));
+                var targetAddress = &container.sample_array[container.sample_array_index];
+                Buffer.MemoryCopy(samples, targetAddress, len * sizeof(short), len * sizeof(short));
 
                 samples += len;
                 container.sample_array_index += len;
@@ -813,8 +814,9 @@ namespace Unosquare.FFplaySharp
                 af.FramePtr->sample_rate != container.Audio.SourceSpec.Frequency ||
                 (wanted_nb_samples != af.FramePtr->nb_samples && container.Audio.ConvertContext == null))
             {
-                fixed (SwrContext** is_swr_ctx = &container.Audio.ConvertContext)
-                    ffmpeg.swr_free(is_swr_ctx);
+                var convertContext = container.Audio.ConvertContext;
+                ffmpeg.swr_free(&convertContext);
+                container.Audio.ConvertContext = null;
 
                 container.Audio.ConvertContext = ffmpeg.swr_alloc_set_opts(null,
                                                  container.Audio.TargetSpec.Layout, container.Audio.TargetSpec.SampleFormat, container.Audio.TargetSpec.Frequency,
@@ -828,8 +830,9 @@ namespace Unosquare.FFplaySharp
                            $"{ffmpeg.av_get_sample_fmt_name((AVSampleFormat)af.FramePtr->format)} {af.FramePtr->channels} channels to " +
                            $"{container.Audio.TargetSpec.Frequency} Hz {ffmpeg.av_get_sample_fmt_name(container.Audio.TargetSpec.SampleFormat)} {container.Audio.TargetSpec.Channels} channels!\n");
 
-                    fixed (SwrContext** is_swr_ctx = &container.Audio.ConvertContext)
-                        ffmpeg.swr_free(is_swr_ctx);
+                    convertContext = container.Audio.ConvertContext;
+                    ffmpeg.swr_free(&convertContext);
+                    container.Audio.ConvertContext = null;
 
                     return -1;
                 }
@@ -841,8 +844,6 @@ namespace Unosquare.FFplaySharp
 
             if (container.Audio.ConvertContext != null)
             {
-                var @in = af.FramePtr->extended_data;
-
                 int out_count = (int)((long)wanted_nb_samples * container.Audio.TargetSpec.Frequency / af.FramePtr->sample_rate + 256);
                 int out_size = ffmpeg.av_samples_get_buffer_size(null, container.Audio.TargetSpec.Channels, out_count, container.Audio.TargetSpec.SampleFormat, 0);
                 int len2;
@@ -874,8 +875,11 @@ namespace Unosquare.FFplaySharp
                     container.audio_buf1_size = (uint)out_size;
                 }
 
-                fixed (byte** @out = &container.audio_buf1)
-                    len2 = ffmpeg.swr_convert(container.Audio.ConvertContext, @out, out_count, @in, af.FramePtr->nb_samples);
+                var audioBufferIn = af.FramePtr->extended_data;
+                var audioBufferOut = container.audio_buf1;
+                len2 = ffmpeg.swr_convert(container.Audio.ConvertContext, &audioBufferOut, out_count, audioBufferIn, af.FramePtr->nb_samples);
+                container.audio_buf1 = audioBufferOut;
+                af.FramePtr->extended_data = audioBufferIn;
 
                 if (len2 < 0)
                 {
@@ -887,8 +891,9 @@ namespace Unosquare.FFplaySharp
                     ffmpeg.av_log(null, ffmpeg.AV_LOG_WARNING, "audio buffer is probably too small\n");
                     if (ffmpeg.swr_init(container.Audio.ConvertContext) < 0)
                     {
-                        fixed (SwrContext** is_swr_ctx = &container.Audio.ConvertContext)
-                            ffmpeg.swr_free(is_swr_ctx);
+                        var convertContext = container.Audio.ConvertContext;
+                        ffmpeg.swr_free(&convertContext);
+                        container.Audio.ConvertContext = convertContext;
                     }
                 }
 

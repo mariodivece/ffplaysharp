@@ -10,6 +10,7 @@
     {
         private readonly int ReorderPts;
         private readonly PacketQueue Packets;
+        private readonly FrameQueue Frames;
         private readonly AutoResetEvent EmptyQueueEvent;
 
         private PacketHolder PendingPacket;
@@ -24,6 +25,7 @@
             Container = component.Container;
             CodecContext = codecContext;
             Packets = component.Packets;
+            Frames = component.Frames;
             EmptyQueueEvent = component.Container.continue_read_thread;
             StartPts = ffmpeg.AV_NOPTS_VALUE;
             PacketSerial = -1;
@@ -193,16 +195,14 @@
             CodecContext = null;
         }
 
-        public void Abort(FrameQueue fq)
+        public void Abort()
         {
             Packets.Close();
-            fq.SignalChanged();
+            Frames.SignalChanged();
             Worker.Join();
             Worker = null;
             Packets.Clear();
         }
-
-        public abstract AVMediaType MediaType { get; }
 
         protected void Start(ThreadStart workerMethod, string threadName)
         {
@@ -223,8 +223,6 @@
         }
 
         public new AudioComponent Component { get; }
-
-        public override AVMediaType MediaType => AVMediaType.AVMEDIA_TYPE_AUDIO;
 
         public override void Start() => base.Start(WorkerThreadMethod, "AudioDecoder");
 
@@ -319,8 +317,6 @@
         }
 
         public new VideoComponent Component { get; }
-
-        public override AVMediaType MediaType => AVMediaType.AVMEDIA_TYPE_VIDEO;
 
         public override void Start() => base.Start(VideoWorkerThreadMethod, "VideoDecoder");
 
@@ -611,8 +607,6 @@
         }
 
         public new SubtitleComponent Component { get; }
-
-        public override AVMediaType MediaType => AVMediaType.AVMEDIA_TYPE_SUBTITLE;
 
         public override void Start() => base.Start(SubtitleWorkerThreadMethod, "SubtitleDecoder");
 

@@ -3,8 +3,6 @@
     using FFmpeg.AutoGen;
     using SDL2;
     using System;
-    using System.Diagnostics;
-    using System.Threading;
 
     public static unsafe class PortedProgram
     {
@@ -12,68 +10,11 @@
 
         // TODO: cmdutils.c
         // https://github.com/FFmpeg/FFmpeg/blob/master/fftools/cmdutils.c
-        /* current context */        
+        /* current context */
         static long last_mouse_left_click;
 
         static MediaContainer GlobalVideoState;
         static MediaRenderer SdlRenderer;
-
-        static void stream_component_close(MediaContainer container, int stream_index)
-        {
-            AVFormatContext* ic = container.InputContext;
-            AVCodecParameters* codecpar;
-
-            if (stream_index < 0 || stream_index >= ic->nb_streams)
-                return;
-            codecpar = ic->streams[stream_index]->codecpar;
-
-            switch (codecpar->codec_type)
-            {
-                case AVMediaType.AVMEDIA_TYPE_AUDIO:
-                    container.Audio.Decoder.Abort(container.Audio.Frames);
-                    SdlRenderer.CloseAudio();
-                    container.Audio.Decoder.Dispose();
-                    fixed (SwrContext** swr_ctx = &container.Audio.ConvertContext)
-                        ffmpeg.swr_free(swr_ctx);
-
-                    if (container.audio_buf1 != null)
-                        ffmpeg.av_free(container.audio_buf1);
-
-                    container.audio_buf1 = null;
-                    container.audio_buf1_size = 0;
-                    container.audio_buf = null;
-                    break;
-                case AVMediaType.AVMEDIA_TYPE_VIDEO:
-                    container.Video.Decoder.Abort(container.Video.Frames);
-                    container.Video.Decoder.Dispose();
-                    break;
-                case AVMediaType.AVMEDIA_TYPE_SUBTITLE:
-                    container.Subtitle.Decoder.Abort(container.Subtitle.Frames);
-                    container.Subtitle.Decoder.Dispose();
-                    break;
-                default:
-                    break;
-            }
-
-            ic->streams[stream_index]->discard = AVDiscard.AVDISCARD_ALL;
-            switch (codecpar->codec_type)
-            {
-                case AVMediaType.AVMEDIA_TYPE_AUDIO:
-                    container.Audio.Stream = null;
-                    container.Audio.StreamIndex = -1;
-                    break;
-                case AVMediaType.AVMEDIA_TYPE_VIDEO:
-                    container.Video.Stream = null;
-                    container.Video.StreamIndex = -1;
-                    break;
-                case AVMediaType.AVMEDIA_TYPE_SUBTITLE:
-                    container.Subtitle.Stream = null;
-                    container.Subtitle.StreamIndex = -1;
-                    break;
-                default:
-                    break;
-            }
-        }
 
         static void stream_close(MediaContainer container)
         {
@@ -82,26 +23,19 @@
             container.read_tid.Join();
 
             /* close each stream */
-            if (container.Audio.StreamIndex >= 0)
-                stream_component_close(container, container.Audio.StreamIndex);
+            foreach (var component in container.Components)
+                component.Close();
 
-            if (container.Video.StreamIndex >= 0)
-                stream_component_close(container, container.Video.StreamIndex);
+            // Close the input context
+            var ic = container.InputContext;
+            ffmpeg.avformat_close_input(&ic);
+            container.InputContext = null;
 
-            if (container.Subtitle.StreamIndex >= 0)
-                stream_component_close(container, container.Subtitle.StreamIndex);
-
-            fixed (AVFormatContext** ic = &container.InputContext)
-                ffmpeg.avformat_close_input(ic);
-
-            container.Video.Packets.Dispose();
-            container.Audio.Packets.Dispose();
-            container.Subtitle.Packets.Dispose();
-
-            /* free all pictures */
-            container.Video.Frames?.Dispose();
-            container.Audio.Frames?.Dispose();
-            container.Subtitle.Frames?.Dispose();
+            foreach (var component in container.Components)
+            {
+                component.Packets?.Dispose();
+                component.Frames?.Dispose();
+            }
 
             container.continue_read_thread.Dispose();
             ffmpeg.sws_freeContext(container.Video.ConvertContext);
@@ -112,9 +46,12 @@
 
             if (container.vid_texture != IntPtr.Zero)
                 SDL.SDL_DestroyTexture(container.vid_texture);
-            
+
             if (container.sub_texture != IntPtr.Zero)
                 SDL.SDL_DestroyTexture(container.sub_texture);
+
+            ffmpeg.av_free(container.sample_array);
+            container.sample_array = null;
         }
 
         static void do_exit(MediaContainer container)
@@ -132,7 +69,7 @@
             ffmpeg.avformat_network_deinit();
             if (container.Options.show_status != 0)
                 Console.WriteLine();
-            
+
             SDL.SDL_Quit();
             ffmpeg.av_log(null, ffmpeg.AV_LOG_QUIET, "");
             Environment.Exit(0);
@@ -206,90 +143,6 @@
             return null;
         }
 
-        static void stream_cycle_channel(MediaContainer container, AVMediaType codecType)
-        {
-            AVFormatContext* ic = container.InputContext;
-            int start_index, stream_index;
-            int old_index;
-            AVStream* st;
-            AVProgram* p = null;
-            int nb_streams = (int)container.InputContext->nb_streams;
-
-            if (codecType == (int)AVMediaType.AVMEDIA_TYPE_VIDEO)
-            {
-                start_index = container.Video.LastStreamIndex;
-                old_index = container.Video.StreamIndex;
-            }
-            else if (codecType == AVMediaType.AVMEDIA_TYPE_AUDIO)
-            {
-                start_index = container.Audio.LastStreamIndex;
-                old_index = container.Audio.StreamIndex;
-            }
-            else
-            {
-                start_index = container.Subtitle.LastStreamIndex;
-                old_index = container.Subtitle.StreamIndex;
-            }
-            stream_index = start_index;
-
-            if (codecType != (int)AVMediaType.AVMEDIA_TYPE_VIDEO && container.Video.StreamIndex != -1)
-            {
-                p = ffmpeg.av_find_program_from_stream(ic, null, container.Video.StreamIndex);
-                if (p != null)
-                {
-                    nb_streams = (int)p->nb_stream_indexes;
-                    for (start_index = 0; start_index < nb_streams; start_index++)
-                        if (p->stream_index[start_index] == stream_index)
-                            break;
-                    if (start_index == nb_streams)
-                        start_index = -1;
-                    stream_index = start_index;
-                }
-            }
-
-            for (; ; )
-            {
-                if (++stream_index >= nb_streams)
-                {
-                    if (codecType == AVMediaType.AVMEDIA_TYPE_SUBTITLE)
-                    {
-                        stream_index = -1;
-                        container.Subtitle.LastStreamIndex = -1;
-                        goto the_end;
-                    }
-                    if (start_index == -1)
-                        return;
-                    stream_index = 0;
-                }
-                if (stream_index == start_index)
-                    return;
-                st = container.InputContext->streams[p != null ? p->stream_index[stream_index] : stream_index];
-                if (st->codecpar->codec_type == codecType)
-                {
-                    /* check that parameters are OK */
-                    switch ((AVMediaType)codecType)
-                    {
-                        case AVMediaType.AVMEDIA_TYPE_AUDIO:
-                            if (st->codecpar->sample_rate != 0 &&
-                                st->codecpar->channels != 0)
-                                goto the_end;
-                            break;
-                        case AVMediaType.AVMEDIA_TYPE_VIDEO:
-                        case AVMediaType.AVMEDIA_TYPE_SUBTITLE:
-                            goto the_end;
-                        default:
-                            break;
-                    }
-                }
-            }
-        the_end:
-            if (p != null && stream_index != -1)
-                stream_index = (int)p->stream_index[stream_index];
-            ffmpeg.av_log(null, ffmpeg.AV_LOG_INFO, $"Switch {ffmpeg.av_get_media_type_string((AVMediaType)codecType)} stream from #{old_index} to #{stream_index}\n");
-
-            stream_component_close(container, old_index);
-            container.stream_component_open(stream_index);
-        }
 
         static void toggle_audio_display(MediaContainer container)
         {
@@ -381,18 +234,18 @@
                                 container.step_to_next_frame();
                                 break;
                             case SDL.SDL_Keycode.SDLK_a:
-                                stream_cycle_channel(container, AVMediaType.AVMEDIA_TYPE_AUDIO);
+                                container.stream_cycle_channel(AVMediaType.AVMEDIA_TYPE_AUDIO);
                                 break;
                             case SDL.SDL_Keycode.SDLK_v:
-                                stream_cycle_channel(container, AVMediaType.AVMEDIA_TYPE_VIDEO);
+                                container.stream_cycle_channel(AVMediaType.AVMEDIA_TYPE_VIDEO);
                                 break;
                             case SDL.SDL_Keycode.SDLK_c:
-                                stream_cycle_channel(container, AVMediaType.AVMEDIA_TYPE_VIDEO);
-                                stream_cycle_channel(container, AVMediaType.AVMEDIA_TYPE_AUDIO);
-                                stream_cycle_channel(container, AVMediaType.AVMEDIA_TYPE_SUBTITLE);
+                                container.stream_cycle_channel(AVMediaType.AVMEDIA_TYPE_VIDEO);
+                                container.stream_cycle_channel(AVMediaType.AVMEDIA_TYPE_AUDIO);
+                                container.stream_cycle_channel(AVMediaType.AVMEDIA_TYPE_SUBTITLE);
                                 break;
                             case SDL.SDL_Keycode.SDLK_t:
-                                stream_cycle_channel(container, AVMediaType.AVMEDIA_TYPE_SUBTITLE);
+                                container.stream_cycle_channel(AVMediaType.AVMEDIA_TYPE_SUBTITLE);
                                 break;
                             case SDL.SDL_Keycode.SDLK_w:
 

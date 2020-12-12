@@ -3,12 +3,13 @@
     using FFmpeg.AutoGen;
     using SDL2;
     using System;
+    using System.Collections.Generic;
     using System.Threading;
 
     public unsafe class MediaContainer
     {
         public Thread read_tid;
-        public AVInputFormat* iformat;
+        public AVInputFormat* iformat = null;
         public bool abort_request;
         public bool force_refresh;
         public bool paused;
@@ -19,7 +20,7 @@
         public long seek_pos;
         public long seek_rel;
         public int read_pause_return;
-        public AVFormatContext* InputContext;
+        public AVFormatContext* InputContext = null;
         public bool realtime;
 
         public Clock AudioClock;
@@ -54,7 +55,7 @@
 
         public ShowMode show_mode;
 
-        public short[] sample_array = new short[Constants.SAMPLE_ARRAY_SIZE];
+        public short* sample_array;
         public int sample_array_index;
         public int last_i_start;
         // RDFTContext* rdft;
@@ -62,7 +63,7 @@
         // FFTSample* rdft_data;
         public int xpos;
         public double last_vis_time;
-        public IntPtr vis_texture; // TOD: remove (audio visualization texture)
+        public IntPtr vis_texture; // TODO: remove (audio visualization texture)
         public IntPtr sub_texture;
         public IntPtr vid_texture;
 
@@ -84,7 +85,7 @@
         public int vfilter_idx;
         public MediaRenderer Renderer { get; }
 
-        public AVFilterGraph* agraph;              // audio filter graph
+        public AVFilterGraph* agraph = null;              // audio filter graph
 
         public AutoResetEvent continue_read_thread = new(false);
 
@@ -95,6 +96,9 @@
             Video = new(this);
             Subtitle = new(this);
             Renderer = renderer;
+            Components = new List<MediaComponent>() { Audio, Video, Subtitle };
+
+            sample_array = (short*)ffmpeg.av_mallocz(Constants.SAMPLE_ARRAY_SIZE * sizeof(short));
         }
 
         public ProgramOptions Options { get; }
@@ -141,6 +145,8 @@
             }
         }
 
+        public IReadOnlyList<MediaComponent> Components { get; }
+
         public int configure_audio_filters(bool force_output_format)
         {
             var afilters = Options.afilters;
@@ -155,11 +161,11 @@
             string asrc_args = null;
             int ret;
 
-            fixed (AVFilterGraph** agraphptr = &agraph)
-                ffmpeg.avfilter_graph_free(agraphptr);
-
-            if ((agraph = ffmpeg.avfilter_graph_alloc()) == null)
-                return ffmpeg.AVERROR(ffmpeg.ENOMEM);
+            var audioFilterGraph = agraph;
+            // TODO: sometimes agraph has weird memory.
+            if (audioFilterGraph != null && audioFilterGraph->nb_filters > 0)
+                ffmpeg.avfilter_graph_free(&audioFilterGraph);
+            agraph = ffmpeg.avfilter_graph_alloc();
             agraph->nb_threads = Options.filter_nbthreads;
 
             while ((e = ffmpeg.av_dict_get(Options.swr_opts, "", e, ffmpeg.AV_DICT_IGNORE_SUFFIX)) != null)
@@ -221,9 +227,11 @@
         end:
             if (ret < 0)
             {
-                fixed (AVFilterGraph** agraphptr = &agraph)
-                    ffmpeg.avfilter_graph_free(agraphptr);
+                var audioGraphRef = agraph;
+                ffmpeg.avfilter_graph_free(&audioGraphRef);
+                agraph = null;
             }
+
             return ret;
         }
 
@@ -308,6 +316,84 @@
 
             ExternalClock.Set(ExternalClock.Time, ExternalClock.Serial);
             paused = AudioClock.IsPaused = VideoClock.IsPaused = ExternalClock.IsPaused = !paused;
+        }
+
+        public void stream_cycle_channel(AVMediaType codecType)
+        {
+            AVFormatContext* ic = InputContext;
+            var streamCount = (int)ic->nb_streams;
+
+            MediaComponent component = codecType switch
+            {
+                AVMediaType.AVMEDIA_TYPE_VIDEO => Video,
+                AVMediaType.AVMEDIA_TYPE_AUDIO => Audio,
+                _ => Subtitle
+            };
+
+            var startStreamIndex = component.LastStreamIndex;
+            var nextStreamIndex = startStreamIndex;
+
+            AVProgram* program = null;
+            if (component.IsVideo && component.StreamIndex != -1)
+            {
+                program = ffmpeg.av_find_program_from_stream(ic, null, component.StreamIndex);
+                if (program != null)
+                {
+                    streamCount = (int)program->nb_stream_indexes;
+                    for (startStreamIndex = 0; startStreamIndex < streamCount; startStreamIndex++)
+                        if (program->stream_index[startStreamIndex] == nextStreamIndex)
+                            break;
+                    if (startStreamIndex == streamCount)
+                        startStreamIndex = -1;
+                    nextStreamIndex = startStreamIndex;
+                }
+            }
+
+            while (true)
+            {
+                if (++nextStreamIndex >= streamCount)
+                {
+                    if (component.MediaType == AVMediaType.AVMEDIA_TYPE_SUBTITLE)
+                    {
+                        nextStreamIndex = -1;
+                        Subtitle.LastStreamIndex = -1;
+                        goto the_end;
+                    }
+                    if (startStreamIndex == -1)
+                        return;
+
+                    nextStreamIndex = 0;
+                }
+
+                if (nextStreamIndex == startStreamIndex)
+                    return;
+
+                var st = InputContext->streams[program != null ? program->stream_index[nextStreamIndex] : nextStreamIndex];
+                if (st->codecpar->codec_type == component.MediaType)
+                {
+                    /* check that parameters are OK */
+                    switch (component.MediaType)
+                    {
+                        case AVMediaType.AVMEDIA_TYPE_AUDIO:
+                            if (st->codecpar->sample_rate != 0 &&
+                                st->codecpar->channels != 0)
+                                goto the_end;
+                            break;
+                        case AVMediaType.AVMEDIA_TYPE_VIDEO:
+                        case AVMediaType.AVMEDIA_TYPE_SUBTITLE:
+                            goto the_end;
+                        default:
+                            break;
+                    }
+                }
+            }
+        the_end:
+            if (program != null && nextStreamIndex != -1)
+                nextStreamIndex = (int)program->stream_index[nextStreamIndex];
+            ffmpeg.av_log(null, ffmpeg.AV_LOG_INFO, $"Switch {ffmpeg.av_get_media_type_string(component.MediaType)} stream from #{component.StreamIndex} to #{nextStreamIndex}\n");
+
+            component.Close();
+            stream_component_open(nextStreamIndex);
         }
 
         public void StartReadThread()
@@ -721,13 +807,17 @@
             // ic->interrupt_callback.opaque = (void*)GCHandle.ToIntPtr(VideoStateHandle);
             if (ffmpeg.av_dict_get(o.format_opts, "scan_all_pmts", null, ffmpeg.AV_DICT_MATCH_CASE) == null)
             {
-                fixed (AVDictionary** ref_format_opts = &o.format_opts)
-                    ffmpeg.av_dict_set(ref_format_opts, "scan_all_pmts", "1", ffmpeg.AV_DICT_DONT_OVERWRITE);
+                var formatOptions = o.format_opts;
+                ffmpeg.av_dict_set(&formatOptions, "scan_all_pmts", "1", ffmpeg.AV_DICT_DONT_OVERWRITE);
+                o.format_opts = formatOptions;
                 scan_all_pmts_set = true;
             }
 
-            fixed (AVDictionary** ref_format_opts = &o.format_opts)
-                err = ffmpeg.avformat_open_input(&ic, filename, iformat, ref_format_opts);
+            {
+                var formatOptions = o.format_opts;
+                err = ffmpeg.avformat_open_input(&ic, filename, iformat, &formatOptions);
+                o.format_opts = formatOptions;
+            }
 
             if (err < 0)
             {
@@ -737,8 +827,9 @@
             }
             if (scan_all_pmts_set)
             {
-                fixed (AVDictionary** ref_format_opts = &o.format_opts)
-                    ffmpeg.av_dict_set(ref_format_opts, "scan_all_pmts", null, ffmpeg.AV_DICT_MATCH_CASE);
+                var formatOptions = o.format_opts;
+                ffmpeg.av_dict_set(&formatOptions, "scan_all_pmts", null, ffmpeg.AV_DICT_MATCH_CASE);
+                o.format_opts = formatOptions;
             }
 
             if ((t = ffmpeg.av_dict_get(o.format_opts, "", null, ffmpeg.AV_DICT_IGNORE_SUFFIX)) != null)

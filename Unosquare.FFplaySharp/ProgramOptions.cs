@@ -66,18 +66,23 @@
 
         public void uninit_opts()
         {
-            fixed (AVDictionary** r_swr_opts = &swr_opts,
-                r_sws_dict = &sws_dict,
-                r_format_opts = &format_opts,
-                r_codec_opts = &codec_opts,
-                r_resample_opts = &resample_opts)
-            {
-                ffmpeg.av_dict_free(r_swr_opts);
-                ffmpeg.av_dict_free(r_sws_dict);
-                ffmpeg.av_dict_free(r_format_opts);
-                ffmpeg.av_dict_free(r_codec_opts);
-                ffmpeg.av_dict_free(r_resample_opts);
-            }
+            var r_swr_opts = swr_opts;
+            var r_sws_dict = sws_dict;
+            var r_format_opts = format_opts;
+            var r_codec_opts = codec_opts;
+            var r_resample_opts = resample_opts;
+
+            ffmpeg.av_dict_free(&r_swr_opts);
+            ffmpeg.av_dict_free(&r_sws_dict);
+            ffmpeg.av_dict_free(&r_format_opts);
+            ffmpeg.av_dict_free(&r_codec_opts);
+            ffmpeg.av_dict_free(&r_resample_opts);
+
+            swr_opts = null;
+            sws_dict = null;
+            format_opts = null;
+            codec_opts = null;
+            resample_opts = null;
         }
 
         public int opt_add_vfilter(void* optctx, string opt, string arg)
