@@ -1,13 +1,12 @@
-﻿using FFmpeg.AutoGen;
-using SDL2;
-using System;
-using System.Collections.Generic;
-using System.Diagnostics;
-using System.Runtime.InteropServices;
-using System.Text;
-
-namespace Unosquare.FFplaySharp
+﻿namespace Unosquare.FFplaySharp
 {
+    using FFmpeg.AutoGen;
+    using SDL2;
+    using System;
+    using System.Collections.Generic;
+    using System.Diagnostics;
+    using System.Text;
+
     public unsafe class MediaRenderer
     {
         public long audio_callback_time;
@@ -29,6 +28,8 @@ namespace Unosquare.FFplaySharp
 
         public int screen_width = 0;
         public int screen_height = 0;
+
+        public bool force_refresh;
 
         public MediaContainer Container { get; private set; }
 
@@ -427,13 +428,13 @@ namespace Unosquare.FFplaySharp
 
             FrameHolder sp, sp2;
 
-            if (!container.paused && container.MasterSyncMode == ClockSync.External && container.realtime)
+            if (!container.IsPaused && container.MasterSyncMode == ClockSync.External && container.IsRealtime)
                 container.check_external_clock_speed();
 
             if (!container.Options.display_disable && container.show_mode != ShowMode.Video && container.Audio.Stream != null)
             {
                 time = ffmpeg.av_gettime_relative() / 1000000.0;
-                if (container.force_refresh || container.last_vis_time + rdftspeed < time)
+                if (force_refresh || container.last_vis_time + rdftspeed < time)
                 {
                     video_display(container);
                     container.last_vis_time = time;
@@ -465,7 +466,7 @@ namespace Unosquare.FFplaySharp
                     if (lastvp.Serial != vp.Serial)
                         container.frame_timer = ffmpeg.av_gettime_relative() / 1000000.0;
 
-                    if (container.paused)
+                    if (container.IsPaused)
                         goto display;
 
                     /* compute nominal last_duration */
@@ -553,18 +554,18 @@ namespace Unosquare.FFplaySharp
                     }
 
                     container.Video.Frames.Next();
-                    container.force_refresh = true;
+                    force_refresh = true;
 
-                    if (container.step != 0 && !container.paused)
+                    if (container.step != 0 && !container.IsPaused)
                         container.stream_toggle_pause();
                 }
             display:
                 /* display picture */
-                if (!container.Options.display_disable && container.force_refresh && container.show_mode == ShowMode.Video && container.Video.Frames.ReadIndexShown)
+                if (!container.Options.display_disable && force_refresh && container.show_mode == ShowMode.Video && container.Video.Frames.ReadIndexShown)
                     video_display(container);
             }
 
-            container.force_refresh = false;
+            force_refresh = false;
             if (container.Options.show_status != 0)
             {
 
@@ -780,7 +781,7 @@ namespace Unosquare.FFplaySharp
             int wanted_nb_samples;
             FrameHolder af;
 
-            if (container.paused)
+            if (container.IsPaused)
                 return -1;
 
             do

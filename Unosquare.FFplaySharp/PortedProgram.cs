@@ -6,8 +6,6 @@
 
     public static unsafe class PortedProgram
     {
-
-
         // TODO: cmdutils.c
         // https://github.com/FFmpeg/FFmpeg/blob/master/fftools/cmdutils.c
         /* current context */
@@ -16,49 +14,11 @@
         static MediaContainer GlobalVideoState;
         static MediaRenderer SdlRenderer;
 
-        static void stream_close(MediaContainer container)
-        {
-            /* XXX: use a special url_shutdown call to abort parse cleanly */
-            container.abort_request = true;
-            container.read_tid.Join();
-
-            /* close each stream */
-            foreach (var component in container.Components)
-                component.Close();
-
-            // Close the input context
-            var ic = container.InputContext;
-            ffmpeg.avformat_close_input(&ic);
-            container.InputContext = null;
-
-            foreach (var component in container.Components)
-            {
-                component.Packets?.Dispose();
-                component.Frames?.Dispose();
-            }
-
-            container.continue_read_thread.Dispose();
-            ffmpeg.sws_freeContext(container.Video.ConvertContext);
-            ffmpeg.sws_freeContext(container.Subtitle.ConvertContext);
-
-            if (container.vis_texture != IntPtr.Zero)
-                SDL.SDL_DestroyTexture(container.vis_texture);
-
-            if (container.vid_texture != IntPtr.Zero)
-                SDL.SDL_DestroyTexture(container.vid_texture);
-
-            if (container.sub_texture != IntPtr.Zero)
-                SDL.SDL_DestroyTexture(container.sub_texture);
-
-            ffmpeg.av_free(container.sample_array);
-            container.sample_array = null;
-        }
-
         static void do_exit(MediaContainer container)
         {
             if (container != null)
             {
-                stream_close(container);
+                container.stream_close();
             }
 
             SdlRenderer.CloseVideo();
@@ -91,11 +51,11 @@
             container.muted = !container.muted;
         }
 
-        static void update_volume(MediaContainer @is, int sign, double step)
+        static void update_volume(MediaContainer container, int sign, double step)
         {
-            var volume_level = @is.audio_volume > 0 ? (20 * Math.Log(@is.audio_volume / (double)SDL.SDL_MIX_MAXVOLUME) / Math.Log(10)) : -1000.0;
+            var volume_level = container.audio_volume > 0 ? (20 * Math.Log(container.audio_volume / (double)SDL.SDL_MIX_MAXVOLUME) / Math.Log(10)) : -1000.0;
             var new_volume = (int)Math.Round(SDL.SDL_MIX_MAXVOLUME * Math.Pow(10.0, (volume_level + sign * step) / 20.0), 0);
-            @is.audio_volume = Helpers.av_clip(@is.audio_volume == new_volume ? (@is.audio_volume + sign) : new_volume, 0, SDL.SDL_MIX_MAXVOLUME);
+            container.audio_volume = Helpers.av_clip(container.audio_volume == new_volume ? (container.audio_volume + sign) : new_volume, 0, SDL.SDL_MIX_MAXVOLUME);
         }
 
         static MediaContainer stream_open(ProgramOptions options, MediaRenderer renderer)
@@ -139,10 +99,9 @@
             return container;
 
         fail:
-            stream_close(container);
+            container.stream_close();
             return null;
         }
-
 
         static void toggle_audio_display(MediaContainer container)
         {
@@ -153,7 +112,7 @@
             } while (next != (int)container.show_mode && (next == (int)ShowMode.Video && container.Video.Stream == null || next != (int)ShowMode.Video && container.Audio.Stream == null));
             if ((int)container.show_mode != next)
             {
-                container.force_refresh = true;
+                SdlRenderer.force_refresh = true;
                 container.show_mode = (ShowMode)next;
             }
         }
@@ -177,7 +136,7 @@
 
                 remaining_time = Constants.REFRESH_RATE;
 
-                if (container.show_mode != ShowMode.None && (!container.paused || container.force_refresh))
+                if (container.show_mode != ShowMode.None && (!container.IsPaused || SdlRenderer.force_refresh))
                     SdlRenderer.video_refresh(container, ref remaining_time);
 
                 SDL.SDL_PumpEvents();
@@ -185,8 +144,6 @@
 
             @event = events[0];
         }
-
-
 
         /* handle an event sent by the GUI */
         static void event_loop(MediaContainer container)
@@ -213,7 +170,7 @@
                         {
                             case SDL.SDL_Keycode.SDLK_f:
                                 SdlRenderer.toggle_full_screen();
-                                container.force_refresh = true;
+                                SdlRenderer.force_refresh = true;
                                 break;
                             case SDL.SDL_Keycode.SDLK_p:
                             case SDL.SDL_Keycode.SDLK_SPACE:
@@ -328,11 +285,11 @@
 
                         if (@event.button.button == SDL.SDL_BUTTON_LEFT)
                         {
-                            last_mouse_left_click = 0;
+                            // last_mouse_left_click = 0;
                             if (ffmpeg.av_gettime_relative() - last_mouse_left_click <= 500000)
                             {
                                 SdlRenderer.toggle_full_screen();
-                                container.force_refresh = true;
+                                SdlRenderer.force_refresh = true;
                                 last_mouse_left_click = 0;
                             }
                             else
@@ -400,7 +357,7 @@
                                 }
                                 break;
                             case SDL.SDL_WindowEventID.SDL_WINDOWEVENT_EXPOSED:
-                                container.force_refresh = true;
+                                SdlRenderer.force_refresh = true;
                                 break;
                         }
                         break;
@@ -455,7 +412,5 @@
 
             event_loop(GlobalVideoState);
         }
-
-
     }
 }

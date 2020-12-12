@@ -8,20 +8,22 @@
 
     public unsafe class MediaContainer
     {
-        public Thread read_tid;
+        private bool WasPaused;
+
+        private Thread ReadingThread;
         public AVInputFormat* iformat = null;
-        public bool abort_request;
-        public bool force_refresh;
-        public bool paused;
-        public bool last_paused;
+        public bool IsAbortRequested;
+        
+        public bool IsPaused { get; private set; }
+
         public bool queue_attachments_req;
-        public bool seek_req;
-        public int seek_flags;
+        private bool seek_req;
+        private int seek_flags;
         public long seek_pos;
-        public long seek_rel;
-        public int read_pause_return;
+        private long seek_rel;
+        private int read_pause_return;
         public AVFormatContext* InputContext = null;
-        public bool realtime;
+        public bool IsRealtime { get; private set; }
 
         public Clock AudioClock;
         public Clock VideoClock;
@@ -304,7 +306,7 @@
 
         public void stream_toggle_pause()
         {
-            if (paused)
+            if (IsPaused)
             {
                 frame_timer += ffmpeg.av_gettime_relative() / 1000000.0 - VideoClock.LastUpdated;
                 if (read_pause_return != ffmpeg.AVERROR(38))
@@ -315,7 +317,7 @@
             }
 
             ExternalClock.Set(ExternalClock.Time, ExternalClock.Serial);
-            paused = AudioClock.IsPaused = VideoClock.IsPaused = ExternalClock.IsPaused = !paused;
+            IsPaused = AudioClock.IsPaused = VideoClock.IsPaused = ExternalClock.IsPaused = !IsPaused;
         }
 
         public void stream_cycle_channel(AVMediaType codecType)
@@ -398,13 +400,13 @@
 
         public void StartReadThread()
         {
-            read_tid = new Thread(read_thread) { IsBackground = true, Name = nameof(read_thread) };
-            read_tid.Start();
+            ReadingThread = new Thread(read_thread) { IsBackground = true, Name = nameof(read_thread) };
+            ReadingThread.Start();
         }
 
         private int decode_interrupt_cb(void* ctx)
         {
-            return abort_request ? 1 : 0;
+            return IsAbortRequested ? 1 : 0;
         }
 
         static bool is_realtime(AVFormatContext* ic)
@@ -425,7 +427,7 @@
         public void step_to_next_frame()
         {
             /* if the stream is paused unpause it, then step */
-            if (paused)
+            if (IsPaused)
                 stream_toggle_pause();
             step = 1;
         }
@@ -775,6 +777,45 @@
         }
 
 
+        public void stream_close()
+        {
+            /* XXX: use a special url_shutdown call to abort parse cleanly */
+            IsAbortRequested = true;
+            ReadingThread.Join();
+
+            /* close each stream */
+            foreach (var component in Components)
+                component.Close();
+
+            // Close the input context
+            var ic = InputContext;
+            ffmpeg.avformat_close_input(&ic);
+            InputContext = null;
+
+            foreach (var component in Components)
+            {
+                component.Packets?.Dispose();
+                component.Frames?.Dispose();
+            }
+
+            continue_read_thread.Dispose();
+            ffmpeg.sws_freeContext(Video.ConvertContext);
+            ffmpeg.sws_freeContext(Subtitle.ConvertContext);
+
+            if (vis_texture != IntPtr.Zero)
+                SDL.SDL_DestroyTexture(vis_texture);
+
+            if (vid_texture != IntPtr.Zero)
+                SDL.SDL_DestroyTexture(vid_texture);
+
+            if (sub_texture != IntPtr.Zero)
+                SDL.SDL_DestroyTexture(sub_texture);
+
+            ffmpeg.av_free(sample_array);
+            sample_array = null;
+        }
+
+
         /* this thread gets the stream from the disk or the network */
         private void read_thread()
         {
@@ -893,7 +934,7 @@
                 }
             }
 
-            realtime = is_realtime(ic);
+            IsRealtime = is_realtime(ic);
 
             if (o.show_status != 0)
                 ffmpeg.av_dump_format(ic, 0, filename, 0);
@@ -972,23 +1013,23 @@
                 goto fail;
             }
 
-            if (o.infinite_buffer < 0 && realtime)
+            if (o.infinite_buffer < 0 && IsRealtime)
                 o.infinite_buffer = 1;
 
             while (true)
             {
-                if (abort_request)
+                if (IsAbortRequested)
                     break;
-                if (paused != last_paused)
+                if (IsPaused != WasPaused)
                 {
-                    last_paused = paused;
-                    if (paused)
+                    WasPaused = IsPaused;
+                    if (IsPaused)
                         read_pause_return = ffmpeg.av_read_pause(ic);
                     else
                         ffmpeg.av_read_play(ic);
                 }
 
-                if (paused &&
+                if (IsPaused &&
                         (Helpers.PtrToString(ic->iformat->name) == "rtsp" ||
                          (ic->pb != null && o.input_filename.StartsWith("mmsh:"))))
                 {
@@ -1041,7 +1082,7 @@
                     queue_attachments_req = true;
                     eof = false;
 
-                    if (paused)
+                    if (IsPaused)
                         step_to_next_frame();
                 }
                 if (queue_attachments_req)
@@ -1067,7 +1108,7 @@
                     continue_read_thread.WaitOne(10);
                     continue;
                 }
-                if (!paused &&
+                if (!IsPaused &&
                     (Audio.Stream == null || (Audio.Decoder.HasFinished == Audio.Packets.Serial && Audio.Frames.PendingCount == 0)) &&
                     (Video.Stream == null || (Video.Decoder.HasFinished == Video.Packets.Serial && Video.Frames.PendingCount == 0)))
                 {
