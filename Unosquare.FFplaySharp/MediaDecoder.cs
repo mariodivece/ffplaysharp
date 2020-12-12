@@ -224,9 +224,9 @@
 
         public new AudioComponent Component { get; }
 
-        public override void Start() => base.Start(WorkerThreadMethod, "AudioDecoder");
+        public override void Start() => base.Start(AudioWorkerThreadMethod, "AudioDecoder");
 
-        private void WorkerThreadMethod()
+        private void AudioWorkerThreadMethod()
         {
             FrameHolder af;
             var last_serial = -1;
@@ -271,7 +271,7 @@
                         Component.FilterSpec.Frequency = frame->sample_rate;
                         last_serial = Component.Decoder.PacketSerial;
 
-                        if ((ret = Container.configure_audio_filters(true)) < 0)
+                        if ((ret = Component.configure_audio_filters(true)) < 0)
                             goto the_end;
                     }
 
@@ -301,7 +301,7 @@
                 }
             } while (ret >= 0 || ret == ffmpeg.AVERROR(ffmpeg.EAGAIN) || ret == ffmpeg.AVERROR_EOF);
         the_end:
-            var agraph = Container.agraph;
+            var agraph = Component.agraph;
             ffmpeg.avfilter_graph_free(&agraph);
             agraph = null;
             ffmpeg.av_frame_free(&frame);
@@ -364,13 +364,9 @@
 
                     ffmpeg.avfilter_graph_free(&graph);
                     graph = ffmpeg.avfilter_graph_alloc();
-                    if (graph == null)
-                    {
-                        ret = ffmpeg.AVERROR(ffmpeg.ENOMEM);
-                        goto the_end;
-                    }
                     graph->nb_threads = Container.Options.filter_nbthreads;
-                    if ((ret = configure_video_filters(graph, Container, Container.Options.vfilters_list.Count > 0
+
+                    if ((ret = Component.configure_video_filters(ref graph, Container, Container.Options.vfilters_list.Count > 0
                         ? Container.Options.vfilters_list[Container.vfilter_idx]
                         : null, frame)) < 0)
                     {
@@ -496,105 +492,6 @@
             }
 
             return got_picture;
-        }
-
-        private int configure_video_filters(AVFilterGraph* graph, MediaContainer container, string vfilters, AVFrame* frame)
-        {
-            // enum AVPixelFormat pix_fmts[FF_ARRAY_ELEMS(sdl_texture_format_map)];
-            var pix_fmts = new List<int>(MediaRenderer.sdl_texture_map.Count);
-            string sws_flags_str = string.Empty;
-            string buffersrc_args = string.Empty;
-            int ret;
-            AVFilterContext* filt_src = null, filt_out = null, last_filter = null;
-            AVCodecParameters* codecpar = container.Video.Stream->codecpar;
-            AVRational fr = ffmpeg.av_guess_frame_rate(container.InputContext, container.Video.Stream, null);
-            AVDictionaryEntry* e = null;
-
-            for (var i = 0; i < Container.Renderer.renderer_info.num_texture_formats; i++)
-            {
-                foreach (var kvp in MediaRenderer.sdl_texture_map)
-                {
-                    if (kvp.Value == Container.Renderer.renderer_info.texture_formats[i])
-                    {
-                        pix_fmts.Add((int)kvp.Key);
-                    }
-                }
-            }
-
-            //pix_fmts.Add(AVPixelFormat.AV_PIX_FMT_NONE);
-
-            while ((e = ffmpeg.av_dict_get(container.Options.sws_dict, "", e, ffmpeg.AV_DICT_IGNORE_SUFFIX)) != null)
-            {
-                var key = Helpers.PtrToString(e->key);
-                var value = Helpers.PtrToString(e->value);
-                if (key == "sws_flags")
-                    sws_flags_str = $"flags={value}:{sws_flags_str}";
-                else
-                    sws_flags_str = $"{key}={value}:{sws_flags_str}";
-            }
-
-            if (string.IsNullOrWhiteSpace(sws_flags_str))
-                sws_flags_str = null;
-
-            graph->scale_sws_opts = sws_flags_str != null ? ffmpeg.av_strdup(sws_flags_str) : null;
-            buffersrc_args = $"video_size={frame->width}x{frame->height}:pix_fmt={frame->format}:time_base={container.Video.Stream->time_base.num}/{container.Video.Stream->time_base.den}:pixel_aspect={codecpar->sample_aspect_ratio.num}/{Math.Max(codecpar->sample_aspect_ratio.den, 1)}";
-
-            if (fr.num != 0 && fr.den != 0)
-                buffersrc_args = $"{buffersrc_args}:frame_rate={fr.num}/{fr.den}";
-
-            if ((ret = ffmpeg.avfilter_graph_create_filter(&filt_src,
-                                                    ffmpeg.avfilter_get_by_name("buffer"),
-                                                    "ffplay_buffer", buffersrc_args, null,
-                                                    graph)) < 0)
-                goto fail;
-
-            ret = ffmpeg.avfilter_graph_create_filter(&filt_out,
-                                               ffmpeg.avfilter_get_by_name("buffersink"),
-                                               "ffplay_buffersink", null, null, graph);
-            if (ret < 0)
-                goto fail;
-
-            if ((ret = Helpers.av_opt_set_int_list(filt_out, "pix_fmts", pix_fmts.ToArray(), ffmpeg.AV_OPT_SEARCH_CHILDREN)) < 0)
-                goto fail;
-
-            last_filter = filt_out;
-            if (container.Options.autorotate)
-            {
-                double theta = Helpers.get_rotation(container.Video.Stream);
-
-                if (Math.Abs(theta - 90) < 1.0)
-                {
-                    if (!Helpers.INSERT_FILT("transpose", "clock", ref graph, ref ret, ref last_filter))
-                        goto fail;
-                }
-                else if (Math.Abs(theta - 180) < 1.0)
-                {
-                    if (!Helpers.INSERT_FILT("hflip", null, ref graph, ref ret, ref last_filter))
-                        goto fail;
-
-                    if (!Helpers.INSERT_FILT("vflip", null, ref graph, ref ret, ref last_filter))
-                        goto fail;
-                }
-                else if (Math.Abs(theta - 270) < 1.0)
-                {
-                    if (!Helpers.INSERT_FILT("transpose", "cclock", ref graph, ref ret, ref last_filter))
-                        goto fail;
-                }
-                else if (Math.Abs(theta) > 1.0)
-                {
-                    if (!Helpers.INSERT_FILT("rotate", $"{theta}*PI/180", ref graph, ref ret, ref last_filter))
-                        goto fail;
-                }
-            }
-
-            if ((ret = MediaContainer.configure_filtergraph(graph, vfilters, filt_src, last_filter)) < 0)
-                goto fail;
-
-            container.Video.InputFilter = filt_src;
-            container.Video.OutputFilter = filt_out;
-
-        fail:
-            return ret;
         }
     }
 

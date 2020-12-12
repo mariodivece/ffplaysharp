@@ -1,8 +1,8 @@
-﻿using FFmpeg.AutoGen;
-using System;
-
-namespace Unosquare.FFplaySharp
+﻿namespace Unosquare.FFplaySharp
 {
+    using FFmpeg.AutoGen;
+    using System;
+
     public class Clock : ISerialProvider
     {
         private readonly ISerialProvider SerialProvider;
@@ -53,7 +53,7 @@ namespace Unosquare.FFplaySharp
         {
             get
             {
-                if (SerialProvider != this && RelatedSerial != Serial)
+                if (RelatedSerial != Serial)
                     return double.NaN;
 
                 if (IsPaused)

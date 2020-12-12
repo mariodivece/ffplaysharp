@@ -91,11 +91,9 @@
         public int vfilter_idx;
         public MediaRenderer Renderer { get; }
 
-        public AVFilterGraph* agraph = null;              // audio filter graph
+        public AutoResetEvent continue_read_thread = new(true);
 
-        public AutoResetEvent continue_read_thread = new(false);
-
-        public MediaContainer(ProgramOptions options, MediaRenderer renderer)
+        private MediaContainer(ProgramOptions options, MediaRenderer renderer)
         {
             Options = options ?? new();
             Audio = new(this);
@@ -199,96 +197,7 @@
             return null;
         }
 
-
-        public int configure_audio_filters(bool force_output_format)
-        {
-            var afilters = Options.afilters;
-            var sample_fmts = new[] { (int)AVSampleFormat.AV_SAMPLE_FMT_S16 };
-            var sample_rates = new[] { 0 };
-            var channel_layouts = new[] { 0L };
-            var channels = new[] { 0 };
-
-            AVFilterContext* filt_asrc = null, filt_asink = null;
-            string aresample_swr_opts = string.Empty;
-            AVDictionaryEntry* e = null;
-            string asrc_args = null;
-            int ret;
-
-            var audioFilterGraph = agraph;
-            // TODO: sometimes agraph has weird memory.
-            if (audioFilterGraph != null && audioFilterGraph->nb_filters > 0)
-                ffmpeg.avfilter_graph_free(&audioFilterGraph);
-            agraph = ffmpeg.avfilter_graph_alloc();
-            agraph->nb_threads = Options.filter_nbthreads;
-
-            while ((e = ffmpeg.av_dict_get(Options.swr_opts, "", e, ffmpeg.AV_DICT_IGNORE_SUFFIX)) != null)
-            {
-                var key = Helpers.PtrToString((IntPtr)e->key);
-                var value = Helpers.PtrToString((IntPtr)e->value);
-                aresample_swr_opts = $"{key}={value}:{aresample_swr_opts}";
-            }
-
-            if (string.IsNullOrWhiteSpace(aresample_swr_opts))
-                aresample_swr_opts = null;
-
-            ffmpeg.av_opt_set(agraph, "aresample_swr_opts", aresample_swr_opts, 0);
-            asrc_args = $"sample_rate={Audio.FilterSpec.Frequency}:sample_fmt={ffmpeg.av_get_sample_fmt_name(Audio.FilterSpec.SampleFormat)}:" +
-                $"channels={Audio.FilterSpec.Channels}:time_base={1}/{Audio.FilterSpec.Frequency}";
-
-            if (Audio.FilterSpec.Layout != 0)
-                asrc_args = $"{asrc_args}:channel_layout=0x{Audio.FilterSpec.Layout:x16}";
-
-            ret = ffmpeg.avfilter_graph_create_filter(&filt_asrc,
-                                               ffmpeg.avfilter_get_by_name("abuffer"), "ffplay_abuffer",
-                                               asrc_args, null, agraph);
-            if (ret < 0)
-                goto end;
-
-            ret = ffmpeg.avfilter_graph_create_filter(&filt_asink,
-                                               ffmpeg.avfilter_get_by_name("abuffersink"), "ffplay_abuffersink",
-                                               null, null, agraph);
-            if (ret < 0)
-                goto end;
-
-            if ((ret = Helpers.av_opt_set_int_list(filt_asink, "sample_fmts", sample_fmts, ffmpeg.AV_OPT_SEARCH_CHILDREN)) < 0)
-                goto end;
-
-            if ((ret = ffmpeg.av_opt_set_int(filt_asink, "all_channel_counts", 1, ffmpeg.AV_OPT_SEARCH_CHILDREN)) < 0)
-                goto end;
-
-            if (force_output_format)
-            {
-                channel_layouts[0] = Convert.ToInt32(Audio.TargetSpec.Layout);
-                channels[0] = Audio.TargetSpec.Layout != 0 ? -1 : Audio.TargetSpec.Channels;
-                sample_rates[0] = Audio.TargetSpec.Frequency;
-                if ((ret = ffmpeg.av_opt_set_int(filt_asink, "all_channel_counts", 0, ffmpeg.AV_OPT_SEARCH_CHILDREN)) < 0)
-                    goto end;
-                if ((ret = Helpers.av_opt_set_int_list(filt_asink, "channel_layouts", channel_layouts, ffmpeg.AV_OPT_SEARCH_CHILDREN)) < 0)
-                    goto end;
-                if ((ret = Helpers.av_opt_set_int_list(filt_asink, "channel_counts", channels, ffmpeg.AV_OPT_SEARCH_CHILDREN)) < 0)
-                    goto end;
-                if ((ret = Helpers.av_opt_set_int_list(filt_asink, "sample_rates", sample_rates, ffmpeg.AV_OPT_SEARCH_CHILDREN)) < 0)
-                    goto end;
-            }
-
-            if ((ret = configure_filtergraph(agraph, afilters, filt_asrc, filt_asink)) < 0)
-                goto end;
-
-            Audio.InputFilter = filt_asrc;
-            Audio.OutputFilter = filt_asink;
-
-        end:
-            if (ret < 0)
-            {
-                var audioGraphRef = agraph;
-                ffmpeg.avfilter_graph_free(&audioGraphRef);
-                agraph = null;
-            }
-
-            return ret;
-        }
-
-        public static int configure_filtergraph(AVFilterGraph* graph, string filtergraph,
+        public static int configure_filtergraph(ref AVFilterGraph* graph, string filtergraph,
                                  AVFilterContext* source_ctx, AVFilterContext* sink_ctx)
         {
             int ret;
@@ -628,7 +537,7 @@
                         Audio.FilterSpec.Channels = avctx->channels;
                         Audio.FilterSpec.Layout = (long)Helpers.get_valid_channel_layout(avctx->channel_layout, avctx->channels);
                         Audio.FilterSpec.SampleFormat = avctx->sample_fmt;
-                        if ((ret = configure_audio_filters(false)) < 0)
+                        if ((ret = Audio.configure_audio_filters(false)) < 0)
                             goto fail;
                         sink = Audio.OutputFilter;
                         sampleRate = ffmpeg.av_buffersink_get_sample_rate(sink);
@@ -838,19 +747,20 @@
 
         public void stream_close()
         {
-            /* XXX: use a special url_shutdown call to abort parse cleanly */
+            // TODO: Use a special url_shutdown call to abort parse cleanly.
             IsAbortRequested = true;
             ReadingThread.Join();
 
-            /* close each stream */
+            // Close each stream.
             foreach (var component in Components)
                 component.Close();
 
-            // Close the input context
+            // Close the input context.
             var ic = InputContext;
             ffmpeg.avformat_close_input(&ic);
             InputContext = null;
 
+            // Release packets and frames
             foreach (var component in Components)
             {
                 component.Packets?.Dispose();

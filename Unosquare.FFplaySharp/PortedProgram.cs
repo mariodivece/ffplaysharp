@@ -281,7 +281,7 @@
                             hh = ns / 3600;
                             mm = (ns % 3600) / 60;
                             ss = (ns % 60);
-                            ffmpeg.av_log(null, ffmpeg.AV_LOG_INFO, "Seek to {(frac * 100)} ({hh}:{mm}:{ss}) of total duration ({thh}:{tmm}:{tss})       \n");
+                            ffmpeg.av_log(null, ffmpeg.AV_LOG_INFO, $"Seek to {(frac * 100)} ({hh}:{mm}:{ss}) of total duration ({thh}:{tmm}:{tss})       \n");
                             ts = (long)(frac * container.InputContext->duration);
                             if (container.InputContext->start_time != ffmpeg.AV_NOPTS_VALUE)
                                 ts += container.InputContext->start_time;
@@ -321,8 +321,8 @@
             {
                 input_filename = @"C:\Users\unosp\OneDrive\ffme-testsuite\video-subtitles-03.mkv",
                 audio_disable = false,
-                subtitle_disable = true,
-                // av_sync_type = ClockSync.Video
+                subtitle_disable = false,
+                av_sync_type = ClockSync.Audio
             };
 
             Helpers.LoadNativeLibraries();
