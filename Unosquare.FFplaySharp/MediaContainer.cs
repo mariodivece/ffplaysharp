@@ -54,7 +54,7 @@
         public uint audio_buf1_size;
         public int audio_buf_index; /* in bytes */
         public int audio_write_buf_size;
-        public int audio_volume;
+        
         public bool IsMuted { get; private set; }
         public int frame_drops_early;
         public int frame_drops_late;
@@ -186,7 +186,7 @@
 
             container.Options.startup_volume = Helpers.av_clip(container.Options.startup_volume, 0, 100);
             container.Options.startup_volume = Helpers.av_clip(SDL.SDL_MIX_MAXVOLUME * container.Options.startup_volume / 100, 0, SDL.SDL_MIX_MAXVOLUME);
-            container.audio_volume = container.Options.startup_volume;
+            renderer.audio_volume = container.Options.startup_volume;
             container.IsMuted = false;
             container.ClockSyncMode = container.Options.av_sync_type;
             container.StartReadThread();

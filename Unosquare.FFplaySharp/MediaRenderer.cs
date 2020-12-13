@@ -35,6 +35,8 @@
         public long last_time_status = 0;
         public double last_audio_clock = 0;
 
+        public int audio_volume;
+
         public MediaContainer Container { get; private set; }
 
         public static readonly Dictionary<AVPixelFormat, uint> sdl_texture_map = new()
@@ -740,7 +742,7 @@
                 if (len1 > len)
                     len1 = len;
 
-                if (!Container.IsMuted && Container.audio_buf != null && Container.audio_volume == SDL.SDL_MIX_MAXVOLUME)
+                if (!Container.IsMuted && Container.audio_buf != null && audio_volume == SDL.SDL_MIX_MAXVOLUME)
                 {
                     var dest = (byte*)stream;
                     var source = (Container.audio_buf + Container.audio_buf_index);
@@ -754,7 +756,7 @@
                         target[b] = 0;
 
                     if (!Container.IsMuted && Container.audio_buf != null)
-                        SDLNatives.SDL_MixAudioFormat((byte*)stream, Container.audio_buf + Container.audio_buf_index, SDL.AUDIO_S16SYS, (uint)len1, Container.audio_volume);
+                        SDLNatives.SDL_MixAudioFormat((byte*)stream, Container.audio_buf + Container.audio_buf_index, SDL.AUDIO_S16SYS, (uint)len1, audio_volume);
                 }
 
                 len -= len1;
@@ -768,6 +770,13 @@
                 Container.AudioClock.Set(Container.audio_clock - (double)(2 * Container.audio_hw_buf_size + Container.audio_write_buf_size) / Container.Audio.TargetSpec.BytesPerSecond, Container.audio_clock_serial, audio_callback_time / 1000000.0);
                 Container.ExternalClock.SyncToSlave(Container.AudioClock);
             }
+        }
+
+        public void update_volume(MediaContainer container, int sign, double step)
+        {
+            var volume_level = audio_volume > 0 ? (20 * Math.Log(audio_volume / (double)SDL.SDL_MIX_MAXVOLUME) / Math.Log(10)) : -1000.0;
+            var new_volume = (int)Math.Round(SDL.SDL_MIX_MAXVOLUME * Math.Pow(10.0, (volume_level + sign * step) / 20.0), 0);
+            audio_volume = Helpers.av_clip(audio_volume == new_volume ? (audio_volume + sign) : new_volume, 0, SDL.SDL_MIX_MAXVOLUME);
         }
 
         /**

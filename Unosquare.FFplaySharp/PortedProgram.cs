@@ -40,13 +40,6 @@
             Environment.Exit(123);
         }
 
-        static void update_volume(MediaContainer container, int sign, double step)
-        {
-            var volume_level = container.audio_volume > 0 ? (20 * Math.Log(container.audio_volume / (double)SDL.SDL_MIX_MAXVOLUME) / Math.Log(10)) : -1000.0;
-            var new_volume = (int)Math.Round(SDL.SDL_MIX_MAXVOLUME * Math.Pow(10.0, (volume_level + sign * step) / 20.0), 0);
-            container.audio_volume = Helpers.av_clip(container.audio_volume == new_volume ? (container.audio_volume + sign) : new_volume, 0, SDL.SDL_MIX_MAXVOLUME);
-        }
-
         static void toggle_audio_display(MediaContainer container)
         {
             int next = (int)container.show_mode;
@@ -107,6 +100,7 @@
                             do_exit(container);
                             break;
                         }
+
                         // If we don't yet have a window, skip all key events, because read_thread might still be initializing...
                         if (container.width <= 0)
                             continue;
@@ -125,11 +119,11 @@
                                 break;
                             case SDL.SDL_Keycode.SDLK_KP_MULTIPLY:
                             case SDL.SDL_Keycode.SDLK_0:
-                                update_volume(container, 1, Constants.SDL_VOLUME_STEP);
+                                SdlRenderer.update_volume(container, 1, Constants.SDL_VOLUME_STEP);
                                 break;
                             case SDL.SDL_Keycode.SDLK_KP_DIVIDE:
                             case SDL.SDL_Keycode.SDLK_9:
-                                update_volume(container, -1, Constants.SDL_VOLUME_STEP);
+                                SdlRenderer.update_volume(container, -1, Constants.SDL_VOLUME_STEP);
                                 break;
                             case SDL.SDL_Keycode.SDLK_s: // S: Step to next frame
                                 container.step_to_next_frame();
