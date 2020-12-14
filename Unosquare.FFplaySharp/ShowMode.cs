@@ -4,8 +4,6 @@
     {
         None = -1,
         Video = 0,
-        Waves,
-        Rdft,
         Last
     }
 }

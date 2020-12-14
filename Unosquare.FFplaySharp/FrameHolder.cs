@@ -7,7 +7,7 @@
     using System.Text;
     using System.Threading.Tasks;
 
-    public unsafe class FrameHolder : IDisposable
+    public unsafe sealed class FrameHolder : IDisposable
     {
         public FrameHolder()
         {
@@ -35,7 +35,10 @@
                 ffmpeg.av_frame_unref(FramePtr);
 
             if (SubtitlePtr != null)
+            {
                 ffmpeg.avsubtitle_free(SubtitlePtr);
+                SubtitlePtr = null;
+            }
         }
 
         public void Dispose()
@@ -49,7 +52,10 @@
             }
 
             if (SubtitlePtr != null)
+            {
                 ffmpeg.avsubtitle_free(SubtitlePtr);
+                SubtitlePtr = null;
+            }
 
             SubtitlePtr = null;
         }

@@ -10,6 +10,7 @@
     public unsafe class MediaRenderer
     {
         public long audio_callback_time;
+        public double audio_clock;
 
         public int default_width = 640;
         public int default_height = 480;
@@ -567,7 +568,7 @@
                 }
             display:
                 /* display picture */
-                if (!container.Options.display_disable && force_refresh && container.show_mode == ShowMode.Video && container.Video.Frames.ReadIndexShown)
+                if (!container.Options.display_disable && force_refresh && container.show_mode == ShowMode.Video && container.Video.Frames.IsReadIndexShown)
                     video_display(container);
             }
 
@@ -765,9 +766,9 @@
             }
             Container.audio_write_buf_size = (int)(Container.audio_buf_size - Container.audio_buf_index);
             /* Let's assume the audio driver that is used by SDL has two periods. */
-            if (!double.IsNaN(Container.audio_clock))
+            if (!double.IsNaN(audio_clock))
             {
-                Container.AudioClock.Set(Container.audio_clock - (double)(2 * Container.audio_hw_buf_size + Container.audio_write_buf_size) / Container.Audio.TargetSpec.BytesPerSecond, Container.audio_clock_serial, audio_callback_time / 1000000.0);
+                Container.AudioClock.Set(audio_clock - (double)(2 * Container.audio_hw_buf_size + Container.audio_write_buf_size) / Container.Audio.TargetSpec.BytesPerSecond, Container.audio_clock_serial, audio_callback_time / 1000000.0);
                 Container.ExternalClock.SyncToSlave(Container.AudioClock);
             }
         }
@@ -919,19 +920,19 @@
                 resampled_data_size = data_size;
             }
 
-            audio_clock0 = container.audio_clock;
+            audio_clock0 = audio_clock;
 
             /* update the audio clock with the pts */
             if (!double.IsNaN(af.Pts))
-                container.audio_clock = af.Pts + (double)af.FramePtr->nb_samples / af.FramePtr->sample_rate;
+                audio_clock = af.Pts + (double)af.FramePtr->nb_samples / af.FramePtr->sample_rate;
             else
-                container.audio_clock = double.NaN;
+                audio_clock = double.NaN;
 
             container.audio_clock_serial = af.Serial;
             if (Debugger.IsAttached)
             {
-                Console.WriteLine($"audio: delay={(container.audio_clock - last_audio_clock),-8:0.####} clock={container.audio_clock,-8:0.####} clock0={audio_clock0,-8:0.####}");
-                last_audio_clock = container.audio_clock;
+                Console.WriteLine($"audio: delay={(audio_clock - last_audio_clock),-8:0.####} clock={audio_clock,-8:0.####} clock0={audio_clock0,-8:0.####}");
+                last_audio_clock = audio_clock;
             }
 
             return resampled_data_size;
@@ -969,12 +970,12 @@
             return delay;
         }
 
-        static double vp_duration(MediaContainer @is, FrameHolder vp, FrameHolder nextvp)
+        static double vp_duration(MediaContainer container, FrameHolder vp, FrameHolder nextvp)
         {
             if (vp.Serial == nextvp.Serial)
             {
                 double duration = nextvp.Pts - vp.Pts;
-                if (double.IsNaN(duration) || duration <= 0 || duration > @is.max_frame_duration)
+                if (double.IsNaN(duration) || duration <= 0 || duration > container.max_frame_duration)
                     return vp.Duration;
                 else
                     return duration;

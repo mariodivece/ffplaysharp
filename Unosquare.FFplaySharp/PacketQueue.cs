@@ -1,9 +1,9 @@
-﻿using FFmpeg.AutoGen;
-using System;
-using System.Threading;
-
-namespace Unosquare.FFplaySharp
+﻿namespace Unosquare.FFplaySharp
 {
+    using FFmpeg.AutoGen;
+    using System;
+    using System.Threading;
+
     public unsafe sealed class PacketQueue : ISerialProvider, IDisposable
     {
         private readonly object SyncLock = new();
@@ -12,6 +12,11 @@ namespace Unosquare.FFplaySharp
         private PacketHolder First;
         private PacketHolder Last;
 
+        private int m_Count;
+        private int m_Size;
+        private long m_Duration;
+        private int m_Serial;
+
         public PacketQueue(MediaComponent component)
         {
             Component = component;
@@ -19,21 +24,33 @@ namespace Unosquare.FFplaySharp
 
         public MediaComponent Component { get; }
 
-        public int Count { get; private set; }
+        public int Count
+        {
+            get { lock (SyncLock) return m_Count; }
+            private set { lock (SyncLock) m_Count = value; }
+        }
 
-        public int Size { get; private set; }
+        public int Size
+        {
+            get { lock (SyncLock) return m_Size; }
+            private set { lock (SyncLock) m_Size = value; }
+        }
 
-        public long Duration { get; private set; }
+        public long Duration
+        {
+            get { lock (SyncLock) return m_Duration; }
+            private set { lock (SyncLock) m_Duration = value; }
+        }
 
-        public int Serial { get; private set; }
+        public int Serial
+        {
+            get { lock (SyncLock) return m_Serial; }
+            private set { lock (SyncLock) m_Serial = value; }
+        }
 
         public bool IsClosed
         {
-            get
-            {
-                lock (SyncLock)
-                    return m_IsClosed;
-            }
+            get { lock (SyncLock) return m_IsClosed; }
         }
 
         public bool PutFlush() => Put(PacketHolder.FlushPacket);
@@ -52,7 +69,7 @@ namespace Unosquare.FFplaySharp
             var result = true;
             lock (SyncLock)
             {
-                var pkt1 = new PacketHolder(packetPtr) { Next = null };
+                var newPacket = new PacketHolder(packetPtr) { Next = null };
 
                 if (m_IsClosed)
                 {
@@ -60,27 +77,28 @@ namespace Unosquare.FFplaySharp
                 }
                 else
                 {
-                    if (pkt1.IsFlushPacket)
+                    if (newPacket.IsFlushPacket)
                         Serial++;
 
-                    pkt1.Serial = Serial;
+                    newPacket.Serial = Serial;
 
                     if (Last == null)
-                        First = pkt1;
+                        First = newPacket;
                     else
-                        Last.Next = pkt1;
+                        Last.Next = newPacket;
 
-                    Last = pkt1;
+                    Last = newPacket;
                     Count++;
-                    Size += pkt1.PacketPtr->size + sizeof(IntPtr);
-                    Duration += pkt1.PacketPtr->duration;
+                    Size += newPacket.PacketPtr->size + sizeof(IntPtr);
+                    Duration += newPacket.PacketPtr->duration;
+                    // IsAvailableEvent.Set();
                 }
 
-                if (!pkt1.IsFlushPacket && !result)
-                    pkt1.Dispose();
-
-                return result;
+                if (!newPacket.IsFlushPacket && !result)
+                    newPacket.Dispose();
             }
+
+            return result;
         }
 
         public void Clear()
@@ -104,17 +122,17 @@ namespace Unosquare.FFplaySharp
             {
                 Close();
                 Clear();
-                IsAvailableEvent.Dispose();
             }
 
+            IsAvailableEvent.Dispose();
         }
 
         public void Close()
         {
             lock (SyncLock)
-            {
                 m_IsClosed = true;
-            }
+
+            // IsAvailableEvent.Set();
         }
 
         public void Open()
@@ -130,11 +148,11 @@ namespace Unosquare.FFplaySharp
         {
             while (true)
             {
+                if (IsClosed)
+                    return null;
+
                 lock (SyncLock)
                 {
-                    if (m_IsClosed)
-                        return null;
-
                     var item = First;
                     if (item != null)
                     {
@@ -147,15 +165,12 @@ namespace Unosquare.FFplaySharp
                         Duration -= (item.PacketPtr->duration);
                         return item;
                     }
-                    else if (!block)
-                    {
-                        return null;
-                    }
-                    else
-                    {
-                        IsAvailableEvent.Wait(10);
-                    }
                 }
+
+                if (!block)
+                    return null;
+                else
+                    IsAvailableEvent.Wait(10);
             }
         }
     }

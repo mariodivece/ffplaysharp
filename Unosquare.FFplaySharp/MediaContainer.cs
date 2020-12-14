@@ -41,7 +41,7 @@
 
         public ClockSync ClockSyncMode { get; private set; }
 
-        public double audio_clock;
+        
         public int audio_clock_serial;
         public double audio_diff_cum; /* used for AV difference average computation */
         public double audio_diff_avg_coef;
@@ -729,7 +729,7 @@
                         }
 
                         ffmpeg.av_log(
-                            null, ffmpeg.AV_LOG_TRACE, $"diff={diff} adiff={avg_diff} sample_diff={(wantedSampleCount - sampleCount)} apts={audio_clock} {audio_diff_threshold}\n");
+                            null, ffmpeg.AV_LOG_TRACE, $"diff={diff} adiff={avg_diff} sample_diff={(wantedSampleCount - sampleCount)} apts={Renderer?.audio_clock} {audio_diff_threshold}\n");
                     }
                 }
                 else
@@ -968,7 +968,7 @@
             }
 
             if (show_mode == ShowMode.None)
-                show_mode = ret >= 0 ? ShowMode.Video : ShowMode.Rdft;
+                show_mode = ret >= 0 ? ShowMode.Video : ShowMode.None;
 
             if (st_index[(int)AVMediaType.AVMEDIA_TYPE_SUBTITLE] >= 0)
             {
