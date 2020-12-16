@@ -322,51 +322,47 @@
 
         private void VideoWorkerThreadMethod()
         {
-            AVFrame* frame = null; // ffmpeg.av_frame_alloc();
-            double pts;
-            double duration;
             int ret;
-            AVRational tb = Component.Stream->time_base;
-            AVRational frame_rate = ffmpeg.av_guess_frame_rate(Container.InputContext, Component.Stream, null);
+            var frameRate = ffmpeg.av_guess_frame_rate(Container.InputContext, Component.Stream, null);
 
-            AVFilterGraph* graph = null;
-            AVFilterContext* filt_out = null, filt_in = null;
-            int last_w = 0;
-            int last_h = 0;
-            int last_format = -2;
-            int last_serial = -1;
-            int last_vfilter_idx = 0;
+            AVFrame* frame = null;
+            AVFilterGraph* filterGraph = null;
+            AVFilterContext* outputFilter = null;
+            AVFilterContext* inputFilter = null;
 
-            for (; ; )
+            var lastWidth = 0;
+            var lastHeight = 0;
+            var lastFormat = -2;
+            var lastSerial = -1;
+            var last_vfilter_idx = 0;
+
+            while (true)
             {
-                ret = get_video_frame(out frame);
+                ret = DecodeFrame(out frame);
                 if (ret < 0)
                     goto the_end;
 
                 if (ret == 0)
                     continue;
 
-                if (last_w != frame->width
-                    || last_h != frame->height
-                    || last_format != frame->format
-                    || last_serial != PacketSerial
+                if (lastWidth != frame->width
+                    || lastHeight != frame->height
+                    || lastFormat != frame->format
+                    || lastSerial != PacketSerial
                     || last_vfilter_idx != Container.vfilter_idx)
                 {
-                    var lastFormat = ffmpeg.av_get_pix_fmt_name((AVPixelFormat)last_format);
-                    lastFormat ??= "none";
-
-                    var frameFormat = ffmpeg.av_get_pix_fmt_name((AVPixelFormat)frame->format);
-                    frameFormat ??= "none";
+                    var lastFormatName = ffmpeg.av_get_pix_fmt_name((AVPixelFormat)lastFormat) ?? "none";
+                    var frameFormatName = ffmpeg.av_get_pix_fmt_name((AVPixelFormat)frame->format) ?? "none";
 
                     ffmpeg.av_log(null, ffmpeg.AV_LOG_DEBUG,
-                           $"Video frame changed from size:{last_w}x%{last_h} format:{lastFormat} serial:{last_serial} to " +
-                           $"size:{frame->width}x{frame->height} format:{frameFormat} serial:{PacketSerial}\n");
+                           $"Video frame changed from size:{lastWidth}x%{lastHeight} format:{lastFormatName} serial:{lastSerial} to " +
+                           $"size:{frame->width}x{frame->height} format:{frameFormatName} serial:{PacketSerial}\n");
 
-                    ffmpeg.avfilter_graph_free(&graph);
-                    graph = ffmpeg.avfilter_graph_alloc();
-                    graph->nb_threads = Container.Options.filter_nbthreads;
+                    ffmpeg.avfilter_graph_free(&filterGraph);
+                    filterGraph = ffmpeg.avfilter_graph_alloc();
+                    filterGraph->nb_threads = Container.Options.filter_nbthreads;
 
-                    if ((ret = Component.configure_video_filters(ref graph, Container, Container.Options.vfilters_list.Count > 0
+                    if ((ret = Component.configure_video_filters(ref filterGraph, Container, Container.Options.vfilters_list.Count > 0
                         ? Container.Options.vfilters_list[Container.vfilter_idx]
                         : null, frame)) < 0)
                     {
@@ -380,17 +376,17 @@
                         goto the_end;
                     }
 
-                    filt_in = Component.InputFilter;
-                    filt_out = Component.OutputFilter;
-                    last_w = frame->width;
-                    last_h = frame->height;
-                    last_format = frame->format;
-                    last_serial = PacketSerial;
+                    inputFilter = Component.InputFilter;
+                    outputFilter = Component.OutputFilter;
+                    lastWidth = frame->width;
+                    lastHeight = frame->height;
+                    lastFormat = frame->format;
+                    lastSerial = PacketSerial;
                     last_vfilter_idx = Container.vfilter_idx;
-                    frame_rate = ffmpeg.av_buffersink_get_frame_rate(filt_out);
+                    frameRate = ffmpeg.av_buffersink_get_frame_rate(outputFilter);
                 }
 
-                ret = ffmpeg.av_buffersrc_add_frame(filt_in, frame);
+                ret = ffmpeg.av_buffersrc_add_frame(inputFilter, frame);
                 if (ret < 0)
                     goto the_end;
 
@@ -398,7 +394,7 @@
                 {
                     Container.frame_last_returned_time = ffmpeg.av_gettime_relative() / 1000000.0;
 
-                    ret = ffmpeg.av_buffersink_get_frame_flags(filt_out, frame, 0);
+                    ret = ffmpeg.av_buffersink_get_frame_flags(outputFilter, frame, 0);
                     if (ret < 0)
                     {
                         if (ret == ffmpeg.AVERROR_EOF)
@@ -411,10 +407,16 @@
                     if (Math.Abs(Container.frame_last_filter_delay) > Constants.AV_NOSYNC_THRESHOLD / 10.0)
                         Container.frame_last_filter_delay = 0;
 
-                    tb = ffmpeg.av_buffersink_get_time_base(filt_out);
-                    duration = (frame_rate.num != 0 && frame_rate.den != 0 ? ffmpeg.av_q2d(new AVRational() { num = frame_rate.den, den = frame_rate.num }) : 0);
-                    pts = (frame->pts == ffmpeg.AV_NOPTS_VALUE) ? double.NaN : frame->pts * ffmpeg.av_q2d(tb);
-                    ret = queue_picture(frame, pts, duration, frame->pkt_pos, PacketSerial);
+                    var duration = (frameRate.num != 0 && frameRate.den != 0
+                        ? ffmpeg.av_q2d(new AVRational() { num = frameRate.den, den = frameRate.num })
+                        : 0);
+
+                    var tb = ffmpeg.av_buffersink_get_time_base(outputFilter);
+                    var pts = (frame->pts == ffmpeg.AV_NOPTS_VALUE)
+                        ? double.NaN
+                        : frame->pts * ffmpeg.av_q2d(tb);
+
+                    ret = queue_picture(frame, pts, duration, PacketSerial);
                     ffmpeg.av_frame_unref(frame);
 
                     if (Component.Packets.Serial != PacketSerial)
@@ -426,47 +428,47 @@
             }
         the_end:
 
-            ffmpeg.avfilter_graph_free(&graph);
+            ffmpeg.avfilter_graph_free(&filterGraph);
             ffmpeg.av_frame_free(&frame);
             return; // 0;
         }
 
-        private int queue_picture(AVFrame* src_frame, double pts, double duration, long pos, int serial)
+        private int queue_picture(AVFrame* sourceFrame, double pts, double duration, int serial)
         {
             var vp = Component.Frames.PeekWriteable();
 
             if (vp == null) return -1;
 
-            vp.Sar = src_frame->sample_aspect_ratio;
+            vp.Sar = sourceFrame->sample_aspect_ratio;
             vp.uploaded = false;
 
-            vp.Width = src_frame->width;
-            vp.Height = src_frame->height;
-            vp.Format = src_frame->format;
+            vp.Width = sourceFrame->width;
+            vp.Height = sourceFrame->height;
+            vp.Format = sourceFrame->format;
 
             vp.Pts = pts;
             vp.Duration = duration;
-            vp.Position = pos;
+            vp.Position = sourceFrame->pkt_pos;
             vp.Serial = serial;
 
             Container.Renderer.set_default_window_size(vp.Width, vp.Height, vp.Sar);
 
-            ffmpeg.av_frame_move_ref(vp.FramePtr, src_frame);
+            ffmpeg.av_frame_move_ref(vp.FramePtr, sourceFrame);
             Component.Frames.Push();
             return 0;
         }
 
-        private int get_video_frame(out AVFrame* frame)
+        private int DecodeFrame(out AVFrame* frame)
         {
             frame = null;
-            int got_picture;
+            var got_picture = default(int);
 
             if ((got_picture = DecodeFrame(out frame, out _)) < 0)
                 return -1;
 
             if (got_picture != 0)
             {
-                double dpts = double.NaN;
+                var dpts = double.NaN;
 
                 if (frame->pts != ffmpeg.AV_NOPTS_VALUE)
                     dpts = ffmpeg.av_q2d(Component.Stream->time_base) * frame->pts;
@@ -477,7 +479,7 @@
                 {
                     if (frame->pts != ffmpeg.AV_NOPTS_VALUE)
                     {
-                        double diff = dpts - Container.MasterTime;
+                        var diff = dpts - Container.MasterTime;
                         if (!double.IsNaN(diff) && Math.Abs(diff) < Constants.AV_NOSYNC_THRESHOLD &&
                             diff - Container.frame_last_filter_delay < 0 &&
                             PacketSerial == Container.VideoClock.Serial &&
