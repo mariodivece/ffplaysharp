@@ -9,6 +9,8 @@
 
     public unsafe class MediaRenderer
     {
+        public long last_mouse_left_click;
+
         public long audio_callback_time;
         public double audio_clock;
 
@@ -171,7 +173,7 @@
                 }
             }
 
-            calculate_display_rect(ref rect, container.xleft, container.ytop, container.width, container.height, vp.Width, vp.Height, vp.Sar);
+            rect = calculate_display_rect(container.xleft, container.ytop, container.width, container.height, vp.Width, vp.Height, vp.Sar);
 
             if (!vp.uploaded)
             {
@@ -325,32 +327,31 @@
             SDL.SDL_RenderPresent(renderer);
         }
 
-        public int upload_texture(ref IntPtr tex, AVFrame* frame, ref SwsContext* img_convert_ctx)
+        private int upload_texture(ref IntPtr tex, AVFrame* frame, ref SwsContext* convertContext)
         {
             int ret = 0;
-            get_sdl_pix_fmt_and_blendmode((AVPixelFormat)frame->format, out var sdl_pix_fmt, out var sdl_blendmode);
-            if (realloc_texture(ref tex,
-                sdl_pix_fmt == SDL.SDL_PIXELFORMAT_UNKNOWN
-                    ? SDL.SDL_PIXELFORMAT_ARGB8888
-                    : sdl_pix_fmt,
+            (var sdlPixelFormat, var sdlBlendMode) = TranslateToSdlFormat((AVPixelFormat)frame->format);
+            if (realloc_texture(
+                ref tex,
+                sdlPixelFormat == SDL.SDL_PIXELFORMAT_UNKNOWN ? SDL.SDL_PIXELFORMAT_ARGB8888 : sdlPixelFormat,
                 frame->width,
                 frame->height,
-                sdl_blendmode,
+                sdlBlendMode,
                 false) < 0)
             {
                 return -1;
             }
 
-            SDL.SDL_Rect rect = new() { w = frame->width, h = frame->height, x = 0, y = 0 };
+            var rect = new SDL.SDL_Rect { w = frame->width, h = frame->height, x = 0, y = 0 };
 
-            if (sdl_pix_fmt == SDL.SDL_PIXELFORMAT_UNKNOWN)
+            if (sdlPixelFormat == SDL.SDL_PIXELFORMAT_UNKNOWN)
             {
                 /* This should only happen if we are not using avfilter... */
-                img_convert_ctx = ffmpeg.sws_getCachedContext(img_convert_ctx,
+                convertContext = ffmpeg.sws_getCachedContext(convertContext,
                     frame->width, frame->height, (AVPixelFormat)frame->format, frame->width, frame->height,
                     AVPixelFormat.AV_PIX_FMT_BGRA, Constants.sws_flags, null, null, null);
 
-                if (img_convert_ctx != null)
+                if (convertContext != null)
                 {
                     if (SDL.SDL_LockTexture(tex, ref rect, out var pixels, out var pitch) == 0)
                     {
@@ -358,7 +359,7 @@
                         var targetScan = default(byte_ptrArray8);
                         targetScan[0] = (byte*)pixels;
 
-                        ffmpeg.sws_scale(img_convert_ctx, frame->data, frame->linesize,
+                        ffmpeg.sws_scale(convertContext, frame->data, frame->linesize,
                               0, frame->height, targetScan, targetStride);
                         SDL.SDL_UnlockTexture(tex);
                     }
@@ -369,7 +370,7 @@
                     ret = -1;
                 }
             }
-            else if (sdl_pix_fmt == SDL.SDL_PIXELFORMAT_IYUV)
+            else if (sdlPixelFormat == SDL.SDL_PIXELFORMAT_IYUV)
             {
                 if (frame->linesize[0] > 0 && frame->linesize[1] > 0 && frame->linesize[2] > 0)
                 {
@@ -406,10 +407,8 @@
 
         public int video_open(MediaContainer container)
         {
-            int w, h;
-
-            w = screen_width != 0 ? screen_width : default_width;
-            h = screen_height != 0 ? screen_height : default_height;
+            var w = screen_width != 0 ? screen_width : default_width;
+            var h = screen_height != 0 ? screen_height : default_height;
 
             if (string.IsNullOrWhiteSpace(window_title))
                 window_title = container.Options.input_filename;
@@ -627,32 +626,34 @@
             SDL.SDL_SetWindowFullscreen(window, (uint)(is_full_screen ? SDL.SDL_WindowFlags.SDL_WINDOW_FULLSCREEN_DESKTOP : 0));
         }
 
-        static void calculate_display_rect(ref SDL.SDL_Rect rect,
-                           int scr_xleft, int scr_ytop, int scr_width, int scr_height,
-                           int pic_width, int pic_height, AVRational pic_sar)
+        static SDL.SDL_Rect calculate_display_rect(
+            int screenX, int screenY, int screenWidth, int screenHeight, int pictureWidth, int pictureHeight, AVRational pictureAspectRatio)
         {
-            AVRational aspect_ratio = pic_sar;
-            long width, height, x, y;
+            var aspectRatio = pictureAspectRatio;
+            if (ffmpeg.av_cmp_q(aspectRatio, ffmpeg.av_make_q(0, 1)) <= 0)
+                aspectRatio = ffmpeg.av_make_q(1, 1);
 
-            if (ffmpeg.av_cmp_q(aspect_ratio, ffmpeg.av_make_q(0, 1)) <= 0)
-                aspect_ratio = ffmpeg.av_make_q(1, 1);
+            aspectRatio = ffmpeg.av_mul_q(aspectRatio, ffmpeg.av_make_q(pictureWidth, pictureHeight));
 
-            aspect_ratio = ffmpeg.av_mul_q(aspect_ratio, ffmpeg.av_make_q(pic_width, pic_height));
-
-            /* XXX: we suppose the screen has a 1.0 pixel ratio */
-            height = scr_height;
-            width = ffmpeg.av_rescale(height, aspect_ratio.num, aspect_ratio.den) & ~1;
-            if (width > scr_width)
+            // TODO: we suppose the screen has a 1.0 pixel ratio
+            long height = screenHeight;
+            long width = ffmpeg.av_rescale(height, aspectRatio.num, aspectRatio.den) & ~1;
+            if (width > screenWidth)
             {
-                width = scr_width;
-                height = ffmpeg.av_rescale(width, aspect_ratio.den, aspect_ratio.num) & ~1;
+                width = screenWidth;
+                height = ffmpeg.av_rescale(width, aspectRatio.den, aspectRatio.num) & ~1;
             }
-            x = (scr_width - width) / 2;
-            y = (scr_height - height) / 2;
-            rect.x = scr_xleft + (int)x;
-            rect.y = scr_ytop + (int)y;
-            rect.w = Math.Max((int)width, 1);
-            rect.h = Math.Max((int)height, 1);
+
+            var x = (screenWidth - width) / 2;
+            var y = (screenHeight - height) / 2;
+
+            return new SDL.SDL_Rect
+            {
+                x = screenX + (int)x,
+                y = screenY + (int)y,
+                w = Math.Max((int)width, 1),
+                h = Math.Max((int)height, 1),
+            };
         }
 
         public void set_sdl_yuv_conversion_mode(AVFrame* frame)
@@ -663,29 +664,30 @@
         {
         }
 
-        static void get_sdl_pix_fmt_and_blendmode(AVPixelFormat format, out uint sdl_pix_fmt, out SDL.SDL_BlendMode sdl_blendmode)
+        private static (uint sdlPixelFormat, SDL.SDL_BlendMode sdlBlendMode) TranslateToSdlFormat(AVPixelFormat pixelFormat)
         {
-            sdl_blendmode = SDL.SDL_BlendMode.SDL_BLENDMODE_NONE;
-            sdl_pix_fmt = SDL.SDL_PIXELFORMAT_UNKNOWN;
-            if (format == AVPixelFormat.AV_PIX_FMT_RGBA ||
-                format == AVPixelFormat.AV_PIX_FMT_ARGB ||
-                format == AVPixelFormat.AV_PIX_FMT_BGRA ||
-                format == AVPixelFormat.AV_PIX_FMT_ABGR)
-                sdl_blendmode = SDL.SDL_BlendMode.SDL_BLENDMODE_BLEND;
+            var sdlBlendMode = SDL.SDL_BlendMode.SDL_BLENDMODE_NONE;
+            var sdlPixelFormat = SDL.SDL_PIXELFORMAT_UNKNOWN;
+            if (pixelFormat == AVPixelFormat.AV_PIX_FMT_RGBA ||
+                pixelFormat == AVPixelFormat.AV_PIX_FMT_ARGB ||
+                pixelFormat == AVPixelFormat.AV_PIX_FMT_BGRA ||
+                pixelFormat == AVPixelFormat.AV_PIX_FMT_ABGR)
+                sdlBlendMode = SDL.SDL_BlendMode.SDL_BLENDMODE_BLEND;
 
-            if (sdl_texture_map.ContainsKey(format))
-                sdl_pix_fmt = sdl_texture_map[format];
+            if (sdl_texture_map.ContainsKey(pixelFormat))
+                sdlPixelFormat = sdl_texture_map[pixelFormat];
+
+            return (sdlPixelFormat, sdlBlendMode);
         }
 
         public void set_default_window_size(int width, int height, AVRational sar)
         {
-            SDL.SDL_Rect rect = new();
             var maxWidth = screen_width != 0 ? screen_width : int.MaxValue;
             var maxHeight = screen_height != 0 ? screen_height : int.MaxValue;
             if (maxWidth == int.MaxValue && maxHeight == int.MaxValue)
                 maxHeight = height;
 
-            calculate_display_rect(ref rect, 0, 0, maxWidth, maxHeight, width, height, sar);
+            var rect = calculate_display_rect(0, 0, maxWidth, maxHeight, width, height, sar);
             default_width = rect.w;
             default_height = rect.h;
         }

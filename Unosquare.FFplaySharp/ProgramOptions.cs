@@ -14,7 +14,7 @@
         public bool subtitle_disable;
         public string[] wanted_stream_spec = new string[(int)AVMediaType.AVMEDIA_TYPE_NB];
         public int seek_by_bytes = -1;
-        public float seek_interval = 10;
+        public float seek_interval = 1;
         public bool display_disable;
         public bool borderless;
         public bool alwaysontop;

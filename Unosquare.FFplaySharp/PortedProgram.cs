@@ -9,7 +9,7 @@
         // TODO: cmdutils.c
         // https://github.com/FFmpeg/FFmpeg/blob/master/fftools/cmdutils.c
         /* current context */
-        static long last_mouse_left_click;
+        
 
         static MediaContainer GlobalVideoState;
         static MediaRenderer SdlRenderer;
@@ -54,9 +54,9 @@
             }
         }
 
-        static void refresh_loop_wait_event(MediaContainer container, out SDL.SDL_Event @event)
+        static SDL.SDL_Event refresh_loop_wait_event(MediaContainer container)
         {
-            double remaining_time = 0.0;
+            var remainingTime = 0.0;
             SDL.SDL_PumpEvents();
             var events = new SDL.SDL_Event[1];
 
@@ -68,34 +68,33 @@
                     container.Options.cursor_hidden = true;
                 }
 
-                if (remaining_time > 0.0)
-                    ffmpeg.av_usleep((uint)(remaining_time * 1000000.0));
+                if (remainingTime > 0.0)
+                    ffmpeg.av_usleep((uint)(remainingTime * 1000000.0));
 
-                remaining_time = Constants.REFRESH_RATE;
+                remainingTime = Constants.REFRESH_RATE;
 
                 if (container.show_mode != ShowMode.None && (!container.IsPaused || SdlRenderer.force_refresh))
-                    SdlRenderer.video_refresh(container, ref remaining_time);
+                    SdlRenderer.video_refresh(container, ref remainingTime);
 
                 SDL.SDL_PumpEvents();
             }
 
-            @event = events[0];
+            return events[0];
         }
 
         /* handle an event sent by the GUI */
         static void event_loop(MediaContainer container)
         {
-            SDL.SDL_Event @event;
             double incr, pos, frac;
 
             while (true)
             {
                 double x;
-                refresh_loop_wait_event(container, out @event);
-                switch ((int)@event.type)
+                var sdlEvent = refresh_loop_wait_event(container);
+                switch ((int)sdlEvent.type)
                 {
                     case (int)SDL.SDL_EventType.SDL_KEYDOWN:
-                        if (container.Options.exit_on_keydown || @event.key.keysym.sym == SDL.SDL_Keycode.SDLK_ESCAPE || @event.key.keysym.sym == SDL.SDL_Keycode.SDLK_q)
+                        if (container.Options.exit_on_keydown || sdlEvent.key.keysym.sym == SDL.SDL_Keycode.SDLK_ESCAPE || sdlEvent.key.keysym.sym == SDL.SDL_Keycode.SDLK_q)
                         {
                             do_exit(container);
                             break;
@@ -104,7 +103,7 @@
                         // If we don't yet have a window, skip all key events, because read_thread might still be initializing...
                         if (container.width <= 0)
                             continue;
-                        switch (@event.key.keysym.sym)
+                        switch (sdlEvent.key.keysym.sym)
                         {
                             case SDL.SDL_Keycode.SDLK_f:
                                 SdlRenderer.toggle_full_screen();
@@ -221,18 +220,18 @@
                             break;
                         }
 
-                        if (@event.button.button == SDL.SDL_BUTTON_LEFT)
+                        if (sdlEvent.button.button == SDL.SDL_BUTTON_LEFT)
                         {
                             // last_mouse_left_click = 0;
-                            if (ffmpeg.av_gettime_relative() - last_mouse_left_click <= 500000)
+                            if (ffmpeg.av_gettime_relative() - SdlRenderer.last_mouse_left_click <= 500000)
                             {
                                 SdlRenderer.toggle_full_screen();
                                 SdlRenderer.force_refresh = true;
-                                last_mouse_left_click = 0;
+                                SdlRenderer.last_mouse_left_click = 0;
                             }
                             else
                             {
-                                last_mouse_left_click = ffmpeg.av_gettime_relative();
+                                SdlRenderer.last_mouse_left_click = ffmpeg.av_gettime_relative();
                             }
                         }
 
@@ -244,17 +243,17 @@
                             container.Options.cursor_hidden = false;
                         }
                         container.Options.cursor_last_shown = ffmpeg.av_gettime_relative();
-                        if (@event.type == SDL.SDL_EventType.SDL_MOUSEBUTTONDOWN)
+                        if (sdlEvent.type == SDL.SDL_EventType.SDL_MOUSEBUTTONDOWN)
                         {
-                            if (@event.button.button != SDL.SDL_BUTTON_RIGHT)
+                            if (sdlEvent.button.button != SDL.SDL_BUTTON_RIGHT)
                                 break;
-                            x = @event.button.x;
+                            x = sdlEvent.button.x;
                         }
                         else
                         {
-                            if ((@event.motion.state & SDL.SDL_BUTTON_RMASK) == 0)
+                            if ((sdlEvent.motion.state & SDL.SDL_BUTTON_RMASK) == 0)
                                 break;
-                            x = @event.motion.x;
+                            x = sdlEvent.motion.x;
                         }
                         if (container.Options.seek_by_bytes != 0 || container.InputContext->duration <= 0)
                         {
@@ -283,11 +282,11 @@
                         }
                         break;
                     case (int)SDL.SDL_EventType.SDL_WINDOWEVENT:
-                        switch (@event.window.windowEvent)
+                        switch (sdlEvent.window.windowEvent)
                         {
                             case SDL.SDL_WindowEventID.SDL_WINDOWEVENT_SIZE_CHANGED:
-                                SdlRenderer.screen_width = container.width = @event.window.data1;
-                                SdlRenderer.screen_height = container.height = @event.window.data2;
+                                SdlRenderer.screen_width = container.width = sdlEvent.window.data1;
+                                SdlRenderer.screen_height = container.height = sdlEvent.window.data2;
                                 if (container.vis_texture != IntPtr.Zero)
                                 {
                                     SDL.SDL_DestroyTexture(container.vis_texture);
