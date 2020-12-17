@@ -3,6 +3,7 @@
     using FFmpeg.AutoGen;
     using SDL2;
     using System;
+    using System.Collections;
     using System.Collections.Generic;
     using System.Threading;
 
@@ -416,7 +417,7 @@
                         ? double.NaN
                         : frame->pts * ffmpeg.av_q2d(tb);
 
-                    ret = queue_picture(frame, pts, duration, PacketSerial);
+                    ret = EnqueueFrame(frame, pts, duration, PacketSerial);
                     ffmpeg.av_frame_unref(frame);
 
                     if (Component.Packets.Serial != PacketSerial)
@@ -433,7 +434,7 @@
             return; // 0;
         }
 
-        private int queue_picture(AVFrame* sourceFrame, double pts, double duration, int serial)
+        private int EnqueueFrame(AVFrame* sourceFrame, double pts, double duration, int serial)
         {
             var vp = Component.Frames.PeekWriteable();
 

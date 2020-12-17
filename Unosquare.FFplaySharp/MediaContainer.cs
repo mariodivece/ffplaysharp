@@ -418,7 +418,7 @@
             continue_read_thread.Set();
         }
 
-        public void seek_chapter(int incr)
+        public void seek_chapter(int incrementCount)
         {
             var i = 0;
             var pos = (long)(MasterTime * ffmpeg.AV_TIME_BASE);
@@ -429,15 +429,15 @@
             /* find the current chapter */
             for (i = 0; i < InputContext->nb_chapters; i++)
             {
-                AVChapter* ch = InputContext->chapters[i];
-                if (ffmpeg.av_compare_ts(pos, Constants.AV_TIME_BASE_Q, ch->start, ch->time_base) < 0)
+                var chapter = InputContext->chapters[i];
+                if (ffmpeg.av_compare_ts(pos, Constants.AV_TIME_BASE_Q, chapter->start, chapter->time_base) < 0)
                 {
                     i--;
                     break;
                 }
             }
 
-            i += incr;
+            i += incrementCount;
             i = Math.Max(i, 0);
             if (i >= InputContext->nb_chapters)
                 return;
