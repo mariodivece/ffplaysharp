@@ -134,15 +134,12 @@
         {
             get
             {
-                switch (MasterSyncMode)
+                return MasterSyncMode switch
                 {
-                    case ClockSync.Video:
-                        return VideoClock.Time;
-                    case ClockSync.Audio:
-                        return AudioClock.Time;
-                    default:
-                        return ExternalClock.Time;
-                }
+                    ClockSync.Video => VideoClock.Time,
+                    ClockSync.Audio => AudioClock.Time,
+                    _ => ExternalClock.Time,
+                };
             }
         }
 
