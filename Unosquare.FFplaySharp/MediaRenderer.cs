@@ -23,6 +23,8 @@
         public uint audio_dev;
         public string window_title;
 
+        public IntPtr sub_texture;
+        public IntPtr vid_texture;
 
         private int screen_left = SDL.SDL_WINDOWPOS_CENTERED;
         private int screen_top = SDL.SDL_WINDOWPOS_CENTERED;
@@ -106,7 +108,7 @@
             FrameHolder vp;
             FrameHolder sp = null;
             SDL.SDL_Rect rect = new();
-
+            
             vp = container.Video.Frames.PeekLast();
             if (container.Subtitle.Stream != null)
             {
@@ -124,12 +126,12 @@
                                 sp.Height = vp.Height;
                             }
 
-                            if (realloc_texture(ref container.sub_texture, SDL.SDL_PIXELFORMAT_ARGB8888, sp.Width, sp.Height, SDL.SDL_BlendMode.SDL_BLENDMODE_BLEND, true) < 0)
+                            if (realloc_texture(ref sub_texture, SDL.SDL_PIXELFORMAT_ARGB8888, sp.Width, sp.Height, SDL.SDL_BlendMode.SDL_BLENDMODE_BLEND, true) < 0)
                                 return;
 
                             for (var i = 0; i < sp.SubtitlePtr->num_rects; i++)
                             {
-                                SDL.SDL_Rect sub_rect = new()
+                                var sub_rect = new SDL.SDL_Rect
                                 {
                                     x = sp.SubtitlePtr->rects[i]->x,
                                     y = sp.SubtitlePtr->rects[i]->y,
@@ -151,16 +153,16 @@
                                     ffmpeg.av_log(null, ffmpeg.AV_LOG_FATAL, "Cannot initialize the conversion context\n");
                                     return;
                                 }
-                                if (SDL.SDL_LockTexture(container.sub_texture, ref sub_rect, out var pixels, out var pitch) == 0)
+                                if (SDL.SDL_LockTexture(sub_texture, ref sub_rect, out var pixels, out var pitch) == 0)
                                 {
                                     var targetStride = new[] { pitch };
                                     var targetScan = default(byte_ptrArray8);
                                     targetScan[0] = (byte*)pixels;
-
+                                    
                                     ffmpeg.sws_scale(container.Subtitle.ConvertContext, sp.SubtitlePtr->rects[i]->data, sp.SubtitlePtr->rects[i]->linesize,
                                       0, sp.SubtitlePtr->rects[i]->h, targetScan, targetStride);
 
-                                    SDL.SDL_UnlockTexture(container.sub_texture);
+                                    SDL.SDL_UnlockTexture(sub_texture);
                                 }
                             }
                             sp.uploaded = true;
@@ -177,7 +179,7 @@
 
             if (!vp.uploaded)
             {
-                if (upload_texture(ref container.vid_texture, vp.FramePtr, ref container.Video.ConvertContext) < 0)
+                if (upload_texture(ref vid_texture, vp.FramePtr, ref container.Video.ConvertContext) < 0)
                     return;
                 vp.uploaded = true;
                 vp.FlipVertical = vp.FramePtr->linesize[0] < 0;
@@ -186,7 +188,7 @@
             var point = new SDL.SDL_Point();
 
             set_sdl_yuv_conversion_mode(vp.FramePtr);
-            SDL.SDL_RenderCopyEx(renderer, container.vid_texture, ref rect, ref rect, 0, ref point, vp.FlipVertical ? SDL.SDL_RendererFlip.SDL_FLIP_VERTICAL : SDL.SDL_RendererFlip.SDL_FLIP_NONE);
+            SDL.SDL_RenderCopyEx(renderer, vid_texture, ref rect, ref rect, 0, ref point, vp.FlipVertical ? SDL.SDL_RendererFlip.SDL_FLIP_VERTICAL : SDL.SDL_RendererFlip.SDL_FLIP_NONE);
             set_sdl_yuv_conversion_mode(null);
 
             if (sp != null)
@@ -212,7 +214,7 @@
                         h = (int)(sub_rect.h * yratio)
                     };
 
-                    SDL.SDL_RenderCopy(renderer, container.sub_texture, ref sub_rect, ref target);
+                    SDL.SDL_RenderCopy(renderer, sub_texture, ref sub_rect, ref target);
                 }
             }
         }
@@ -299,8 +301,15 @@
         {
             if (renderer != IntPtr.Zero)
                 SDL.SDL_DestroyRenderer(renderer);
+
             if (window != IntPtr.Zero)
                 SDL.SDL_DestroyWindow(window);
+
+            if (vid_texture != IntPtr.Zero)
+                SDL.SDL_DestroyTexture(vid_texture);
+
+            if (sub_texture != IntPtr.Zero)
+                SDL.SDL_DestroyTexture(sub_texture);
         }
 
         public void CloseAudio()
@@ -327,12 +336,12 @@
             SDL.SDL_RenderPresent(renderer);
         }
 
-        private int upload_texture(ref IntPtr tex, AVFrame* frame, ref SwsContext* convertContext)
+        private int upload_texture(ref IntPtr texture, AVFrame* frame, ref SwsContext* convertContext)
         {
             int ret = 0;
             (var sdlPixelFormat, var sdlBlendMode) = TranslateToSdlFormat((AVPixelFormat)frame->format);
             if (realloc_texture(
-                ref tex,
+                ref texture,
                 sdlPixelFormat == SDL.SDL_PIXELFORMAT_UNKNOWN ? SDL.SDL_PIXELFORMAT_ARGB8888 : sdlPixelFormat,
                 frame->width,
                 frame->height,
@@ -342,7 +351,7 @@
                 return -1;
             }
 
-            var rect = new SDL.SDL_Rect { w = frame->width, h = frame->height, x = 0, y = 0 };
+            var textureRect = new SDL.SDL_Rect { w = frame->width, h = frame->height, x = 0, y = 0 };
 
             if (sdlPixelFormat == SDL.SDL_PIXELFORMAT_UNKNOWN)
             {
@@ -353,15 +362,14 @@
 
                 if (convertContext != null)
                 {
-                    if (SDL.SDL_LockTexture(tex, ref rect, out var pixels, out var pitch) == 0)
+                    if (SDL.SDL_LockTexture(texture, ref textureRect, out var textureAddress, out var texturePitch) == 0)
                     {
-                        var targetStride = new[] { pitch };
+                        var targetStride = new[] { texturePitch };
                         var targetScan = default(byte_ptrArray8);
-                        targetScan[0] = (byte*)pixels;
+                        targetScan[0] = (byte*)textureAddress;
 
-                        ffmpeg.sws_scale(convertContext, frame->data, frame->linesize,
-                              0, frame->height, targetScan, targetStride);
-                        SDL.SDL_UnlockTexture(tex);
+                        ffmpeg.sws_scale(convertContext, frame->data, frame->linesize, 0, frame->height, targetScan, targetStride);
+                        SDL.SDL_UnlockTexture(texture);
                     }
                 }
                 else
@@ -374,13 +382,13 @@
             {
                 if (frame->linesize[0] > 0 && frame->linesize[1] > 0 && frame->linesize[2] > 0)
                 {
-                    ret = SDL.SDL_UpdateYUVTexture(tex, ref rect, (IntPtr)frame->data[0], frame->linesize[0],
+                    ret = SDL.SDL_UpdateYUVTexture(texture, ref textureRect, (IntPtr)frame->data[0], frame->linesize[0],
                                                            (IntPtr)frame->data[1], frame->linesize[1],
                                                            (IntPtr)frame->data[2], frame->linesize[2]);
                 }
                 else if (frame->linesize[0] < 0 && frame->linesize[1] < 0 && frame->linesize[2] < 0)
                 {
-                    ret = SDL.SDL_UpdateYUVTexture(tex, ref rect, (IntPtr)frame->data[0] + frame->linesize[0] * (frame->height - 1), -frame->linesize[0],
+                    ret = SDL.SDL_UpdateYUVTexture(texture, ref textureRect, (IntPtr)frame->data[0] + frame->linesize[0] * (frame->height - 1), -frame->linesize[0],
                                                            (IntPtr)frame->data[1] + frame->linesize[1] * (Helpers.AV_CEIL_RSHIFT(frame->height, 1) - 1), -frame->linesize[1],
                                                            (IntPtr)frame->data[2] + frame->linesize[2] * (Helpers.AV_CEIL_RSHIFT(frame->height, 1) - 1), -frame->linesize[2]);
                 }
@@ -394,11 +402,11 @@
             {
                 if (frame->linesize[0] < 0)
                 {
-                    ret = SDL.SDL_UpdateTexture(tex, ref rect, (IntPtr)frame->data[0] + frame->linesize[0] * (frame->height - 1), -frame->linesize[0]);
+                    ret = SDL.SDL_UpdateTexture(texture, ref textureRect, (IntPtr)frame->data[0] + frame->linesize[0] * (frame->height - 1), -frame->linesize[0]);
                 }
                 else
                 {
-                    ret = SDL.SDL_UpdateTexture(tex, ref rect, (IntPtr)frame->data[0], frame->linesize[0]);
+                    ret = SDL.SDL_UpdateTexture(texture, ref textureRect, (IntPtr)frame->data[0], frame->linesize[0]);
                 }
             }
 
@@ -535,7 +543,7 @@
                                             h = sp.SubtitlePtr->rects[i]->h,
                                         };
 
-                                        if (SDL.SDL_LockTexture(container.sub_texture, ref sub_rect, out var pixels, out var pitch) == 0)
+                                        if (SDL.SDL_LockTexture(sub_texture, ref sub_rect, out var pixels, out var pitch) == 0)
                                         {
                                             var ptr = (byte*)pixels;
                                             for (var j = 0; j < sub_rect.h; j++, ptr += pitch)
@@ -546,7 +554,7 @@
                                                 }
                                             }
 
-                                            SDL.SDL_UnlockTexture(container.sub_texture);
+                                            SDL.SDL_UnlockTexture(sub_texture);
                                         }
                                     }
                                 }

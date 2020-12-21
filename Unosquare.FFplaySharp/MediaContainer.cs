@@ -14,10 +14,10 @@
         private Thread ReadingThread;
         public AVInputFormat* iformat = null;
         public bool IsAbortRequested { get; private set; }
-        
+
         public bool IsPaused { get; private set; }
 
-        
+
         private bool seek_req;
         private int seek_flags;
         public long seek_pos;
@@ -28,9 +28,9 @@
         public bool IsRealtime { get; private set; }
 
         public Clock AudioClock { get; private set; }
-        
+
         public Clock VideoClock { get; private set; }
-        
+
         public Clock ExternalClock { get; private set; }
 
         public AudioComponent Audio { get; }
@@ -41,7 +41,7 @@
 
         public ClockSync ClockSyncMode { get; private set; }
 
-        
+
         public int audio_clock_serial;
         public double audio_diff_cum; /* used for AV difference average computation */
         public double audio_diff_avg_coef;
@@ -54,7 +54,7 @@
         public uint audio_buf1_size;
         public int audio_buf_index; /* in bytes */
         public int audio_write_buf_size;
-        
+
         public bool IsMuted { get; private set; }
         public int frame_drops_early;
         public int frame_drops_late;
@@ -69,9 +69,6 @@
         // FFTSample* rdft_data;
         // public int xpos;
         public double last_vis_time;
-        public IntPtr vis_texture; // TODO: remove (audio visualization texture)
-        public IntPtr sub_texture;
-        public IntPtr vid_texture;
 
         public double frame_timer;
         public double frame_last_returned_time;
@@ -531,23 +528,16 @@
             switch (avctx->codec_type)
             {
                 case AVMediaType.AVMEDIA_TYPE_AUDIO:
-                    {
-                        AVFilterContext* sink;
-                        Audio.FilterSpec.Frequency = avctx->sample_rate;
-                        Audio.FilterSpec.Channels = avctx->channels;
-                        Audio.FilterSpec.Layout = (long)Helpers.get_valid_channel_layout(avctx->channel_layout, avctx->channels);
-                        Audio.FilterSpec.SampleFormat = avctx->sample_fmt;
-                        if ((ret = Audio.configure_audio_filters(false)) < 0)
-                            goto fail;
-                        sink = Audio.OutputFilter;
-                        sampleRate = ffmpeg.av_buffersink_get_sample_rate(sink);
-                        nb_channels = ffmpeg.av_buffersink_get_channels(sink);
-                        channelLayout = (long)ffmpeg.av_buffersink_get_channel_layout(sink);
-                    }
-
-                    sampleRate = avctx->sample_rate;
-                    nb_channels = avctx->channels;
-                    channelLayout = (long)avctx->channel_layout;
+                    Audio.FilterSpec.Frequency = avctx->sample_rate;
+                    Audio.FilterSpec.Channels = avctx->channels;
+                    Audio.FilterSpec.Layout = (long)Helpers.get_valid_channel_layout(avctx->channel_layout, avctx->channels);
+                    Audio.FilterSpec.SampleFormat = avctx->sample_fmt;
+                    if ((ret = Audio.configure_audio_filters(false)) < 0)
+                        goto fail;
+                    var sink = Audio.OutputFilter;
+                    sampleRate = ffmpeg.av_buffersink_get_sample_rate(sink);
+                    nb_channels = ffmpeg.av_buffersink_get_channels(sink);
+                    channelLayout = (long)ffmpeg.av_buffersink_get_channel_layout(sink);
 
                     /* prepare audio output */
                     if ((ret = audio_open(channelLayout, nb_channels, sampleRate, ref Audio.TargetSpec)) < 0)
@@ -583,7 +573,6 @@
                 case AVMediaType.AVMEDIA_TYPE_VIDEO:
                     Video.StreamIndex = stream_index;
                     Video.Stream = ic->streams[stream_index];
-
                     Video.Decoder = new(this, avctx);
                     Video.Decoder.Start();
                     IsPictureAttachmentPending = true;
@@ -591,7 +580,6 @@
                 case AVMediaType.AVMEDIA_TYPE_SUBTITLE:
                     Subtitle.StreamIndex = stream_index;
                     Subtitle.Stream = ic->streams[stream_index];
-
                     Subtitle.Decoder = new(this, avctx);
                     Subtitle.Decoder.Start();
                     break;
@@ -770,15 +758,6 @@
             continue_read_thread.Dispose();
             ffmpeg.sws_freeContext(Video.ConvertContext);
             ffmpeg.sws_freeContext(Subtitle.ConvertContext);
-
-            if (vis_texture != IntPtr.Zero)
-                SDL.SDL_DestroyTexture(vis_texture);
-
-            if (vid_texture != IntPtr.Zero)
-                SDL.SDL_DestroyTexture(vid_texture);
-
-            if (sub_texture != IntPtr.Zero)
-                SDL.SDL_DestroyTexture(sub_texture);
 
             ffmpeg.av_free(sample_array);
             sample_array = null;

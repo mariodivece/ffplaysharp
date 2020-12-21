@@ -85,11 +85,11 @@
         /* handle an event sent by the GUI */
         static void event_loop(MediaContainer container)
         {
-            double incr, pos, frac;
+            double incr, pos, x;
 
             while (true)
             {
-                double x;
+                // double x;
                 var sdlEvent = refresh_loop_wait_event(container);
                 switch ((int)sdlEvent.type)
                 {
@@ -262,20 +262,19 @@
                         }
                         else
                         {
-                            long ts;
-                            int ns, hh, mm, ss;
-                            int tns, thh, tmm, tss;
-                            tns = (int)(container.InputContext->duration / 1000000L);
-                            thh = tns / 3600;
-                            tmm = (tns % 3600) / 60;
-                            tss = (tns % 60);
-                            frac = x / container.width;
-                            ns = (int)(frac * tns);
-                            hh = ns / 3600;
-                            mm = (ns % 3600) / 60;
-                            ss = (ns % 60);
+                            var tns = (int)(container.InputContext->duration / 1000000L);
+                            var thh = tns / 3600;
+                            var tmm = (tns % 3600) / 60;
+                            var tss = (tns % 60);
+                            var frac = x / container.width;
+                            var ns = (int)(frac * tns);
+                            var hh = ns / 3600;
+                            var mm = (ns % 3600) / 60;
+                            var ss = (ns % 60);
+                            var ts = (long)(frac * container.InputContext->duration);
+
                             ffmpeg.av_log(null, ffmpeg.AV_LOG_INFO, $"Seek to {(frac * 100)} ({hh}:{mm}:{ss}) of total duration ({thh}:{tmm}:{tss})       \n");
-                            ts = (long)(frac * container.InputContext->duration);
+                            
                             if (container.InputContext->start_time != ffmpeg.AV_NOPTS_VALUE)
                                 ts += container.InputContext->start_time;
                             container.stream_seek(ts, 0, 0);
@@ -287,11 +286,6 @@
                             case SDL.SDL_WindowEventID.SDL_WINDOWEVENT_SIZE_CHANGED:
                                 SdlRenderer.screen_width = container.width = sdlEvent.window.data1;
                                 SdlRenderer.screen_height = container.height = sdlEvent.window.data2;
-                                if (container.vis_texture != IntPtr.Zero)
-                                {
-                                    SDL.SDL_DestroyTexture(container.vis_texture);
-                                    container.vis_texture = IntPtr.Zero;
-                                }
                                 break;
                             case SDL.SDL_WindowEventID.SDL_WINDOWEVENT_EXPOSED:
                                 SdlRenderer.force_refresh = true;
