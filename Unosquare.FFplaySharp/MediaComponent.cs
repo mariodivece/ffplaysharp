@@ -10,13 +10,14 @@
         {
             Container = container;
             Packets = new(this);
+            Frames = CreateFrameQueue();
         }
 
         public MediaContainer Container { get; }
 
         public PacketQueue Packets { get; }
 
-        public FrameQueue Frames;
+        public FrameQueue Frames { get; }
 
         public MediaDecoder Decoder { get; set; }
 
@@ -56,6 +57,8 @@
             Stream = null;
             StreamIndex = -1;
         }
+
+        protected abstract FrameQueue CreateFrameQueue();
     }
 
     public abstract unsafe class FilteringMediaComponent : MediaComponent
@@ -83,6 +86,8 @@
         public new VideoDecoder Decoder { get; set; }
 
         public override AVMediaType MediaType => AVMediaType.AVMEDIA_TYPE_VIDEO;
+
+        protected override FrameQueue CreateFrameQueue() => new FrameQueue(Packets, Constants.VIDEO_PICTURE_QUEUE_SIZE, true);
     }
 
     public unsafe sealed class AudioComponent : FilteringMediaComponent
@@ -218,6 +223,8 @@
             Stream = null;
             StreamIndex = -1;
         }
+
+        protected override FrameQueue CreateFrameQueue() => new FrameQueue(Packets, Constants.SAMPLE_QUEUE_SIZE, true);
     }
 
     public unsafe sealed class SubtitleComponent : MediaComponent
@@ -233,5 +240,7 @@
         public new SubtitleDecoder Decoder { get; set; }
 
         public override AVMediaType MediaType => AVMediaType.AVMEDIA_TYPE_SUBTITLE;
+
+        protected override FrameQueue CreateFrameQueue() => new FrameQueue(Packets, Constants.SUBPICTURE_QUEUE_SIZE, false);
     }
 }

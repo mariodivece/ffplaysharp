@@ -165,11 +165,6 @@
             container.ytop = 0;
             container.xleft = 0;
 
-            /* start video display */
-            container.Video.Frames = new(container.Video.Packets, Constants.VIDEO_PICTURE_QUEUE_SIZE, true);
-            container.Subtitle.Frames = new(container.Subtitle.Packets, Constants.SUBPICTURE_QUEUE_SIZE, false);
-            container.Audio.Frames = new(container.Audio.Packets, Constants.SAMPLE_QUEUE_SIZE, true);
-
             container.VideoClock = new Clock(container.Video.Packets);
             container.AudioClock = new Clock(container.Audio.Packets);
             container.ExternalClock = new Clock(container.ExternalClock);
