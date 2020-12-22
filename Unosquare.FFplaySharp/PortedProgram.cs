@@ -3,6 +3,7 @@
     using FFmpeg.AutoGen;
     using SDL2;
     using System;
+    using Unosquare.FFplaySharp.Primitives;
 
     public static unsafe class PortedProgram
     {

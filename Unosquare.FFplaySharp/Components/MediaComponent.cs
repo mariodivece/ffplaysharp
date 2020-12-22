@@ -1,17 +1,12 @@
-﻿namespace Unosquare.FFplaySharp
+﻿namespace Unosquare.FFplaySharp.Components
 {
     using FFmpeg.AutoGen;
-    using SDL2;
-    using System;
-    using System.Collections;
-    using System.Collections.Generic;
     using System.Threading;
+    using Unosquare.FFplaySharp.Primitives;
 
-    public abstract unsafe class MediaDecoder
+    public abstract unsafe class MediaComponent
     {
         private readonly int ReorderPts;
-        private readonly PacketQueue Packets;
-        private readonly FrameQueue Frames;
         private readonly AutoResetEvent EmptyQueueEvent;
 
         private PacketHolder PendingPacket;
@@ -20,25 +15,48 @@
         private AVRational NextPtsTimeBase;
         private Thread Worker;
 
-        protected MediaDecoder(MediaComponent component, AVCodecContext* codecContext)
+        protected MediaComponent(MediaContainer container)
         {
-            Component = component;
-            Container = component.Container;
-            CodecContext = codecContext;
-            Packets = component.Packets;
-            Frames = component.Frames;
-            EmptyQueueEvent = component.Container.continue_read_thread;
-            StartPts = ffmpeg.AV_NOPTS_VALUE;
-            PacketSerial = -1;
-            ReorderPts = component.Container.Options.decoder_reorder_pts;
-            StartPtsTimeBase = new();
+            Container = container;
+            Packets = new(this);
+            Frames = CreateFrameQueue();
+            EmptyQueueEvent = Container.continue_read_thread;
+            ReorderPts = Container.Options.decoder_reorder_pts;
         }
+
+        public MediaContainer Container { get; }
+
+        public PacketQueue Packets { get; }
+
+        public FrameQueue Frames { get; }
 
         public AVCodecContext* CodecContext { get; private set; }
 
-        public MediaComponent Component { get; }
+        public AVStream* Stream;
 
-        public MediaContainer Container { get; }
+        public int StreamIndex;
+
+        public int LastStreamIndex;
+
+        public abstract AVMediaType MediaType { get; }
+
+        public bool IsAudio => MediaType == AVMediaType.AVMEDIA_TYPE_AUDIO;
+
+        public bool IsVideo => MediaType == AVMediaType.AVMEDIA_TYPE_VIDEO;
+
+        public bool IsSubtitle => MediaType == AVMediaType.AVMEDIA_TYPE_SUBTITLE;
+
+        public bool HasEnoughPackets
+        {
+            get
+            {
+                return StreamIndex < 0 ||
+                   Packets.IsClosed ||
+                   (Stream->disposition & ffmpeg.AV_DISPOSITION_ATTACHED_PIC) != 0 ||
+                   Packets.Count > Constants.MIN_FRAMES && (Packets.Duration == 0 ||
+                   ffmpeg.av_q2d(Stream->time_base) * Packets.Duration > 1.0);
+            }
+        }
 
         public int PacketSerial { get; private set; }
 
@@ -47,6 +65,18 @@
         public long StartPts { get; set; }
 
         public AVRational StartPtsTimeBase { get; set; }
+
+        public virtual void Close()
+        {
+            if (StreamIndex < 0 || StreamIndex >= Container.InputContext->nb_streams)
+                return;
+
+            AbortDecoder();
+            DisposeDecoder();
+            Container.InputContext->streams[StreamIndex]->discard = AVDiscard.AVDISCARD_ALL;
+            Stream = null;
+            StreamIndex = -1;
+        }
 
         protected int DecodeFrame(out AVFrame* frame, out AVSubtitle* sub)
         {
@@ -188,7 +218,15 @@
             }
         }
 
-        public void Dispose()
+        public virtual void InitializeDecoder(AVCodecContext* codecContext)
+        {
+            CodecContext = codecContext;
+            StartPts = ffmpeg.AV_NOPTS_VALUE;
+            PacketSerial = -1;
+            StartPtsTimeBase = new();
+        }
+
+        public void DisposeDecoder()
         {
             PendingPacket?.Dispose();
             var codecContext = CodecContext;
@@ -196,7 +234,7 @@
             CodecContext = null;
         }
 
-        public void Abort()
+        public void AbortDecoder()
         {
             Packets.Close();
             Frames.SignalChanged();
@@ -205,13 +243,17 @@
             Packets.Clear();
         }
 
-        protected void Start(ThreadStart workerMethod, string threadName)
+        private void Start(ThreadStart workerMethod, string threadName)
         {
             Packets.Open();
             Worker = new Thread(workerMethod) { Name = threadName, IsBackground = true };
             Worker.Start();
         }
 
-        public abstract void Start();
+        public void Start() => Start(WorkerThreadMethod, $"{GetType().Name}Worker");
+
+        protected abstract FrameQueue CreateFrameQueue();
+
+        protected abstract void WorkerThreadMethod();
     }
 }

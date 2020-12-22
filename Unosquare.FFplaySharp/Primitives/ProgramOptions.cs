@@ -1,4 +1,4 @@
-﻿namespace Unosquare.FFplaySharp
+﻿namespace Unosquare.FFplaySharp.Primitives
 {
     using FFmpeg.AutoGen;
     using System.Collections.Generic;

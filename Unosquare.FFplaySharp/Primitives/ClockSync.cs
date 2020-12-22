@@ -1,4 +1,4 @@
-﻿namespace Unosquare.FFplaySharp
+﻿namespace Unosquare.FFplaySharp.Primitives
 {
     public enum ClockSync
     {

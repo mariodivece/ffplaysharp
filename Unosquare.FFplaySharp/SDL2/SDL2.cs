@@ -35,7 +35,7 @@ using System.Text;
 
 namespace SDL2
 {
-	public static class SDL
+	public static partial class SDL
 	{
 		#region SDL2# Variables
 

@@ -5,6 +5,8 @@
     using System;
     using System.Collections.Generic;
     using System.Threading;
+    using Unosquare.FFplaySharp.Components;
+    using Unosquare.FFplaySharp.Primitives;
 
     public unsafe class MediaContainer
     {
@@ -76,7 +78,7 @@
 
         public double max_frame_duration;      // maximum duration of a frame - above this, we consider the jump a timestamp discontinuity
 
-        public bool eof;
+        public bool IsAtEndOfStream { get; private set; }
 
         public string filename;
         public int width = 1;
@@ -515,7 +517,7 @@
                 goto fail;
             }
 
-            eof = false;
+            IsAtEndOfStream = false;
             ic->streams[stream_index]->discard = AVDiscard.AVDISCARD_DEFAULT;
             switch (avctx->codec_type)
             {
@@ -551,29 +553,29 @@
                     Audio.StreamIndex = stream_index;
                     Audio.Stream = ic->streams[stream_index];
 
-                    Audio.Decoder = new(this, avctx);
+                    Audio.InitializeDecoder(avctx);
                     if ((InputContext->iformat->flags & (ffmpeg.AVFMT_NOBINSEARCH | ffmpeg.AVFMT_NOGENSEARCH | ffmpeg.AVFMT_NO_BYTE_SEEK)) != 0 &&
                         InputContext->iformat->read_seek.Pointer == IntPtr.Zero)
                     {
-                        Audio.Decoder.StartPts = Audio.Stream->start_time;
-                        Audio.Decoder.StartPtsTimeBase = Audio.Stream->time_base;
+                        Audio.StartPts = Audio.Stream->start_time;
+                        Audio.StartPtsTimeBase = Audio.Stream->time_base;
                     }
 
-                    Audio.Decoder.Start();
+                    Audio.Start();
                     Renderer.PauseAudio();
                     break;
                 case AVMediaType.AVMEDIA_TYPE_VIDEO:
                     Video.StreamIndex = stream_index;
                     Video.Stream = ic->streams[stream_index];
-                    Video.Decoder = new(this, avctx);
-                    Video.Decoder.Start();
+                    Video.InitializeDecoder(avctx);
+                    Video.Start();
                     IsPictureAttachmentPending = true;
                     break;
                 case AVMediaType.AVMEDIA_TYPE_SUBTITLE:
                     Subtitle.StreamIndex = stream_index;
                     Subtitle.Stream = ic->streams[stream_index];
-                    Subtitle.Decoder = new(this, avctx);
-                    Subtitle.Decoder.Start();
+                    Subtitle.InitializeDecoder(avctx);
+                    Subtitle.Start();
                     break;
                 default:
                     break;
@@ -774,7 +776,7 @@
             for (var b = 0; b < st_index.Length; b++)
                 st_index[b] = -1;
 
-            eof = false;
+            IsAtEndOfStream = false;
 
             ic = ffmpeg.avformat_alloc_context();
             if (ic == null)
@@ -1020,7 +1022,7 @@
                     }
                     seek_req = false;
                     IsPictureAttachmentPending = true;
-                    eof = false;
+                    IsAtEndOfStream = false;
 
                     if (IsPaused)
                         step_to_next_frame();
@@ -1049,8 +1051,8 @@
                     continue;
                 }
                 if (!IsPaused &&
-                    (Audio.Stream == null || (Audio.Decoder.HasFinished == Audio.Packets.Serial && Audio.Frames.PendingCount == 0)) &&
-                    (Video.Stream == null || (Video.Decoder.HasFinished == Video.Packets.Serial && Video.Frames.PendingCount == 0)))
+                    (Audio.Stream == null || (Audio.HasFinished == Audio.Packets.Serial && Audio.Frames.PendingCount == 0)) &&
+                    (Video.Stream == null || (Video.HasFinished == Video.Packets.Serial && Video.Frames.PendingCount == 0)))
                 {
                     if (o.loop != 1 && (o.loop == 0 || (--o.loop) > 0))
                     {
@@ -1067,7 +1069,7 @@
                 ret = ffmpeg.av_read_frame(ic, pkt);
                 if (ret < 0)
                 {
-                    if ((ret == ffmpeg.AVERROR_EOF || ffmpeg.avio_feof(ic->pb) != 0) && !eof)
+                    if ((ret == ffmpeg.AVERROR_EOF || ffmpeg.avio_feof(ic->pb) != 0) && !IsAtEndOfStream)
                     {
                         if (Video.StreamIndex >= 0)
                             Video.Packets.PutNull();
@@ -1075,7 +1077,7 @@
                             Audio.Packets.PutNull();
                         if (Subtitle.StreamIndex >= 0)
                             Subtitle.Packets.PutNull();
-                        eof = true;
+                        IsAtEndOfStream = true;
                     }
                     if (ic->pb != null && ic->pb->error != 0)
                     {
@@ -1091,7 +1093,7 @@
                 }
                 else
                 {
-                    eof = false;
+                    IsAtEndOfStream = false;
                 }
 
                 /* check if packet is in play range specified by user, then queue, otherwise discard */

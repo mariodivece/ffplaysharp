@@ -1,8 +1,9 @@
-﻿namespace Unosquare.FFplaySharp
+﻿namespace Unosquare.FFplaySharp.Primitives
 {
     using FFmpeg.AutoGen;
     using System;
     using System.Threading;
+    using Unosquare.FFplaySharp.Components;
 
     public unsafe sealed class PacketQueue : ISerialProvider, IDisposable
     {

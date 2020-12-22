@@ -1,26 +1,29 @@
-﻿namespace Unosquare.FFplaySharp
+﻿namespace Unosquare.FFplaySharp.Components
 {
     using FFmpeg.AutoGen;
     using SDL2;
     using System;
     using System.Collections.Generic;
+    using Unosquare.FFplaySharp.Primitives;
 
-    public unsafe sealed class VideoDecoder : MediaDecoder
+    public unsafe sealed class VideoComponent : FilteringMediaComponent
     {
-        public VideoDecoder(MediaContainer container, AVCodecContext* codecContext)
-            : base(container.Video, codecContext)
+        public VideoComponent(MediaContainer container)
+            : base(container)
         {
-            Component = container.Video;
+            // placeholder
         }
 
-        public new VideoComponent Component { get; }
+        public SwsContext* ConvertContext;
 
-        public override void Start() => Start(VideoWorkerThreadMethod, nameof(VideoDecoder));
+        public override AVMediaType MediaType => AVMediaType.AVMEDIA_TYPE_VIDEO;
 
-        private void VideoWorkerThreadMethod()
+        protected override FrameQueue CreateFrameQueue() => new(Packets, Constants.VIDEO_PICTURE_QUEUE_SIZE, true);
+
+        protected override void WorkerThreadMethod()
         {
             int ret;
-            var frameRate = ffmpeg.av_guess_frame_rate(Container.InputContext, Component.Stream, null);
+            var frameRate = ffmpeg.av_guess_frame_rate(Container.InputContext, Stream, null);
 
             AVFrame* decodedFrame;
             AVFilterGraph* filterGraph = null;
@@ -71,8 +74,8 @@
                         goto the_end;
                     }
 
-                    inputFilter = Component.InputFilter;
-                    outputFilter = Component.OutputFilter;
+                    inputFilter = InputFilter;
+                    outputFilter = OutputFilter;
                     lastWidth = decodedFrame->width;
                     lastHeight = decodedFrame->height;
                     lastFormat = decodedFrame->format;
@@ -114,7 +117,7 @@
                     ret = EnqueueFrame(decodedFrame, pts, duration, PacketSerial);
                     ffmpeg.av_frame_unref(decodedFrame);
 
-                    if (Component.Packets.Serial != PacketSerial)
+                    if (Packets.Serial != PacketSerial)
                         break;
                 }
 
@@ -130,7 +133,7 @@
 
         private int EnqueueFrame(AVFrame* sourceFrame, double pts, double duration, int serial)
         {
-            var frameSlot = Component.Frames.PeekWriteable();
+            var frameSlot = Frames.PeekWriteable();
 
             if (frameSlot == null) return -1;
 
@@ -149,7 +152,7 @@
             Container.Renderer.set_default_window_size(frameSlot.Width, frameSlot.Height, frameSlot.Sar);
 
             ffmpeg.av_frame_move_ref(frameSlot.FramePtr, sourceFrame);
-            Component.Frames.Push();
+            Frames.Push();
             return 0;
         }
 
@@ -166,9 +169,9 @@
                 var dpts = double.NaN;
 
                 if (frame->pts != ffmpeg.AV_NOPTS_VALUE)
-                    dpts = ffmpeg.av_q2d(Component.Stream->time_base) * frame->pts;
+                    dpts = ffmpeg.av_q2d(Stream->time_base) * frame->pts;
 
-                frame->sample_aspect_ratio = ffmpeg.av_guess_sample_aspect_ratio(Container.InputContext, Component.Stream, frame);
+                frame->sample_aspect_ratio = ffmpeg.av_guess_sample_aspect_ratio(Container.InputContext, Stream, frame);
 
                 if (Container.Options.framedrop > 0 || (Container.Options.framedrop != 0 && Container.MasterSyncMode != ClockSync.Video))
                 {
@@ -178,7 +181,7 @@
                         if (!double.IsNaN(diff) && Math.Abs(diff) < Constants.AV_NOSYNC_THRESHOLD &&
                             diff - Container.frame_last_filter_delay < 0 &&
                             PacketSerial == Container.VideoClock.Serial &&
-                            Component.Packets.Count != 0)
+                            Packets.Count != 0)
                         {
                             Container.frame_drops_early++;
                             ffmpeg.av_frame_unref(frame);
@@ -198,8 +201,8 @@
 
             int ret;
             AVFilterContext* sourceFilter = null, outputFilter = null, lastFilter = null;
-            var codecParameters = Component.Stream->codecpar;
-            var frameRate = ffmpeg.av_guess_frame_rate(Container.InputContext, Component.Stream, null);
+            var codecParameters = Stream->codecpar;
+            var frameRate = ffmpeg.av_guess_frame_rate(Container.InputContext, Stream, null);
             AVDictionaryEntry* e = null;
 
             for (var i = 0; i < Container.Renderer.renderer_info.num_texture_formats; i++)
@@ -230,7 +233,7 @@
             var sourceFilterArguments =
                 $"video_size={frame->width}x{frame->height}" +
                 $":pix_fmt={frame->format}" +
-                $":time_base={Component.Stream->time_base.num}/{Component.Stream->time_base.den}" +
+                $":time_base={Stream->time_base.num}/{Stream->time_base.den}" +
                 $":pixel_aspect={codecParameters->sample_aspect_ratio.num}/{Math.Max(codecParameters->sample_aspect_ratio.den, 1)}";
 
             if (frameRate.num != 0 && frameRate.den != 0)
@@ -255,7 +258,7 @@
             lastFilter = outputFilter;
             if (Container.Options.autorotate)
             {
-                var theta = Helpers.get_rotation(Component.Stream);
+                var theta = Helpers.get_rotation(Stream);
 
                 if (Math.Abs(theta - 90) < 1.0)
                 {
@@ -285,8 +288,8 @@
             if ((ret = MediaContainer.configure_filtergraph(ref graph, filterLiteral, sourceFilter, lastFilter)) < 0)
                 goto fail;
 
-            Component.InputFilter = sourceFilter;
-            Component.OutputFilter = outputFilter;
+            InputFilter = sourceFilter;
+            OutputFilter = outputFilter;
 
         fail:
             return ret;

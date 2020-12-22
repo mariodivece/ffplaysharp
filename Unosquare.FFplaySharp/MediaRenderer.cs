@@ -6,6 +6,7 @@
     using System.Collections.Generic;
     using System.Diagnostics;
     using System.Text;
+    using Unosquare.FFplaySharp.Primitives;
 
     public unsafe class MediaRenderer
     {
@@ -615,8 +616,8 @@
                     buf.Append($"aq={(aqsize / 1024)}KB ");
                     buf.Append($"vq={(vqsize / 1024)}KB ");
                     buf.Append($"sq={(sqsize)}B ");
-                    buf.Append($" f={(container.Video.Stream != null ? container.Video.Decoder.CodecContext->pts_correction_num_faulty_dts : 0)} / ");
-                    buf.Append($"{(container.Video.Stream != null ? container.Video.Decoder.CodecContext->pts_correction_num_faulty_pts : 0)}");
+                    buf.Append($" f={(container.Video.Stream != null ? container.Video.CodecContext->pts_correction_num_faulty_dts : 0)} / ");
+                    buf.Append($"{(container.Video.Stream != null ? container.Video.CodecContext->pts_correction_num_faulty_pts : 0)}");
 
                     if (container.Options.show_status == 1 && ffmpeg.AV_LOG_INFO > ffmpeg.av_log_get_level())
                         Console.WriteLine(buf.ToString());
@@ -767,7 +768,7 @@
                         target[b] = 0;
 
                     if (!Container.IsMuted && Container.audio_buf != null)
-                        SDLNatives.SDL_MixAudioFormat((byte*)stream, Container.audio_buf + Container.audio_buf_index, SDL.AUDIO_S16SYS, (uint)len1, audio_volume);
+                        SDL.SDL_MixAudioFormat((byte*)stream, Container.audio_buf + Container.audio_buf_index, SDL.AUDIO_S16SYS, (uint)len1, audio_volume);
                 }
 
                 len -= len1;
