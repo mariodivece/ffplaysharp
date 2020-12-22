@@ -2,11 +2,19 @@
 {
     using FFmpeg.AutoGen;
     using System;
+    using System.Diagnostics;
     using Unosquare.FFplaySharp.Primitives;
 
     public unsafe sealed class AudioComponent : FilteringMediaComponent
     {
         public AVFilterGraph* FilterGraph = null;              // audio filter graph
+
+        public double audio_clock;
+        public double last_audio_clock = 0;
+        public double audio_diff_cum; /* used for AV difference average computation */
+        public double audio_diff_threshold;
+        public double audio_diff_avg_coef;
+        public int audio_diff_avg_count;
 
         public AudioComponent(MediaContainer container)
             : base(container)
@@ -14,7 +22,7 @@
             // placeholder
         }
 
-        public SwrContext* ConvertContext;
+        public SwrContext* ConvertContext { get; private set; }
 
         public AudioParams SourceSpec = new();
         public AudioParams FilterSpec = new();
@@ -109,6 +117,213 @@
             }
 
             return ret;
+        }
+
+        /**
+* Decode one audio frame and return its uncompressed size.
+*
+* The processed audio frame is decoded, converted if required, and
+* stored in is->audio_buf, with size in bytes given by the return
+* value.
+*/
+        public int audio_decode_frame()
+        {
+            int data_size, resampled_data_size;
+            long dec_channel_layout;
+            double audio_clock0;
+            FrameHolder af;
+
+            if (Container.IsPaused)
+                return -1;
+
+            do
+            {
+                while (Container.Audio.Frames.PendingCount == 0)
+                {
+                    if ((ffmpeg.av_gettime_relative() - Container.Renderer.audio_callback_time) > 1000000L * Container.audio_hw_buf_size / TargetSpec.BytesPerSecond / 2)
+                        return -1;
+                    ffmpeg.av_usleep(1000);
+                }
+
+                if ((af = Frames.PeekReadable()) == null)
+                    return -1;
+
+                Frames.Next();
+
+            } while (af.Serial != Packets.Serial);
+
+            data_size = ffmpeg.av_samples_get_buffer_size(null, af.FramePtr->channels,
+                                                   af.FramePtr->nb_samples,
+                                                   (AVSampleFormat)af.FramePtr->format, 1);
+
+            dec_channel_layout =
+                (af.FramePtr->channel_layout != 0 && af.FramePtr->channels == ffmpeg.av_get_channel_layout_nb_channels(af.FramePtr->channel_layout))
+                ? (long)af.FramePtr->channel_layout
+                : ffmpeg.av_get_default_channel_layout(af.FramePtr->channels);
+            var wantedSampleCount = synchronize_audio(af.FramePtr->nb_samples);
+
+            if (af.FramePtr->format != (int)SourceSpec.SampleFormat ||
+                dec_channel_layout != SourceSpec.Layout ||
+                af.FramePtr->sample_rate != SourceSpec.Frequency ||
+                (wantedSampleCount != af.FramePtr->nb_samples && ConvertContext == null))
+            {
+                var convertContext = ConvertContext;
+                ffmpeg.swr_free(&convertContext);
+                ConvertContext = null;
+
+                ConvertContext = ffmpeg.swr_alloc_set_opts(null,
+                                                 TargetSpec.Layout, TargetSpec.SampleFormat, TargetSpec.Frequency,
+                                                 dec_channel_layout, (AVSampleFormat)af.FramePtr->format, af.FramePtr->sample_rate,
+                                                 0, null);
+
+                if (ConvertContext == null || ffmpeg.swr_init(ConvertContext) < 0)
+                {
+                    ffmpeg.av_log(null, ffmpeg.AV_LOG_ERROR,
+                           $"Cannot create sample rate converter for conversion of {af.FramePtr->sample_rate} Hz " +
+                           $"{ffmpeg.av_get_sample_fmt_name((AVSampleFormat)af.FramePtr->format)} {af.FramePtr->channels} channels to " +
+                           $"{TargetSpec.Frequency} Hz {ffmpeg.av_get_sample_fmt_name(TargetSpec.SampleFormat)} {TargetSpec.Channels} channels!\n");
+
+                    convertContext = ConvertContext;
+                    ffmpeg.swr_free(&convertContext);
+                    ConvertContext = null;
+
+                    return -1;
+                }
+
+                SourceSpec.Layout = dec_channel_layout;
+                SourceSpec.Channels = af.FramePtr->channels;
+                SourceSpec.Frequency = af.FramePtr->sample_rate;
+                SourceSpec.SampleFormat = (AVSampleFormat)af.FramePtr->format;
+            }
+
+            if (ConvertContext != null)
+            {
+                int wantedOutputSize = wantedSampleCount * TargetSpec.Frequency / af.FramePtr->sample_rate + 256;
+                int out_size = ffmpeg.av_samples_get_buffer_size(null, TargetSpec.Channels, wantedOutputSize, TargetSpec.SampleFormat, 0);
+                int len2;
+                if (out_size < 0)
+                {
+                    ffmpeg.av_log(null, ffmpeg.AV_LOG_ERROR, "av_samples_get_buffer_size() failed\n");
+                    return -1;
+                }
+                if (wantedSampleCount != af.FramePtr->nb_samples)
+                {
+                    if (ffmpeg.swr_set_compensation(ConvertContext, (wantedSampleCount - af.FramePtr->nb_samples) * TargetSpec.Frequency / af.FramePtr->sample_rate,
+                                                wantedSampleCount * TargetSpec.Frequency / af.FramePtr->sample_rate) < 0)
+                    {
+                        ffmpeg.av_log(null, ffmpeg.AV_LOG_ERROR, "swr_set_compensation() failed\n");
+                        return -1;
+                    }
+                }
+
+                if (Container.audio_buf1 == null)
+                {
+                    Container.audio_buf1 = (byte*)ffmpeg.av_mallocz((ulong)out_size);
+                    Container.audio_buf1_size = (uint)out_size;
+                }
+
+                if (Container.audio_buf1_size < out_size && Container.audio_buf1 != null)
+                {
+                    ffmpeg.av_free(Container.audio_buf1);
+                    Container.audio_buf1 = (byte*)ffmpeg.av_mallocz((ulong)out_size);
+                    Container.audio_buf1_size = (uint)out_size;
+                }
+
+                var audioBufferIn = af.FramePtr->extended_data;
+                var audioBufferOut = Container.audio_buf1;
+                len2 = ffmpeg.swr_convert(ConvertContext, &audioBufferOut, wantedOutputSize, audioBufferIn, af.FramePtr->nb_samples);
+                Container.audio_buf1 = audioBufferOut;
+                af.FramePtr->extended_data = audioBufferIn;
+
+                if (len2 < 0)
+                {
+                    ffmpeg.av_log(null, ffmpeg.AV_LOG_ERROR, "swr_convert() failed\n");
+                    return -1;
+                }
+                if (len2 == wantedOutputSize)
+                {
+                    ffmpeg.av_log(null, ffmpeg.AV_LOG_WARNING, "audio buffer is probably too small\n");
+                    if (ffmpeg.swr_init(ConvertContext) < 0)
+                    {
+                        var convertContext = ConvertContext;
+                        ffmpeg.swr_free(&convertContext);
+                        ConvertContext = convertContext;
+                    }
+                }
+
+                Container.audio_buf = Container.audio_buf1;
+                resampled_data_size = len2 * TargetSpec.Channels * ffmpeg.av_get_bytes_per_sample(TargetSpec.SampleFormat);
+            }
+            else
+            {
+                Container.audio_buf = af.FramePtr->data[0];
+                resampled_data_size = data_size;
+            }
+
+            audio_clock0 = audio_clock;
+
+            /* update the audio clock with the pts */
+            if (!double.IsNaN(af.Pts))
+                audio_clock = af.Pts + (double)af.FramePtr->nb_samples / af.FramePtr->sample_rate;
+            else
+                audio_clock = double.NaN;
+
+            Container.audio_clock_serial = af.Serial;
+            if (Debugger.IsAttached)
+            {
+                Console.WriteLine($"audio: delay={(audio_clock - last_audio_clock),-8:0.####} clock={audio_clock,-8:0.####} clock0={audio_clock0,-8:0.####}");
+                last_audio_clock = audio_clock;
+            }
+
+            return resampled_data_size;
+        }
+
+        /* return the wanted number of samples to get better sync if sync_type is video
+* or external master clock */
+        public int synchronize_audio(int sampleCount)
+        {
+            var wantedSampleCount = sampleCount;
+
+            /* if not master, then we try to remove or add samples to correct the clock */
+            if (Container.MasterSyncMode != ClockSync.Audio)
+            {
+                var diff = Container.AudioClock.Time - Container.MasterTime;
+
+                if (!double.IsNaN(diff) && Math.Abs(diff) < Constants.AV_NOSYNC_THRESHOLD)
+                {
+                    audio_diff_cum = diff + audio_diff_avg_coef * audio_diff_cum;
+                    if (audio_diff_avg_count < Constants.AUDIO_DIFF_AVG_NB)
+                    {
+                        /* not enough measures to have a correct estimate */
+                        audio_diff_avg_count++;
+                    }
+                    else
+                    {
+                        /* estimate the A-V difference */
+                        var avg_diff = audio_diff_cum * (1.0 - audio_diff_avg_coef);
+
+                        if (Math.Abs(avg_diff) >= audio_diff_threshold)
+                        {
+                            wantedSampleCount = sampleCount + (int)(diff * SourceSpec.Frequency);
+                            var minSampleCount = (int)((sampleCount * (100 - Constants.SAMPLE_CORRECTION_PERCENT_MAX) / 100));
+                            var maxSampleCount = (int)((sampleCount * (100 + Constants.SAMPLE_CORRECTION_PERCENT_MAX) / 100));
+                            wantedSampleCount = Helpers.av_clip(wantedSampleCount, minSampleCount, maxSampleCount);
+                        }
+
+                        ffmpeg.av_log(
+                            null, ffmpeg.AV_LOG_TRACE, $"diff={diff} adiff={avg_diff} sample_diff={(wantedSampleCount - sampleCount)} apts={audio_clock} {audio_diff_threshold}\n");
+                    }
+                }
+                else
+                {
+                    /* too big difference : may be initial PTS errors, so
+                       reset A-V filter */
+                    audio_diff_avg_count = 0;
+                    audio_diff_cum = 0;
+                }
+            }
+
+            return wantedSampleCount;
         }
 
         public override void Close()

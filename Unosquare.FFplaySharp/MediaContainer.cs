@@ -45,17 +45,13 @@
 
 
         public int audio_clock_serial;
-        public double audio_diff_cum; /* used for AV difference average computation */
-        public double audio_diff_avg_coef;
-        public double audio_diff_threshold;
-        public int audio_diff_avg_count;
+        
+
         public int audio_hw_buf_size;
         public byte* audio_buf;
         public byte* audio_buf1;
         public uint audio_buf_size; /* in bytes */
         public uint audio_buf1_size;
-        public int audio_buf_index; /* in bytes */
-        public int audio_write_buf_size;
 
         public bool IsMuted { get; private set; }
         public int frame_drops_early;
@@ -540,15 +536,15 @@
                     audio_hw_buf_size = ret;
                     Audio.SourceSpec = Audio.TargetSpec;
                     audio_buf_size = 0;
-                    audio_buf_index = 0;
+                    Renderer.audio_buf_index = 0;
 
                     /* init averaging filter */
-                    audio_diff_avg_coef = Math.Exp(Math.Log(0.01) / Constants.AUDIO_DIFF_AVG_NB);
-                    audio_diff_avg_count = 0;
+                    Audio.audio_diff_avg_coef = Math.Exp(Math.Log(0.01) / Constants.AUDIO_DIFF_AVG_NB);
+                    Audio.audio_diff_avg_count = 0;
 
                     /* since we do not have a precise anough audio FIFO fullness,
                        we correct audio sync only if larger than this threshold */
-                    audio_diff_threshold = (double)(audio_hw_buf_size) / Audio.TargetSpec.BytesPerSecond;
+                    Audio.audio_diff_threshold = (double)(audio_hw_buf_size) / Audio.TargetSpec.BytesPerSecond;
 
                     Audio.StreamIndex = stream_index;
                     Audio.Stream = ic->streams[stream_index];
@@ -677,55 +673,6 @@
 
             return (int)spec.size;
         }
-
-        /* return the wanted number of samples to get better sync if sync_type is video
-* or external master clock */
-        public int synchronize_audio(int sampleCount)
-        {
-            var wantedSampleCount = sampleCount;
-
-            /* if not master, then we try to remove or add samples to correct the clock */
-            if (MasterSyncMode != ClockSync.Audio)
-            {
-                var diff = AudioClock.Time - MasterTime;
-
-                if (!double.IsNaN(diff) && Math.Abs(diff) < Constants.AV_NOSYNC_THRESHOLD)
-                {
-                    audio_diff_cum = diff + audio_diff_avg_coef * audio_diff_cum;
-                    if (audio_diff_avg_count < Constants.AUDIO_DIFF_AVG_NB)
-                    {
-                        /* not enough measures to have a correct estimate */
-                        audio_diff_avg_count++;
-                    }
-                    else
-                    {
-                        /* estimate the A-V difference */
-                        var avg_diff = audio_diff_cum * (1.0 - audio_diff_avg_coef);
-
-                        if (Math.Abs(avg_diff) >= audio_diff_threshold)
-                        {
-                            wantedSampleCount = sampleCount + (int)(diff * Audio.SourceSpec.Frequency);
-                            var minSampleCount = (int)((sampleCount * (100 - Constants.SAMPLE_CORRECTION_PERCENT_MAX) / 100));
-                            var maxSampleCount = (int)((sampleCount * (100 + Constants.SAMPLE_CORRECTION_PERCENT_MAX) / 100));
-                            wantedSampleCount = Helpers.av_clip(wantedSampleCount, minSampleCount, maxSampleCount);
-                        }
-
-                        ffmpeg.av_log(
-                            null, ffmpeg.AV_LOG_TRACE, $"diff={diff} adiff={avg_diff} sample_diff={(wantedSampleCount - sampleCount)} apts={Renderer?.audio_clock} {audio_diff_threshold}\n");
-                    }
-                }
-                else
-                {
-                    /* too big difference : may be initial PTS errors, so
-                       reset A-V filter */
-                    audio_diff_avg_count = 0;
-                    audio_diff_cum = 0;
-                }
-            }
-
-            return wantedSampleCount;
-        }
-
 
         public void stream_close()
         {

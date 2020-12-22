@@ -250,7 +250,7 @@
             Worker.Start();
         }
 
-        public void Start() => Start(WorkerThreadMethod, $"{GetType().Name}Worker");
+        public virtual void Start() => Start(WorkerThreadMethod, $"{GetType().Name}Worker");
 
         protected abstract FrameQueue CreateFrameQueue();
 

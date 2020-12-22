@@ -4,7 +4,6 @@
     using SDL2;
     using System;
     using System.Collections.Generic;
-    using System.Diagnostics;
     using System.Text;
     using Unosquare.FFplaySharp.Primitives;
 
@@ -13,7 +12,8 @@
         public long last_mouse_left_click;
 
         public long audio_callback_time;
-        public double audio_clock;
+        public int audio_buf_index; /* in bytes */
+        public int audio_write_buf_size;
 
         public int default_width = 640;
         public int default_height = 480;
@@ -39,7 +39,6 @@
 
         // inlined static variables
         public long last_time_status = 0;
-        public double last_audio_clock = 0;
 
         public int audio_volume;
 
@@ -733,9 +732,9 @@
 
             while (len > 0)
             {
-                if (Container.audio_buf_index >= Container.audio_buf_size)
+                if (audio_buf_index >= Container.audio_buf_size)
                 {
-                    audio_size = audio_decode_frame(Container);
+                    audio_size = Container.Audio.audio_decode_frame();
                     if (audio_size < 0)
                     {
                         /* if error, just output silence */
@@ -748,16 +747,16 @@
                             update_sample_display(Container, (short*)Container.audio_buf, audio_size);
                         Container.audio_buf_size = (uint)audio_size;
                     }
-                    Container.audio_buf_index = 0;
+                    audio_buf_index = 0;
                 }
-                len1 = (int)(Container.audio_buf_size - Container.audio_buf_index);
+                len1 = (int)(Container.audio_buf_size - audio_buf_index);
                 if (len1 > len)
                     len1 = len;
 
                 if (!Container.IsMuted && Container.audio_buf != null && audio_volume == SDL.SDL_MIX_MAXVOLUME)
                 {
                     var dest = (byte*)stream;
-                    var source = (Container.audio_buf + Container.audio_buf_index);
+                    var source = (Container.audio_buf + audio_buf_index);
                     for (var b = 0; b < len1; b++)
                         dest[b] = source[b];
                 }
@@ -768,18 +767,19 @@
                         target[b] = 0;
 
                     if (!Container.IsMuted && Container.audio_buf != null)
-                        SDL.SDL_MixAudioFormat((byte*)stream, Container.audio_buf + Container.audio_buf_index, SDL.AUDIO_S16SYS, (uint)len1, audio_volume);
+                        SDL.SDL_MixAudioFormat((byte*)stream, Container.audio_buf + audio_buf_index, SDL.AUDIO_S16SYS, (uint)len1, audio_volume);
                 }
 
                 len -= len1;
                 stream += len1;
-                Container.audio_buf_index += len1;
+                audio_buf_index += len1;
             }
-            Container.audio_write_buf_size = (int)(Container.audio_buf_size - Container.audio_buf_index);
+            
+            audio_write_buf_size = (int)(Container.audio_buf_size - audio_buf_index);
             /* Let's assume the audio driver that is used by SDL has two periods. */
-            if (!double.IsNaN(audio_clock))
+            if (!double.IsNaN(Container.Audio.audio_clock))
             {
-                Container.AudioClock.Set(audio_clock - (double)(2 * Container.audio_hw_buf_size + Container.audio_write_buf_size) / Container.Audio.TargetSpec.BytesPerSecond, Container.audio_clock_serial, audio_callback_time / 1000000.0);
+                Container.AudioClock.Set(Container.Audio.audio_clock - (double)(2 * Container.audio_hw_buf_size + audio_write_buf_size) / Container.Audio.TargetSpec.BytesPerSecond, Container.audio_clock_serial, audio_callback_time / 1000000.0);
                 Container.ExternalClock.SyncToSlave(Container.AudioClock);
             }
         }
@@ -790,165 +790,6 @@
             var new_volume = (int)Math.Round(SDL.SDL_MIX_MAXVOLUME * Math.Pow(10.0, (volume_level + sign * step) / 20.0), 0);
             audio_volume = Helpers.av_clip(audio_volume == new_volume ? (audio_volume + sign) : new_volume, 0, SDL.SDL_MIX_MAXVOLUME);
         }
-
-        /**
-* Decode one audio frame and return its uncompressed size.
-*
-* The processed audio frame is decoded, converted if required, and
-* stored in is->audio_buf, with size in bytes given by the return
-* value.
-*/
-        public int audio_decode_frame(MediaContainer container)
-        {
-            int data_size, resampled_data_size;
-            long dec_channel_layout;
-            double audio_clock0;
-            FrameHolder af;
-
-            if (container.IsPaused)
-                return -1;
-
-            do
-            {
-                while (container.Audio.Frames.PendingCount == 0)
-                {
-                    if ((ffmpeg.av_gettime_relative() - audio_callback_time) > 1000000L * container.audio_hw_buf_size / container.Audio.TargetSpec.BytesPerSecond / 2)
-                        return -1;
-                    ffmpeg.av_usleep(1000);
-                }
-
-                if ((af = container.Audio.Frames.PeekReadable()) == null)
-                    return -1;
-
-                container.Audio.Frames.Next();
-
-            } while (af.Serial != container.Audio.Packets.Serial);
-
-            data_size = ffmpeg.av_samples_get_buffer_size(null, af.FramePtr->channels,
-                                                   af.FramePtr->nb_samples,
-                                                   (AVSampleFormat)af.FramePtr->format, 1);
-
-            dec_channel_layout =
-                (af.FramePtr->channel_layout != 0 && af.FramePtr->channels == ffmpeg.av_get_channel_layout_nb_channels(af.FramePtr->channel_layout))
-                ? (long)af.FramePtr->channel_layout
-                : ffmpeg.av_get_default_channel_layout(af.FramePtr->channels);
-            var wantedSampleCount = container.synchronize_audio(af.FramePtr->nb_samples);
-
-            if (af.FramePtr->format != (int)container.Audio.SourceSpec.SampleFormat ||
-                dec_channel_layout != container.Audio.SourceSpec.Layout ||
-                af.FramePtr->sample_rate != container.Audio.SourceSpec.Frequency ||
-                (wantedSampleCount != af.FramePtr->nb_samples && container.Audio.ConvertContext == null))
-            {
-                var convertContext = container.Audio.ConvertContext;
-                ffmpeg.swr_free(&convertContext);
-                container.Audio.ConvertContext = null;
-
-                container.Audio.ConvertContext = ffmpeg.swr_alloc_set_opts(null,
-                                                 container.Audio.TargetSpec.Layout, container.Audio.TargetSpec.SampleFormat, container.Audio.TargetSpec.Frequency,
-                                                 dec_channel_layout, (AVSampleFormat)af.FramePtr->format, af.FramePtr->sample_rate,
-                                                 0, null);
-
-                if (container.Audio.ConvertContext == null || ffmpeg.swr_init(container.Audio.ConvertContext) < 0)
-                {
-                    ffmpeg.av_log(null, ffmpeg.AV_LOG_ERROR,
-                           $"Cannot create sample rate converter for conversion of {af.FramePtr->sample_rate} Hz " +
-                           $"{ffmpeg.av_get_sample_fmt_name((AVSampleFormat)af.FramePtr->format)} {af.FramePtr->channels} channels to " +
-                           $"{container.Audio.TargetSpec.Frequency} Hz {ffmpeg.av_get_sample_fmt_name(container.Audio.TargetSpec.SampleFormat)} {container.Audio.TargetSpec.Channels} channels!\n");
-
-                    convertContext = container.Audio.ConvertContext;
-                    ffmpeg.swr_free(&convertContext);
-                    container.Audio.ConvertContext = null;
-
-                    return -1;
-                }
-                container.Audio.SourceSpec.Layout = dec_channel_layout;
-                container.Audio.SourceSpec.Channels = af.FramePtr->channels;
-                container.Audio.SourceSpec.Frequency = af.FramePtr->sample_rate;
-                container.Audio.SourceSpec.SampleFormat = (AVSampleFormat)af.FramePtr->format;
-            }
-
-            if (container.Audio.ConvertContext != null)
-            {
-                int wantedOutputSize = wantedSampleCount * container.Audio.TargetSpec.Frequency / af.FramePtr->sample_rate + 256;
-                int out_size = ffmpeg.av_samples_get_buffer_size(null, container.Audio.TargetSpec.Channels, wantedOutputSize, container.Audio.TargetSpec.SampleFormat, 0);
-                int len2;
-                if (out_size < 0)
-                {
-                    ffmpeg.av_log(null, ffmpeg.AV_LOG_ERROR, "av_samples_get_buffer_size() failed\n");
-                    return -1;
-                }
-                if (wantedSampleCount != af.FramePtr->nb_samples)
-                {
-                    if (ffmpeg.swr_set_compensation(container.Audio.ConvertContext, (wantedSampleCount - af.FramePtr->nb_samples) * container.Audio.TargetSpec.Frequency / af.FramePtr->sample_rate,
-                                                wantedSampleCount * container.Audio.TargetSpec.Frequency / af.FramePtr->sample_rate) < 0)
-                    {
-                        ffmpeg.av_log(null, ffmpeg.AV_LOG_ERROR, "swr_set_compensation() failed\n");
-                        return -1;
-                    }
-                }
-
-                if (container.audio_buf1 == null)
-                {
-                    container.audio_buf1 = (byte*)ffmpeg.av_mallocz((ulong)out_size);
-                    container.audio_buf1_size = (uint)out_size;
-                }
-
-                if (container.audio_buf1_size < out_size && container.audio_buf1 != null)
-                {
-                    ffmpeg.av_free(container.audio_buf1);
-                    container.audio_buf1 = (byte*)ffmpeg.av_mallocz((ulong)out_size);
-                    container.audio_buf1_size = (uint)out_size;
-                }
-
-                var audioBufferIn = af.FramePtr->extended_data;
-                var audioBufferOut = container.audio_buf1;
-                len2 = ffmpeg.swr_convert(container.Audio.ConvertContext, &audioBufferOut, wantedOutputSize, audioBufferIn, af.FramePtr->nb_samples);
-                container.audio_buf1 = audioBufferOut;
-                af.FramePtr->extended_data = audioBufferIn;
-
-                if (len2 < 0)
-                {
-                    ffmpeg.av_log(null, ffmpeg.AV_LOG_ERROR, "swr_convert() failed\n");
-                    return -1;
-                }
-                if (len2 == wantedOutputSize)
-                {
-                    ffmpeg.av_log(null, ffmpeg.AV_LOG_WARNING, "audio buffer is probably too small\n");
-                    if (ffmpeg.swr_init(container.Audio.ConvertContext) < 0)
-                    {
-                        var convertContext = container.Audio.ConvertContext;
-                        ffmpeg.swr_free(&convertContext);
-                        container.Audio.ConvertContext = convertContext;
-                    }
-                }
-
-                container.audio_buf = container.audio_buf1;
-                resampled_data_size = len2 * container.Audio.TargetSpec.Channels * ffmpeg.av_get_bytes_per_sample(container.Audio.TargetSpec.SampleFormat);
-            }
-            else
-            {
-                container.audio_buf = af.FramePtr->data[0];
-                resampled_data_size = data_size;
-            }
-
-            audio_clock0 = audio_clock;
-
-            /* update the audio clock with the pts */
-            if (!double.IsNaN(af.Pts))
-                audio_clock = af.Pts + (double)af.FramePtr->nb_samples / af.FramePtr->sample_rate;
-            else
-                audio_clock = double.NaN;
-
-            container.audio_clock_serial = af.Serial;
-            if (Debugger.IsAttached)
-            {
-                Console.WriteLine($"audio: delay={(audio_clock - last_audio_clock),-8:0.####} clock={audio_clock,-8:0.####} clock0={audio_clock0,-8:0.####}");
-                last_audio_clock = audio_clock;
-            }
-
-            return resampled_data_size;
-        }
-
 
         static double compute_target_delay(double delay, MediaContainer container)
         {
