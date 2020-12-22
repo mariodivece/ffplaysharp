@@ -12,20 +12,21 @@
     {
         private bool WasPaused;
         private bool IsPictureAttachmentPending;
-
+        private bool IsSeekRequested;
+        private int SeekFlags;
         private Thread ReadingThread;
-        public AVInputFormat* iformat = null;
+        private AVInputFormat* InputFormat = null;
+
         public bool IsAbortRequested { get; private set; }
 
         public bool IsPaused { get; private set; }
+        
+        public long SeekPosition { get; private set; }
 
-
-        private bool seek_req;
-        private int seek_flags;
-        public long seek_pos;
         private long seek_rel;
         private int read_pause_return;
-        public AVFormatContext* InputContext = null;
+
+        public AVFormatContext* InputContext { get; private set; }
 
         public bool IsRealtime { get; private set; }
 
@@ -45,8 +46,6 @@
 
 
         public int audio_clock_serial;
-        
-
         public int audio_hw_buf_size;
         public byte* audio_buf;
         public byte* audio_buf1;
@@ -81,7 +80,7 @@
         public int height = 1;
         public int xleft;
         public int ytop;
-        public int step;
+        public bool step;
 
         public int vfilter_idx;
         public MediaRenderer Renderer { get; }
@@ -156,7 +155,7 @@
             if (string.IsNullOrWhiteSpace(container.filename))
                 goto fail;
 
-            container.iformat = o.file_iformat;
+            container.InputFormat = o.file_iformat;
             container.ytop = 0;
             container.xleft = 0;
 
@@ -259,7 +258,7 @@
         public void toggle_pause()
         {
             stream_toggle_pause();
-            step = 0;
+            step = false;
         }
 
         public void stream_toggle_pause()
@@ -387,21 +386,22 @@
             /* if the stream is paused unpause it, then step */
             if (IsPaused)
                 stream_toggle_pause();
-            step = 1;
+            step = true;
         }
 
         /* seek in the stream */
-        public void stream_seek(long pos, long rel, int seek_by_bytes)
+        public void stream_seek(long pos, long rel, bool seek_by_bytes)
         {
-            if (seek_req)
+            if (IsSeekRequested)
                 return;
 
-            seek_pos = pos;
+            SeekPosition = pos;
             seek_rel = rel;
-            seek_flags &= ~ffmpeg.AVSEEK_FLAG_BYTE;
-            if (seek_by_bytes != 0)
-                seek_flags |= ffmpeg.AVSEEK_FLAG_BYTE;
-            seek_req = true;
+            SeekFlags &= ~ffmpeg.AVSEEK_FLAG_BYTE;
+            if (seek_by_bytes)
+                SeekFlags |= ffmpeg.AVSEEK_FLAG_BYTE;
+
+            IsSeekRequested = true;
             continue_read_thread.Set();
         }
 
@@ -430,7 +430,7 @@
                 return;
 
             ffmpeg.av_log(null, ffmpeg.AV_LOG_VERBOSE, $"Seeking to chapter {i}.\n");
-            stream_seek(ffmpeg.av_rescale_q(InputContext->chapters[i]->start, InputContext->chapters[i]->time_base, Constants.AV_TIME_BASE_Q), 0, 0);
+            stream_seek(ffmpeg.av_rescale_q(InputContext->chapters[i]->start, InputContext->chapters[i]->time_base, Constants.AV_TIME_BASE_Q), 0, false);
         }
 
         /* open a given stream. Return 0 if OK */
@@ -442,8 +442,6 @@
             string forcedCodecName = null;
             AVDictionary* opts = null;
             AVDictionaryEntry* t = null;
-            int sampleRate, nb_channels;
-            long channelLayout;
             int ret = 0;
             int stream_lowres = Options.lowres;
 
@@ -525,12 +523,12 @@
                     if ((ret = Audio.configure_audio_filters(false)) < 0)
                         goto fail;
                     var sink = Audio.OutputFilter;
-                    sampleRate = ffmpeg.av_buffersink_get_sample_rate(sink);
-                    nb_channels = ffmpeg.av_buffersink_get_channels(sink);
-                    channelLayout = (long)ffmpeg.av_buffersink_get_channel_layout(sink);
+                    var sampleRate = ffmpeg.av_buffersink_get_sample_rate(sink);
+                    var channelCount = ffmpeg.av_buffersink_get_channels(sink);
+                    var channelLayout = (long)ffmpeg.av_buffersink_get_channel_layout(sink);
 
                     /* prepare audio output */
-                    if ((ret = audio_open(channelLayout, nb_channels, sampleRate, ref Audio.TargetSpec)) < 0)
+                    if ((ret = Renderer.audio_open(channelLayout, channelCount, sampleRate, ref Audio.TargetSpec)) < 0)
                         goto fail;
 
                     audio_hw_buf_size = ret;
@@ -544,7 +542,7 @@
 
                     /* since we do not have a precise anough audio FIFO fullness,
                        we correct audio sync only if larger than this threshold */
-                    Audio.audio_diff_threshold = (double)(audio_hw_buf_size) / Audio.TargetSpec.BytesPerSecond;
+                    Audio.audio_diff_threshold = (double)audio_hw_buf_size / Audio.TargetSpec.BytesPerSecond;
 
                     Audio.StreamIndex = stream_index;
                     Audio.Stream = ic->streams[stream_index];
@@ -584,94 +582,6 @@
             ffmpeg.av_dict_free(&opts);
 
             return ret;
-        }
-
-        public int audio_open(long wanted_channel_layout, int wanted_nb_channels, int wanted_sample_rate, ref AudioParams audio_hw_params)
-        {
-            SDL.SDL_AudioSpec wanted_spec = new();
-            SDL.SDL_AudioSpec spec = new();
-
-            var next_nb_channels = new[] { 0, 0, 1, 6, 2, 6, 4, 6 };
-            var next_sample_rates = new[] { 0, 44100, 48000, 96000, 192000 };
-            int next_sample_rate_idx = next_sample_rates.Length - 1;
-
-            var env = Environment.GetEnvironmentVariable("SDL_AUDIO_CHANNELS");
-            if (!string.IsNullOrWhiteSpace(env))
-            {
-                wanted_nb_channels = int.Parse(env);
-                wanted_channel_layout = ffmpeg.av_get_default_channel_layout(wanted_nb_channels);
-            }
-
-            if (wanted_channel_layout == 0 || wanted_nb_channels != ffmpeg.av_get_channel_layout_nb_channels((ulong)wanted_channel_layout))
-            {
-                wanted_channel_layout = ffmpeg.av_get_default_channel_layout(wanted_nb_channels);
-                wanted_channel_layout &= ~ffmpeg.AV_CH_LAYOUT_STEREO_DOWNMIX;
-            }
-
-            wanted_nb_channels = ffmpeg.av_get_channel_layout_nb_channels((ulong)wanted_channel_layout);
-            wanted_spec.channels = (byte)wanted_nb_channels;
-            wanted_spec.freq = wanted_sample_rate;
-            if (wanted_spec.freq <= 0 || wanted_spec.channels <= 0)
-            {
-                ffmpeg.av_log(null, ffmpeg.AV_LOG_ERROR, "Invalid sample rate or channel count!\n");
-                return -1;
-            }
-
-            while (next_sample_rate_idx != 0 && next_sample_rates[next_sample_rate_idx] >= wanted_spec.freq)
-                next_sample_rate_idx--;
-
-            wanted_spec.format = SDL.AUDIO_S16SYS;
-            wanted_spec.silence = 0;
-            wanted_spec.samples = (ushort)Math.Max(Constants.SDL_AUDIO_MIN_BUFFER_SIZE, 2 << ffmpeg.av_log2((uint)(wanted_spec.freq / Constants.SDL_AUDIO_MAX_CALLBACKS_PER_SEC)));
-            wanted_spec.callback = Renderer.sdl_audio_callback;
-            // wanted_spec.userdata = GCHandle.ToIntPtr(VideoStateHandle);
-            while ((Renderer.audio_dev = SDL.SDL_OpenAudioDevice(null, 0, ref wanted_spec, out spec, (int)(SDL.SDL_AUDIO_ALLOW_FREQUENCY_CHANGE | SDL.SDL_AUDIO_ALLOW_CHANNELS_CHANGE))) == 0)
-            {
-                ffmpeg.av_log(null, ffmpeg.AV_LOG_WARNING, $"SDL_OpenAudio ({wanted_spec.channels} channels, {wanted_spec.freq} Hz): {SDL.SDL_GetError()}\n");
-                wanted_spec.channels = (byte)next_nb_channels[Math.Min(7, (int)wanted_spec.channels)];
-                if (wanted_spec.channels == 0)
-                {
-                    wanted_spec.freq = next_sample_rates[next_sample_rate_idx--];
-                    wanted_spec.channels = (byte)wanted_nb_channels;
-                    if (wanted_spec.freq == 0)
-                    {
-                        ffmpeg.av_log(null, ffmpeg.AV_LOG_ERROR, "No more combinations to try, audio open failed\n");
-                        return -1;
-                    }
-                }
-
-                wanted_channel_layout = ffmpeg.av_get_default_channel_layout(wanted_spec.channels);
-            }
-            if (spec.format != SDL.AUDIO_S16SYS)
-            {
-                ffmpeg.av_log(null, ffmpeg.AV_LOG_ERROR,
-                       $"SDL advised audio format {spec.format} is not supported!\n");
-                return -1;
-            }
-            if (spec.channels != wanted_spec.channels)
-            {
-                wanted_channel_layout = ffmpeg.av_get_default_channel_layout(spec.channels);
-                if (wanted_channel_layout == 0)
-                {
-                    ffmpeg.av_log(null, ffmpeg.AV_LOG_ERROR,
-                           $"SDL advised channel count {spec.channels} is not supported!\n");
-                    return -1;
-                }
-            }
-
-            audio_hw_params.SampleFormat = AVSampleFormat.AV_SAMPLE_FMT_S16;
-            audio_hw_params.Frequency = spec.freq;
-            audio_hw_params.Layout = wanted_channel_layout;
-            audio_hw_params.Channels = spec.channels;
-            audio_hw_params.FrameSize = ffmpeg.av_samples_get_buffer_size(null, audio_hw_params.Channels, 1, audio_hw_params.SampleFormat, 1);
-            audio_hw_params.BytesPerSecond = ffmpeg.av_samples_get_buffer_size(null, audio_hw_params.Channels, audio_hw_params.Frequency, audio_hw_params.SampleFormat, 1);
-            if (audio_hw_params.BytesPerSecond <= 0 || audio_hw_params.FrameSize <= 0)
-            {
-                ffmpeg.av_log(null, ffmpeg.AV_LOG_ERROR, "av_samples_get_buffer_size failed\n");
-                return -1;
-            }
-
-            return (int)spec.size;
         }
 
         public void stream_close()
@@ -745,7 +655,7 @@
 
             {
                 var formatOptions = o.format_opts;
-                err = ffmpeg.avformat_open_input(&ic, filename, iformat, &formatOptions);
+                err = ffmpeg.avformat_open_input(&ic, filename, InputFormat, &formatOptions);
                 o.format_opts = formatOptions;
             }
 
@@ -928,15 +838,15 @@
                     continue;
                 }
 
-                if (seek_req)
+                if (IsSeekRequested)
                 {
-                    var seek_target = seek_pos;
+                    var seek_target = SeekPosition;
                     var seek_min = seek_rel > 0 ? seek_target - seek_rel + 2 : long.MinValue;
                     var seek_max = seek_rel < 0 ? seek_target - seek_rel - 2 : long.MaxValue;
                     // FIXME the +-2 is due to rounding being not done in the correct direction in generation
                     //      of the seek_pos/seek_rel variables
 
-                    ret = ffmpeg.avformat_seek_file(InputContext, -1, seek_min, seek_target, seek_max, seek_flags);
+                    ret = ffmpeg.avformat_seek_file(InputContext, -1, seek_min, seek_target, seek_max, SeekFlags);
                     if (ret < 0)
                     {
                         ffmpeg.av_log(null, ffmpeg.AV_LOG_ERROR, $"{Helpers.PtrToString(InputContext->url)}: error while seeking\n");
@@ -958,7 +868,7 @@
                             Video.Packets.Clear();
                             Video.Packets.PutFlush();
                         }
-                        if ((seek_flags & ffmpeg.AVSEEK_FLAG_BYTE) != 0)
+                        if ((SeekFlags & ffmpeg.AVSEEK_FLAG_BYTE) != 0)
                         {
                             ExternalClock.Set(double.NaN, 0);
                         }
@@ -967,13 +877,15 @@
                             ExternalClock.Set(seek_target / (double)ffmpeg.AV_TIME_BASE, 0);
                         }
                     }
-                    seek_req = false;
+
+                    IsSeekRequested = false;
                     IsPictureAttachmentPending = true;
                     IsAtEndOfStream = false;
 
                     if (IsPaused)
                         step_to_next_frame();
                 }
+
                 if (IsPictureAttachmentPending)
                 {
                     if (Video.Stream != null && (Video.Stream->disposition & ffmpeg.AV_DISPOSITION_ATTACHED_PIC) != 0)
@@ -1003,7 +915,7 @@
                 {
                     if (o.loop != 1 && (o.loop == 0 || (--o.loop) > 0))
                     {
-                        stream_seek(o.start_time != ffmpeg.AV_NOPTS_VALUE ? o.start_time : 0, 0, 0);
+                        stream_seek(o.start_time != ffmpeg.AV_NOPTS_VALUE ? o.start_time : 0, 0, false);
                     }
                     else if (o.autoexit)
                     {

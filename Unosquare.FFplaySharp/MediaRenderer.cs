@@ -18,9 +18,9 @@
         public int default_width = 640;
         public int default_height = 480;
 
-        public IntPtr window;
-        public IntPtr renderer;
-        public SDL.SDL_RendererInfo renderer_info;
+        private IntPtr RenderingWindow;
+        private IntPtr SdlRenderer;
+        public SDL.SDL_RendererInfo SdlRendererInfo;
         public uint audio_dev;
         public string window_title;
 
@@ -75,7 +75,7 @@
                 if (texture != IntPtr.Zero)
                     SDL.SDL_DestroyTexture(texture);
 
-                if (IntPtr.Zero == (texture = SDL.SDL_CreateTexture(renderer, new_format, (int)SDL.SDL_TextureAccess.SDL_TEXTUREACCESS_STREAMING, new_width, new_height)))
+                if (IntPtr.Zero == (texture = SDL.SDL_CreateTexture(SdlRenderer, new_format, (int)SDL.SDL_TextureAccess.SDL_TEXTUREACCESS_STREAMING, new_width, new_height)))
                     return -1;
 
                 if (SDL.SDL_SetTextureBlendMode(texture, blendmode) < 0)
@@ -188,7 +188,7 @@
             var point = new SDL.SDL_Point();
 
             set_sdl_yuv_conversion_mode(vp.FramePtr);
-            SDL.SDL_RenderCopyEx(renderer, vid_texture, ref rect, ref rect, 0, ref point, vp.FlipVertical ? SDL.SDL_RendererFlip.SDL_FLIP_VERTICAL : SDL.SDL_RendererFlip.SDL_FLIP_NONE);
+            SDL.SDL_RenderCopyEx(SdlRenderer, vid_texture, ref rect, ref rect, 0, ref point, vp.FlipVertical ? SDL.SDL_RendererFlip.SDL_FLIP_VERTICAL : SDL.SDL_RendererFlip.SDL_FLIP_NONE);
             set_sdl_yuv_conversion_mode(null);
 
             if (sp != null)
@@ -214,7 +214,7 @@
                         h = (int)(sub_rect.h * yratio)
                     };
 
-                    SDL.SDL_RenderCopy(renderer, sub_texture, ref sub_rect, ref target);
+                    SDL.SDL_RenderCopy(SdlRenderer, sub_texture, ref sub_rect, ref target);
                 }
             }
         }
@@ -267,27 +267,27 @@
                 else
                     flags |= (uint)SDL.SDL_WindowFlags.SDL_WINDOW_RESIZABLE;
 
-                window = SDL.SDL_CreateWindow(
+                RenderingWindow = SDL.SDL_CreateWindow(
                     Constants.program_name, SDL.SDL_WINDOWPOS_UNDEFINED, SDL.SDL_WINDOWPOS_UNDEFINED, default_width, default_height, (SDL.SDL_WindowFlags)flags);
 
                 SDL.SDL_SetHint(SDL.SDL_HINT_RENDER_SCALE_QUALITY, "linear");
 
-                if (window != IntPtr.Zero)
+                if (RenderingWindow != IntPtr.Zero)
                 {
-                    renderer = SDL.SDL_CreateRenderer(window, -1, SDL.SDL_RendererFlags.SDL_RENDERER_ACCELERATED | SDL.SDL_RendererFlags.SDL_RENDERER_PRESENTVSYNC);
-                    if (renderer == IntPtr.Zero)
+                    SdlRenderer = SDL.SDL_CreateRenderer(RenderingWindow, -1, SDL.SDL_RendererFlags.SDL_RENDERER_ACCELERATED | SDL.SDL_RendererFlags.SDL_RENDERER_PRESENTVSYNC);
+                    if (SdlRenderer == IntPtr.Zero)
                     {
                         ffmpeg.av_log(null, ffmpeg.AV_LOG_WARNING, $"Failed to initialize a hardware accelerated renderer: {SDL.SDL_GetError()}\n");
-                        renderer = SDL.SDL_CreateRenderer(window, -1, 0);
+                        SdlRenderer = SDL.SDL_CreateRenderer(RenderingWindow, -1, 0);
                     }
 
-                    if (renderer != IntPtr.Zero)
+                    if (SdlRenderer != IntPtr.Zero)
                     {
-                        if (SDL.SDL_GetRendererInfo(renderer, out renderer_info) == 0)
-                            ffmpeg.av_log(null, ffmpeg.AV_LOG_VERBOSE, $"Initialized {Helpers.PtrToString(renderer_info.name)} renderer.\n");
+                        if (SDL.SDL_GetRendererInfo(SdlRenderer, out SdlRendererInfo) == 0)
+                            ffmpeg.av_log(null, ffmpeg.AV_LOG_VERBOSE, $"Initialized {Helpers.PtrToString(SdlRendererInfo.name)} renderer.\n");
                     }
                 }
-                if (window == IntPtr.Zero || renderer == IntPtr.Zero || renderer_info.num_texture_formats <= 0)
+                if (RenderingWindow == IntPtr.Zero || SdlRenderer == IntPtr.Zero || SdlRendererInfo.num_texture_formats <= 0)
                 {
                     ffmpeg.av_log(null, ffmpeg.AV_LOG_FATAL, $"Failed to create window or renderer: {SDL.SDL_GetError()}");
                     return false;
@@ -297,13 +297,103 @@
             return true;
         }
 
+
+        public int audio_open(long wanted_channel_layout, int wanted_nb_channels, int wanted_sample_rate, ref AudioParams audio_hw_params)
+        {
+            SDL.SDL_AudioSpec wantedSpec = new();
+            SDL.SDL_AudioSpec spec = new();
+
+            var next_nb_channels = new[] { 0, 0, 1, 6, 2, 6, 4, 6 };
+            var next_sample_rates = new[] { 0, 44100, 48000, 96000, 192000 };
+            int next_sample_rate_idx = next_sample_rates.Length - 1;
+
+            var env = Environment.GetEnvironmentVariable("SDL_AUDIO_CHANNELS");
+            if (!string.IsNullOrWhiteSpace(env))
+            {
+                wanted_nb_channels = int.Parse(env);
+                wanted_channel_layout = ffmpeg.av_get_default_channel_layout(wanted_nb_channels);
+            }
+
+            if (wanted_channel_layout == 0 || wanted_nb_channels != ffmpeg.av_get_channel_layout_nb_channels((ulong)wanted_channel_layout))
+            {
+                wanted_channel_layout = ffmpeg.av_get_default_channel_layout(wanted_nb_channels);
+                wanted_channel_layout &= ~ffmpeg.AV_CH_LAYOUT_STEREO_DOWNMIX;
+            }
+
+            wanted_nb_channels = ffmpeg.av_get_channel_layout_nb_channels((ulong)wanted_channel_layout);
+            wantedSpec.channels = (byte)wanted_nb_channels;
+            wantedSpec.freq = wanted_sample_rate;
+            if (wantedSpec.freq <= 0 || wantedSpec.channels <= 0)
+            {
+                ffmpeg.av_log(null, ffmpeg.AV_LOG_ERROR, "Invalid sample rate or channel count!\n");
+                return -1;
+            }
+
+            while (next_sample_rate_idx != 0 && next_sample_rates[next_sample_rate_idx] >= wantedSpec.freq)
+                next_sample_rate_idx--;
+
+            wantedSpec.format = SDL.AUDIO_S16SYS;
+            wantedSpec.silence = 0;
+            wantedSpec.samples = (ushort)Math.Max(Constants.SDL_AUDIO_MIN_BUFFER_SIZE, 2 << ffmpeg.av_log2((uint)(wantedSpec.freq / Constants.SDL_AUDIO_MAX_CALLBACKS_PER_SEC)));
+            wantedSpec.callback = sdl_audio_callback;
+            // wanted_spec.userdata = GCHandle.ToIntPtr(VideoStateHandle);
+            while ((audio_dev = SDL.SDL_OpenAudioDevice(null, 0, ref wantedSpec, out spec, (int)(SDL.SDL_AUDIO_ALLOW_FREQUENCY_CHANGE | SDL.SDL_AUDIO_ALLOW_CHANNELS_CHANGE))) == 0)
+            {
+                ffmpeg.av_log(null, ffmpeg.AV_LOG_WARNING, $"SDL_OpenAudio ({wantedSpec.channels} channels, {wantedSpec.freq} Hz): {SDL.SDL_GetError()}\n");
+                wantedSpec.channels = (byte)next_nb_channels[Math.Min(7, (int)wantedSpec.channels)];
+                if (wantedSpec.channels == 0)
+                {
+                    wantedSpec.freq = next_sample_rates[next_sample_rate_idx--];
+                    wantedSpec.channels = (byte)wanted_nb_channels;
+                    if (wantedSpec.freq == 0)
+                    {
+                        ffmpeg.av_log(null, ffmpeg.AV_LOG_ERROR, "No more combinations to try, audio open failed\n");
+                        return -1;
+                    }
+                }
+
+                wanted_channel_layout = ffmpeg.av_get_default_channel_layout(wantedSpec.channels);
+            }
+            if (spec.format != SDL.AUDIO_S16SYS)
+            {
+                ffmpeg.av_log(null, ffmpeg.AV_LOG_ERROR,
+                       $"SDL advised audio format {spec.format} is not supported!\n");
+                return -1;
+            }
+            if (spec.channels != wantedSpec.channels)
+            {
+                wanted_channel_layout = ffmpeg.av_get_default_channel_layout(spec.channels);
+                if (wanted_channel_layout == 0)
+                {
+                    ffmpeg.av_log(null, ffmpeg.AV_LOG_ERROR,
+                           $"SDL advised channel count {spec.channels} is not supported!\n");
+                    return -1;
+                }
+            }
+
+            audio_hw_params.SampleFormat = AVSampleFormat.AV_SAMPLE_FMT_S16;
+            audio_hw_params.Frequency = spec.freq;
+            audio_hw_params.Layout = wanted_channel_layout;
+            audio_hw_params.Channels = spec.channels;
+            audio_hw_params.FrameSize = ffmpeg.av_samples_get_buffer_size(null, audio_hw_params.Channels, 1, audio_hw_params.SampleFormat, 1);
+            audio_hw_params.BytesPerSecond = ffmpeg.av_samples_get_buffer_size(null, audio_hw_params.Channels, audio_hw_params.Frequency, audio_hw_params.SampleFormat, 1);
+            if (audio_hw_params.BytesPerSecond <= 0 || audio_hw_params.FrameSize <= 0)
+            {
+                ffmpeg.av_log(null, ffmpeg.AV_LOG_ERROR, "av_samples_get_buffer_size failed\n");
+                return -1;
+            }
+
+            return (int)spec.size;
+        }
+
+
         public void CloseVideo()
         {
-            if (renderer != IntPtr.Zero)
-                SDL.SDL_DestroyRenderer(renderer);
+            if (SdlRenderer != IntPtr.Zero)
+                SDL.SDL_DestroyRenderer(SdlRenderer);
 
-            if (window != IntPtr.Zero)
-                SDL.SDL_DestroyWindow(window);
+            if (RenderingWindow != IntPtr.Zero)
+                SDL.SDL_DestroyWindow(RenderingWindow);
 
             if (vid_texture != IntPtr.Zero)
                 SDL.SDL_DestroyTexture(vid_texture);
@@ -327,13 +417,13 @@
             if (container.width != 0)
                 video_open(container);
 
-            _ = SDL.SDL_SetRenderDrawColor(renderer, 0, 0, 0, 255);
-            _ = SDL.SDL_RenderClear(renderer);
+            _ = SDL.SDL_SetRenderDrawColor(SdlRenderer, 0, 0, 0, 255);
+            _ = SDL.SDL_RenderClear(SdlRenderer);
             if (container.Audio.Stream != null && container.show_mode != ShowMode.Video)
                 video_audio_display(container);
             else if (container.Video.Stream != null)
                 video_image_display(container);
-            SDL.SDL_RenderPresent(renderer);
+            SDL.SDL_RenderPresent(SdlRenderer);
         }
 
         private int upload_texture(ref IntPtr texture, AVFrame* frame, ref SwsContext* convertContext)
@@ -420,14 +510,14 @@
 
             if (string.IsNullOrWhiteSpace(window_title))
                 window_title = container.Options.input_filename;
-            SDL.SDL_SetWindowTitle(window, window_title);
+            SDL.SDL_SetWindowTitle(RenderingWindow, window_title);
 
-            SDL.SDL_SetWindowSize(window, w, h);
-            SDL.SDL_SetWindowPosition(window, screen_left, screen_top);
+            SDL.SDL_SetWindowSize(RenderingWindow, w, h);
+            SDL.SDL_SetWindowPosition(RenderingWindow, screen_left, screen_top);
             if (is_full_screen)
-                SDL.SDL_SetWindowFullscreen(window, (uint)SDL.SDL_WindowFlags.SDL_WINDOW_FULLSCREEN_DESKTOP);
+                SDL.SDL_SetWindowFullscreen(RenderingWindow, (uint)SDL.SDL_WindowFlags.SDL_WINDOW_FULLSCREEN_DESKTOP);
 
-            SDL.SDL_ShowWindow(window);
+            SDL.SDL_ShowWindow(RenderingWindow);
 
             container.width = w;
             container.height = h;
@@ -505,7 +595,7 @@
                     {
                         var nextvp = container.Video.Frames.PeekNext();
                         duration = vp_duration(container, vp, nextvp);
-                        if (container.step == 0 &&
+                        if (container.step == false &&
                             (container.Options.framedrop > 0 ||
                             (container.Options.framedrop != 0 && container.MasterSyncMode != ClockSync.Video))
                             && time > container.frame_timer + duration)
@@ -570,7 +660,7 @@
                     container.Video.Frames.Next();
                     force_refresh = true;
 
-                    if (container.step != 0 && !container.IsPaused)
+                    if (container.step && !container.IsPaused)
                         container.stream_toggle_pause();
                 }
             display:
@@ -631,7 +721,7 @@
         public void toggle_full_screen()
         {
             is_full_screen = !is_full_screen;
-            SDL.SDL_SetWindowFullscreen(window, (uint)(is_full_screen ? SDL.SDL_WindowFlags.SDL_WINDOW_FULLSCREEN_DESKTOP : 0));
+            SDL.SDL_SetWindowFullscreen(RenderingWindow, (uint)(is_full_screen ? SDL.SDL_WindowFlags.SDL_WINDOW_FULLSCREEN_DESKTOP : 0));
         }
 
         static SDL.SDL_Rect calculate_display_rect(

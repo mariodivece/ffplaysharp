@@ -197,17 +197,17 @@
                                     else
                                         incr *= 180000.0;
                                     pos += incr;
-                                    container.stream_seek((long)pos, (long)incr, 1);
+                                    container.stream_seek((long)pos, (long)incr, true);
                                 }
                                 else
                                 {
                                     pos = container.MasterTime;
                                     if (double.IsNaN(pos))
-                                        pos = (double)container.seek_pos / ffmpeg.AV_TIME_BASE;
+                                        pos = (double)container.SeekPosition / ffmpeg.AV_TIME_BASE;
                                     pos += incr;
                                     if (container.InputContext->start_time != ffmpeg.AV_NOPTS_VALUE && pos < container.InputContext->start_time / (double)ffmpeg.AV_TIME_BASE)
                                         pos = container.InputContext->start_time / (double)ffmpeg.AV_TIME_BASE;
-                                    container.stream_seek((long)(pos * ffmpeg.AV_TIME_BASE), (long)(incr * ffmpeg.AV_TIME_BASE), 0);
+                                    container.stream_seek((long)(pos * ffmpeg.AV_TIME_BASE), (long)(incr * ffmpeg.AV_TIME_BASE), false);
                                 }
                                 break;
                             default:
@@ -259,7 +259,7 @@
                         if (container.Options.seek_by_bytes != 0 || container.InputContext->duration <= 0)
                         {
                             long size = ffmpeg.avio_size(container.InputContext->pb);
-                            container.stream_seek((long)(size * x / container.width), 0, 1);
+                            container.stream_seek((long)(size * x / container.width), 0, true);
                         }
                         else
                         {
@@ -278,7 +278,7 @@
                             
                             if (container.InputContext->start_time != ffmpeg.AV_NOPTS_VALUE)
                                 ts += container.InputContext->start_time;
-                            container.stream_seek(ts, 0, 0);
+                            container.stream_seek(ts, 0, false);
                         }
                         break;
                     case (int)SDL.SDL_EventType.SDL_WINDOWEVENT:

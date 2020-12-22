@@ -205,11 +205,11 @@
             var frameRate = ffmpeg.av_guess_frame_rate(Container.InputContext, Stream, null);
             AVDictionaryEntry* e = null;
 
-            for (var i = 0; i < Container.Renderer.renderer_info.num_texture_formats; i++)
+            for (var i = 0; i < Container.Renderer.SdlRendererInfo.num_texture_formats; i++)
             {
                 foreach (var kvp in MediaRenderer.sdl_texture_map)
                 {
-                    if (kvp.Value == Container.Renderer.renderer_info.texture_formats[i])
+                    if (kvp.Value == Container.Renderer.SdlRendererInfo.texture_formats[i])
                         outputFormats.Add((int)kvp.Key);
                 }
             }
