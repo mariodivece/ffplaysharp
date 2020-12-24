@@ -183,53 +183,6 @@
             return null;
         }
 
-        public static int configure_filtergraph(ref AVFilterGraph* graph, string filtergraph,
-                                 AVFilterContext* source_ctx, AVFilterContext* sink_ctx)
-        {
-            int ret;
-            var nb_filters = graph->nb_filters;
-            AVFilterInOut* outputs = null, inputs = null;
-
-            if (!string.IsNullOrWhiteSpace(filtergraph))
-            {
-                outputs = ffmpeg.avfilter_inout_alloc();
-                inputs = ffmpeg.avfilter_inout_alloc();
-                if (outputs == null || inputs == null)
-                {
-                    ret = ffmpeg.AVERROR(ffmpeg.ENOMEM);
-                    goto fail;
-                }
-
-                outputs->name = ffmpeg.av_strdup("in");
-                outputs->filter_ctx = source_ctx;
-                outputs->pad_idx = 0;
-                outputs->next = null;
-
-                inputs->name = ffmpeg.av_strdup("out");
-                inputs->filter_ctx = sink_ctx;
-                inputs->pad_idx = 0;
-                inputs->next = null;
-
-                if ((ret = ffmpeg.avfilter_graph_parse_ptr(graph, filtergraph, &inputs, &outputs, null)) < 0)
-                    goto fail;
-            }
-            else
-            {
-                if ((ret = ffmpeg.avfilter_link(source_ctx, 0, sink_ctx, 0)) < 0)
-                    goto fail;
-            }
-
-            /* Reorder the filters to ensure that inputs of the custom filters are merged first */
-            for (var i = 0; i < graph->nb_filters - nb_filters; i++)
-                Helpers.FFSWAP(ref graph->filters, i, i + (int)nb_filters);
-
-            ret = ffmpeg.avfilter_graph_config(graph, null);
-        fail:
-            ffmpeg.avfilter_inout_free(&outputs);
-            ffmpeg.avfilter_inout_free(&inputs);
-            return ret;
-        }
-
         public void check_external_clock_speed()
         {
             if (Video.StreamIndex >= 0 && Video.Packets.Count <= Constants.EXTERNAL_CLOCK_MIN_FRAMES ||
@@ -434,35 +387,32 @@
         }
 
         /* open a given stream. Return 0 if OK */
-        public int stream_component_open(int stream_index)
+        public int stream_component_open(int streamIndex)
         {
-            AVFormatContext* ic = InputContext;
-            AVCodecContext* avctx;
-            AVCodec* codec;
             string forcedCodecName = null;
-            AVDictionary* opts = null;
-            AVDictionaryEntry* t = null;
-            int ret = 0;
-            int stream_lowres = Options.lowres;
 
-            if (stream_index < 0 || stream_index >= ic->nb_streams)
+            AVFormatContext* ic = InputContext;
+            AVCodecContext* codecContext;
+
+            var ret = 0;
+            var lowResFactor = Options.lowres;
+
+            if (streamIndex < 0 || streamIndex >= ic->nb_streams)
                 return -1;
 
-            avctx = ffmpeg.avcodec_alloc_context3(null);
-            if (avctx == null)
-                return ffmpeg.AVERROR(ffmpeg.ENOMEM);
+            codecContext = ffmpeg.avcodec_alloc_context3(null);
+            ret = ffmpeg.avcodec_parameters_to_context(codecContext, ic->streams[streamIndex]->codecpar);
 
-            ret = ffmpeg.avcodec_parameters_to_context(avctx, ic->streams[stream_index]->codecpar);
             if (ret < 0) goto fail;
-            avctx->pkt_timebase = ic->streams[stream_index]->time_base;
+            codecContext->pkt_timebase = ic->streams[streamIndex]->time_base;
 
-            codec = ffmpeg.avcodec_find_decoder(avctx->codec_id);
+            var codec = ffmpeg.avcodec_find_decoder(codecContext->codec_id);
 
-            switch (avctx->codec_type)
+            switch (codecContext->codec_type)
             {
-                case AVMediaType.AVMEDIA_TYPE_AUDIO: Audio.LastStreamIndex = stream_index; forcedCodecName = Options.AudioForcedCodecName; break;
-                case AVMediaType.AVMEDIA_TYPE_SUBTITLE: Subtitle.LastStreamIndex = stream_index; forcedCodecName = Options.SubtitleForcedCodecName; break;
-                case AVMediaType.AVMEDIA_TYPE_VIDEO: Video.LastStreamIndex = stream_index; forcedCodecName = Options.VideoForcedCodecName; break;
+                case AVMediaType.AVMEDIA_TYPE_AUDIO: Audio.LastStreamIndex = streamIndex; forcedCodecName = Options.AudioForcedCodecName; break;
+                case AVMediaType.AVMEDIA_TYPE_SUBTITLE: Subtitle.LastStreamIndex = streamIndex; forcedCodecName = Options.SubtitleForcedCodecName; break;
+                case AVMediaType.AVMEDIA_TYPE_VIDEO: Video.LastStreamIndex = streamIndex; forcedCodecName = Options.VideoForcedCodecName; break;
             }
             if (!string.IsNullOrWhiteSpace(forcedCodecName))
                 codec = ffmpeg.avcodec_find_decoder_by_name(forcedCodecName);
@@ -472,38 +422,40 @@
                 if (!string.IsNullOrWhiteSpace(forcedCodecName))
                     ffmpeg.av_log(null, ffmpeg.AV_LOG_WARNING, $"No codec could be found with name '{forcedCodecName}'\n");
                 else
-                    ffmpeg.av_log(null, ffmpeg.AV_LOG_WARNING, $"No decoder could be found for codec {ffmpeg.avcodec_get_name(avctx->codec_id)}\n");
+                    ffmpeg.av_log(null, ffmpeg.AV_LOG_WARNING, $"No decoder could be found for codec {ffmpeg.avcodec_get_name(codecContext->codec_id)}\n");
                 ret = ffmpeg.AVERROR(ffmpeg.EINVAL);
                 goto fail;
             }
 
-            avctx->codec_id = codec->id;
-            if (stream_lowres > codec->max_lowres)
+            codecContext->codec_id = codec->id;
+            if (lowResFactor > codec->max_lowres)
             {
-                ffmpeg.av_log(avctx, ffmpeg.AV_LOG_WARNING, $"The maximum value for lowres supported by the decoder is {codec->max_lowres}\n");
-                stream_lowres = codec->max_lowres;
+                ffmpeg.av_log(codecContext, ffmpeg.AV_LOG_WARNING, $"The maximum value for lowres supported by the decoder is {codec->max_lowres}\n");
+                lowResFactor = codec->max_lowres;
             }
 
-            avctx->lowres = stream_lowres;
+            codecContext->lowres = lowResFactor;
 
             if (Options.fast != 0)
-                avctx->flags2 |= ffmpeg.AV_CODEC_FLAG2_FAST;
+                codecContext->flags2 |= ffmpeg.AV_CODEC_FLAG2_FAST;
 
-            opts = Helpers.filter_codec_opts(Options.codec_opts, avctx->codec_id, ic, ic->streams[stream_index], codec);
-            if (ffmpeg.av_dict_get(opts, "threads", null, 0) == null)
-                ffmpeg.av_dict_set(&opts, "threads", "auto", 0);
+            var codecOptions = Helpers.filter_codec_opts(Options.codec_opts, codecContext->codec_id, ic, ic->streams[streamIndex], codec);
+            if (ffmpeg.av_dict_get(codecOptions, "threads", null, 0) == null)
+                ffmpeg.av_dict_set(&codecOptions, "threads", "auto", 0);
 
-            if (stream_lowres != 0)
-                ffmpeg.av_dict_set_int(&opts, "lowres", stream_lowres, 0);
+            if (lowResFactor != 0)
+                ffmpeg.av_dict_set_int(&codecOptions, "lowres", lowResFactor, 0);
 
-            if (avctx->codec_type == AVMediaType.AVMEDIA_TYPE_VIDEO || avctx->codec_type == AVMediaType.AVMEDIA_TYPE_AUDIO)
-                ffmpeg.av_dict_set(&opts, "refcounted_frames", "1", 0);
+            if (codecContext->codec_type == AVMediaType.AVMEDIA_TYPE_VIDEO || codecContext->codec_type == AVMediaType.AVMEDIA_TYPE_AUDIO)
+                ffmpeg.av_dict_set(&codecOptions, "refcounted_frames", "1", 0);
 
-            if ((ret = ffmpeg.avcodec_open2(avctx, codec, &opts)) < 0)
+            if ((ret = ffmpeg.avcodec_open2(codecContext, codec, &codecOptions)) < 0)
             {
                 goto fail;
             }
-            if ((t = ffmpeg.av_dict_get(opts, "", null, ffmpeg.AV_DICT_IGNORE_SUFFIX)) != null)
+
+            var t = ffmpeg.av_dict_get(codecOptions, string.Empty, null, ffmpeg.AV_DICT_IGNORE_SUFFIX);
+            if (t != null)
             {
                 var key = Helpers.PtrToString(t->key);
                 ffmpeg.av_log(null, ffmpeg.AV_LOG_ERROR, $"Option {key} not found.\n");
@@ -512,20 +464,21 @@
             }
 
             IsAtEndOfStream = false;
-            ic->streams[stream_index]->discard = AVDiscard.AVDISCARD_DEFAULT;
-            switch (avctx->codec_type)
+            ic->streams[streamIndex]->discard = AVDiscard.AVDISCARD_DEFAULT;
+
+            switch (codecContext->codec_type)
             {
                 case AVMediaType.AVMEDIA_TYPE_AUDIO:
-                    Audio.FilterSpec.Frequency = avctx->sample_rate;
-                    Audio.FilterSpec.Channels = avctx->channels;
-                    Audio.FilterSpec.Layout = (long)Helpers.get_valid_channel_layout(avctx->channel_layout, avctx->channels);
-                    Audio.FilterSpec.SampleFormat = avctx->sample_fmt;
+                    Audio.FilterSpec.Frequency = codecContext->sample_rate;
+                    Audio.FilterSpec.Channels = codecContext->channels;
+                    Audio.FilterSpec.Layout = (long)Helpers.get_valid_channel_layout(codecContext->channel_layout, codecContext->channels);
+                    Audio.FilterSpec.SampleFormat = codecContext->sample_fmt;
                     if ((ret = Audio.configure_audio_filters(false)) < 0)
                         goto fail;
-                    var sink = Audio.OutputFilter;
-                    var sampleRate = ffmpeg.av_buffersink_get_sample_rate(sink);
-                    var channelCount = ffmpeg.av_buffersink_get_channels(sink);
-                    var channelLayout = (long)ffmpeg.av_buffersink_get_channel_layout(sink);
+
+                    var sampleRate = ffmpeg.av_buffersink_get_sample_rate(Audio.OutputFilter);
+                    var channelCount = ffmpeg.av_buffersink_get_channels(Audio.OutputFilter);
+                    var channelLayout = (long)ffmpeg.av_buffersink_get_channel_layout(Audio.OutputFilter);
 
                     /* prepare audio output */
                     if ((ret = Renderer.audio_open(channelLayout, channelCount, sampleRate, ref Audio.TargetSpec)) < 0)
@@ -544,12 +497,12 @@
                        we correct audio sync only if larger than this threshold */
                     Audio.audio_diff_threshold = (double)audio_hw_buf_size / Audio.TargetSpec.BytesPerSecond;
 
-                    Audio.StreamIndex = stream_index;
-                    Audio.Stream = ic->streams[stream_index];
+                    Audio.StreamIndex = streamIndex;
+                    Audio.Stream = ic->streams[streamIndex];
 
-                    Audio.InitializeDecoder(avctx);
-                    if ((InputContext->iformat->flags & (ffmpeg.AVFMT_NOBINSEARCH | ffmpeg.AVFMT_NOGENSEARCH | ffmpeg.AVFMT_NO_BYTE_SEEK)) != 0 &&
-                        InputContext->iformat->read_seek.Pointer == IntPtr.Zero)
+                    Audio.InitializeDecoder(codecContext);
+                    if ((ic->iformat->flags & (ffmpeg.AVFMT_NOBINSEARCH | ffmpeg.AVFMT_NOGENSEARCH | ffmpeg.AVFMT_NO_BYTE_SEEK)) != 0 &&
+                        ic->iformat->read_seek.Pointer == IntPtr.Zero)
                     {
                         Audio.StartPts = Audio.Stream->start_time;
                         Audio.StartPtsTimeBase = Audio.Stream->time_base;
@@ -559,16 +512,16 @@
                     Renderer.PauseAudio();
                     break;
                 case AVMediaType.AVMEDIA_TYPE_VIDEO:
-                    Video.StreamIndex = stream_index;
-                    Video.Stream = ic->streams[stream_index];
-                    Video.InitializeDecoder(avctx);
+                    Video.StreamIndex = streamIndex;
+                    Video.Stream = ic->streams[streamIndex];
+                    Video.InitializeDecoder(codecContext);
                     Video.Start();
                     IsPictureAttachmentPending = true;
                     break;
                 case AVMediaType.AVMEDIA_TYPE_SUBTITLE:
-                    Subtitle.StreamIndex = stream_index;
-                    Subtitle.Stream = ic->streams[stream_index];
-                    Subtitle.InitializeDecoder(avctx);
+                    Subtitle.StreamIndex = streamIndex;
+                    Subtitle.Stream = ic->streams[streamIndex];
+                    Subtitle.InitializeDecoder(codecContext);
                     Subtitle.Start();
                     break;
                 default:
@@ -577,9 +530,9 @@
             goto @out;
 
         fail:
-            ffmpeg.avcodec_free_context(&avctx);
+            ffmpeg.avcodec_free_context(&codecContext);
         @out:
-            ffmpeg.av_dict_free(&opts);
+            ffmpeg.av_dict_free(&codecOptions);
 
             return ret;
         }

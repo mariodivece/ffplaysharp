@@ -66,7 +66,7 @@
                         ? Container.Options.vfilters_list[Container.vfilter_idx]
                         : null;
 
-                    if ((ret = ConfigureFilters(ref filterGraph, filterLiteral, decodedFrame)) < 0)
+                    if ((ret = ConfigureFilters(filterGraph, filterLiteral, decodedFrame)) < 0)
                     {
                         var evt = new SDL.SDL_Event() { type = (SDL.SDL_EventType)Constants.FF_QUIT_EVENT, };
                         // evt.user.data1 = GCHandle.ToIntPtr(VideoStateHandle);
@@ -194,7 +194,7 @@
             return gotPicture;
         }
 
-        private int ConfigureFilters(ref AVFilterGraph* graph, string filterLiteral, AVFrame* frame)
+        private int ConfigureFilters(AVFilterGraph* graph, string filterLiteral, AVFrame* frame)
         {
             var outputFormats = new List<int>(MediaRenderer.sdl_texture_map.Count);
             var softwareScalerFlags = string.Empty;
@@ -262,30 +262,30 @@
 
                 if (Math.Abs(theta - 90) < 1.0)
                 {
-                    if (!Helpers.INSERT_FILT("transpose", "clock", ref graph, ref ret, ref lastFilter))
+                    if (!Helpers.INSERT_FILT("transpose", "clock", graph, ref ret, lastFilter))
                         goto fail;
                 }
                 else if (Math.Abs(theta - 180) < 1.0)
                 {
-                    if (!Helpers.INSERT_FILT("hflip", null, ref graph, ref ret, ref lastFilter))
+                    if (!Helpers.INSERT_FILT("hflip", null, graph, ref ret, lastFilter))
                         goto fail;
 
-                    if (!Helpers.INSERT_FILT("vflip", null, ref graph, ref ret, ref lastFilter))
+                    if (!Helpers.INSERT_FILT("vflip", null, graph, ref ret, lastFilter))
                         goto fail;
                 }
                 else if (Math.Abs(theta - 270) < 1.0)
                 {
-                    if (!Helpers.INSERT_FILT("transpose", "cclock", ref graph, ref ret, ref lastFilter))
+                    if (!Helpers.INSERT_FILT("transpose", "cclock", graph, ref ret, lastFilter))
                         goto fail;
                 }
                 else if (Math.Abs(theta) > 1.0)
                 {
-                    if (!Helpers.INSERT_FILT("rotate", $"{theta}*PI/180", ref graph, ref ret, ref lastFilter))
+                    if (!Helpers.INSERT_FILT("rotate", $"{theta}*PI/180", graph, ref ret, lastFilter))
                         goto fail;
                 }
             }
 
-            if ((ret = MediaContainer.configure_filtergraph(ref graph, filterLiteral, sourceFilter, lastFilter)) < 0)
+            if ((ret = configure_filtergraph(graph, filterLiteral, sourceFilter, lastFilter)) < 0)
                 goto fail;
 
             InputFilter = sourceFilter;

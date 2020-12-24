@@ -67,14 +67,14 @@
                 return 0;
         }
 
-        public static unsafe void FFSWAP(ref AVFilterContext** array, int a, int b)
+        public static unsafe void FFSWAP(AVFilterContext** array, int a, int b)
         {
             var temp = array[b];
             array[b] = array[a];
             array[a] = temp;
         }
 
-        public static unsafe bool INSERT_FILT(string name, string arg, ref AVFilterGraph* graph, ref int ret, ref AVFilterContext* last_filter)
+        public static unsafe bool INSERT_FILT(string name, string arg, AVFilterGraph* graph, ref int ret, AVFilterContext* last_filter)
         {
             do
             {

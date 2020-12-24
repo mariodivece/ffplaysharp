@@ -7,8 +7,6 @@
 
     public unsafe sealed class AudioComponent : FilteringMediaComponent
     {
-        public AVFilterGraph* FilterGraph = null;              // audio filter graph
-
         public double audio_clock;
         public double last_audio_clock = 0;
         public double audio_diff_cum; /* used for AV difference average computation */
@@ -33,22 +31,27 @@
         public int configure_audio_filters(bool forceOutputFormat)
         {
             var o = Container.Options;
-            var afilters = o.afilters;
+            
             var sample_fmts = new[] { (int)AVSampleFormat.AV_SAMPLE_FMT_S16 };
-            var sample_rates = new[] { 0 };
-            var channel_layouts = new[] { 0L };
-            var channels = new[] { 0 };
+            // var sample_rates = new[] { 0 };
+            // var channel_layouts = new[] { 0L };
+            // var channels = new[] { 0 };
 
-            AVFilterContext* filt_asrc = null, filt_asink = null;
-            string aresample_swr_opts = string.Empty;
+            AVFilterContext* inputFilterContext = null;
+            AVFilterContext* outputFilterContext = null;
             AVDictionaryEntry* e = null;
+
+            string resamplerOptions = string.Empty;
             string asrc_args = null;
             int ret;
 
-            var audioFilterGraph = FilterGraph;
-            // TODO: sometimes agraph has weird memory.
-            if (audioFilterGraph != null && audioFilterGraph->nb_filters > 0)
-                ffmpeg.avfilter_graph_free(&audioFilterGraph);
+            {
+                var audioFilterGraph = FilterGraph;
+                // TODO: sometimes agraph has weird memory.
+                if (audioFilterGraph != null && audioFilterGraph->nb_filters > 0)
+                    ffmpeg.avfilter_graph_free(&audioFilterGraph);
+            }
+
             FilterGraph = ffmpeg.avfilter_graph_alloc();
             FilterGraph->nb_threads = o.filter_nbthreads;
 
@@ -56,63 +59,65 @@
             {
                 var key = Helpers.PtrToString((IntPtr)e->key);
                 var value = Helpers.PtrToString((IntPtr)e->value);
-                aresample_swr_opts = $"{key}={value}:{aresample_swr_opts}";
+                resamplerOptions = $"{key}={value}:{resamplerOptions}";
             }
 
-            if (string.IsNullOrWhiteSpace(aresample_swr_opts))
-                aresample_swr_opts = null;
+            if (string.IsNullOrWhiteSpace(resamplerOptions))
+                resamplerOptions = null;
 
-            ffmpeg.av_opt_set(FilterGraph, "aresample_swr_opts", aresample_swr_opts, 0);
+            ffmpeg.av_opt_set(FilterGraph, "aresample_swr_opts", resamplerOptions, 0);
             asrc_args = $"sample_rate={FilterSpec.Frequency}:sample_fmt={ffmpeg.av_get_sample_fmt_name(FilterSpec.SampleFormat)}:" +
                 $"channels={FilterSpec.Channels}:time_base={1}/{FilterSpec.Frequency}";
 
             if (FilterSpec.Layout != 0)
                 asrc_args = $"{asrc_args}:channel_layout=0x{FilterSpec.Layout:x16}";
 
-            ret = ffmpeg.avfilter_graph_create_filter(&filt_asrc,
+            ret = ffmpeg.avfilter_graph_create_filter(&inputFilterContext,
                                                ffmpeg.avfilter_get_by_name("abuffer"), "ffplay_abuffer",
                                                asrc_args, null, FilterGraph);
             if (ret < 0)
                 goto end;
 
-            ret = ffmpeg.avfilter_graph_create_filter(&filt_asink,
+            ret = ffmpeg.avfilter_graph_create_filter(&outputFilterContext,
                                                ffmpeg.avfilter_get_by_name("abuffersink"), "ffplay_abuffersink",
                                                null, null, FilterGraph);
             if (ret < 0)
                 goto end;
 
-            if ((ret = Helpers.av_opt_set_int_list(filt_asink, "sample_fmts", sample_fmts, ffmpeg.AV_OPT_SEARCH_CHILDREN)) < 0)
+            if ((ret = Helpers.av_opt_set_int_list(outputFilterContext, "sample_fmts", sample_fmts, ffmpeg.AV_OPT_SEARCH_CHILDREN)) < 0)
                 goto end;
 
-            if ((ret = ffmpeg.av_opt_set_int(filt_asink, "all_channel_counts", 1, ffmpeg.AV_OPT_SEARCH_CHILDREN)) < 0)
+            if ((ret = ffmpeg.av_opt_set_int(outputFilterContext, "all_channel_counts", 1, ffmpeg.AV_OPT_SEARCH_CHILDREN)) < 0)
                 goto end;
 
             if (forceOutputFormat)
             {
-                channel_layouts[0] = Convert.ToInt32(TargetSpec.Layout);
-                channels[0] = TargetSpec.Layout != 0 ? -1 : TargetSpec.Channels;
-                sample_rates[0] = TargetSpec.Frequency;
-                if ((ret = ffmpeg.av_opt_set_int(filt_asink, "all_channel_counts", 0, ffmpeg.AV_OPT_SEARCH_CHILDREN)) < 0)
+                var outputChannelLayout = new[] { Convert.ToInt32(TargetSpec.Layout) };
+                var outputChannelCount = new[] { TargetSpec.Layout != 0 ? -1 : TargetSpec.Channels };
+                var outputSampleRates = new[] { TargetSpec.Frequency };
+
+                if ((ret = ffmpeg.av_opt_set_int(outputFilterContext, "all_channel_counts", 0, ffmpeg.AV_OPT_SEARCH_CHILDREN)) < 0)
                     goto end;
-                if ((ret = Helpers.av_opt_set_int_list(filt_asink, "channel_layouts", channel_layouts, ffmpeg.AV_OPT_SEARCH_CHILDREN)) < 0)
+                if ((ret = Helpers.av_opt_set_int_list(outputFilterContext, "channel_layouts", outputChannelLayout, ffmpeg.AV_OPT_SEARCH_CHILDREN)) < 0)
                     goto end;
-                if ((ret = Helpers.av_opt_set_int_list(filt_asink, "channel_counts", channels, ffmpeg.AV_OPT_SEARCH_CHILDREN)) < 0)
+                if ((ret = Helpers.av_opt_set_int_list(outputFilterContext, "channel_counts", outputChannelCount, ffmpeg.AV_OPT_SEARCH_CHILDREN)) < 0)
                     goto end;
-                if ((ret = Helpers.av_opt_set_int_list(filt_asink, "sample_rates", sample_rates, ffmpeg.AV_OPT_SEARCH_CHILDREN)) < 0)
+                if ((ret = Helpers.av_opt_set_int_list(outputFilterContext, "sample_rates", outputSampleRates, ffmpeg.AV_OPT_SEARCH_CHILDREN)) < 0)
                     goto end;
             }
 
-            if ((ret = MediaContainer.configure_filtergraph(ref FilterGraph, afilters, filt_asrc, filt_asink)) < 0)
+            var filterGraphLiteral = o.afilters;
+            if ((ret = configure_filtergraph(FilterGraph, filterGraphLiteral, inputFilterContext, outputFilterContext)) < 0)
                 goto end;
 
-            InputFilter = filt_asrc;
-            OutputFilter = filt_asink;
+            InputFilter = inputFilterContext;
+            OutputFilter = outputFilterContext;
 
         end:
             if (ret < 0)
             {
-                var audioGraphRef = FilterGraph;
-                ffmpeg.avfilter_graph_free(&audioGraphRef);
+                var audioFilterGraph = FilterGraph;
+                ffmpeg.avfilter_graph_free(&audioFilterGraph);
                 FilterGraph = null;
             }
 
