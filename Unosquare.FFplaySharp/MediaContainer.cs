@@ -391,16 +391,14 @@
         {
             string forcedCodecName = null;
 
-            AVFormatContext* ic = InputContext;
-            AVCodecContext* codecContext;
-
+            var ic = InputContext;
             var ret = 0;
             var lowResFactor = Options.lowres;
 
             if (streamIndex < 0 || streamIndex >= ic->nb_streams)
                 return -1;
 
-            codecContext = ffmpeg.avcodec_alloc_context3(null);
+            var codecContext = ffmpeg.avcodec_alloc_context3(null);
             ret = ffmpeg.avcodec_parameters_to_context(codecContext, ic->streams[streamIndex]->codecpar);
 
             if (ret < 0) goto fail;
