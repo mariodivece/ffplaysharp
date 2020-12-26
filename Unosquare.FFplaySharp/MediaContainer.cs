@@ -344,7 +344,7 @@
         }
 
         /* seek in the stream */
-        public void stream_seek(long pos, long rel, bool seek_by_bytes)
+        public void stream_seek(long pos, long rel, bool seekByBytes)
         {
             if (IsSeekRequested)
                 return;
@@ -352,7 +352,7 @@
             SeekPosition = pos;
             seek_rel = rel;
             SeekFlags &= ~ffmpeg.AVSEEK_FLAG_BYTE;
-            if (seek_by_bytes)
+            if (seekByBytes)
                 SeekFlags |= ffmpeg.AVSEEK_FLAG_BYTE;
 
             IsSeekRequested = true;
@@ -573,20 +573,19 @@
         /* this thread gets the stream from the disk or the network */
         private void read_thread()
         {
+            var mediaTypeCount = (int)AVMediaType.AVMEDIA_TYPE_NB;
+
             var o = Options;
             AVFormatContext* ic = null;
             int err, i, ret;
-            var st_index = new int[(int)AVMediaType.AVMEDIA_TYPE_NB];
+            var streamIndexes = new Dictionary<AVMediaType, int>(mediaTypeCount);
             // AVPacket pkt1;
             // AVPacket* pkt = &pkt1;
-            long stream_start_time;
-            bool pkt_in_play_range = false;
             AVDictionaryEntry* t;
             bool scan_all_pmts_set = false;
-            long pkt_ts;
 
-            for (var b = 0; b < st_index.Length; b++)
-                st_index[b] = -1;
+            for (var mediaType = 0; mediaType < mediaTypeCount; mediaType++)
+                streamIndexes[(AVMediaType)mediaType] = -1;
 
             IsAtEndOfStream = false;
 
@@ -643,7 +642,7 @@
 
             if (o.find_stream_info)
             {
-                AVDictionary** opts = Helpers.setup_find_stream_info_opts(ic, o.codec_opts);
+                var opts = Helpers.setup_find_stream_info_opts(ic, o.codec_opts);
                 int orig_nb_streams = (int)ic->nb_streams;
 
                 err = ffmpeg.avformat_find_stream_info(ic, opts);
@@ -695,45 +694,46 @@
 
             for (i = 0; i < ic->nb_streams; i++)
             {
-                AVStream* st = ic->streams[i];
-                var type = (int)st->codecpar->codec_type;
+                var st = ic->streams[i];
+                var type = st->codecpar->codec_type;
                 st->discard = AVDiscard.AVDISCARD_ALL;
-                if (type >= 0 && o.wanted_stream_spec[type] != null && st_index[type] == -1)
-                    if (ffmpeg.avformat_match_stream_specifier(ic, st, o.wanted_stream_spec[type]) > 0)
-                        st_index[type] = i;
+                if (type >= 0 && o.wanted_stream_spec[(int)type] != null && streamIndexes[type] == -1)
+                    if (ffmpeg.avformat_match_stream_specifier(ic, st, o.wanted_stream_spec[(int)type]) > 0)
+                        streamIndexes[type] = i;
             }
+
             for (i = 0; i < (int)AVMediaType.AVMEDIA_TYPE_NB; i++)
             {
-                if (o.wanted_stream_spec[i] != null && st_index[i] == -1)
+                if (o.wanted_stream_spec[i] != null && streamIndexes[(AVMediaType)i] == -1)
                 {
                     ffmpeg.av_log(null, ffmpeg.AV_LOG_ERROR, $"Stream specifier {Options.wanted_stream_spec[i]} does not match any {ffmpeg.av_get_media_type_string((AVMediaType)i)} stream\n");
-                    st_index[i] = int.MaxValue;
+                    streamIndexes[(AVMediaType)i] = int.MaxValue;
                 }
             }
 
             if (!o.video_disable)
-                st_index[(int)AVMediaType.AVMEDIA_TYPE_VIDEO] =
+                streamIndexes[AVMediaType.AVMEDIA_TYPE_VIDEO] =
                     ffmpeg.av_find_best_stream(ic, AVMediaType.AVMEDIA_TYPE_VIDEO,
-                                        st_index[(int)AVMediaType.AVMEDIA_TYPE_VIDEO], -1, null, 0);
+                                        streamIndexes[AVMediaType.AVMEDIA_TYPE_VIDEO], -1, null, 0);
             if (!o.audio_disable)
-                st_index[(int)AVMediaType.AVMEDIA_TYPE_AUDIO] =
+                streamIndexes[AVMediaType.AVMEDIA_TYPE_AUDIO] =
                     ffmpeg.av_find_best_stream(ic, AVMediaType.AVMEDIA_TYPE_AUDIO,
-                                        st_index[(int)AVMediaType.AVMEDIA_TYPE_AUDIO],
-                                        st_index[(int)AVMediaType.AVMEDIA_TYPE_VIDEO],
+                                        streamIndexes[AVMediaType.AVMEDIA_TYPE_AUDIO],
+                                        streamIndexes[AVMediaType.AVMEDIA_TYPE_VIDEO],
                                         null, 0);
             if (!o.video_disable && !o.subtitle_disable)
-                st_index[(int)AVMediaType.AVMEDIA_TYPE_SUBTITLE] =
+                streamIndexes[AVMediaType.AVMEDIA_TYPE_SUBTITLE] =
                     ffmpeg.av_find_best_stream(ic, AVMediaType.AVMEDIA_TYPE_SUBTITLE,
-                                        st_index[(int)AVMediaType.AVMEDIA_TYPE_SUBTITLE],
-                                        (st_index[(int)AVMediaType.AVMEDIA_TYPE_AUDIO] >= 0 ?
-                                         st_index[(int)AVMediaType.AVMEDIA_TYPE_AUDIO] :
-                                         st_index[(int)AVMediaType.AVMEDIA_TYPE_VIDEO]),
+                                        streamIndexes[AVMediaType.AVMEDIA_TYPE_SUBTITLE],
+                                        (streamIndexes[AVMediaType.AVMEDIA_TYPE_AUDIO] >= 0 ?
+                                         streamIndexes[AVMediaType.AVMEDIA_TYPE_AUDIO] :
+                                         streamIndexes[AVMediaType.AVMEDIA_TYPE_VIDEO]),
                                         null, 0);
 
             show_mode = o.show_mode;
-            if (st_index[(int)AVMediaType.AVMEDIA_TYPE_VIDEO] >= 0)
+            if (streamIndexes[AVMediaType.AVMEDIA_TYPE_VIDEO] >= 0)
             {
-                AVStream* st = ic->streams[st_index[(int)AVMediaType.AVMEDIA_TYPE_VIDEO]];
+                AVStream* st = ic->streams[streamIndexes[AVMediaType.AVMEDIA_TYPE_VIDEO]];
                 AVCodecParameters* codecpar = st->codecpar;
                 AVRational sar = ffmpeg.av_guess_sample_aspect_ratio(ic, st, null);
                 if (codecpar->width != 0)
@@ -741,23 +741,23 @@
             }
 
             /* open the streams */
-            if (st_index[(int)AVMediaType.AVMEDIA_TYPE_AUDIO] >= 0)
+            if (streamIndexes[AVMediaType.AVMEDIA_TYPE_AUDIO] >= 0)
             {
-                stream_component_open(st_index[(int)AVMediaType.AVMEDIA_TYPE_AUDIO]);
+                stream_component_open(streamIndexes[AVMediaType.AVMEDIA_TYPE_AUDIO]);
             }
 
             ret = -1;
-            if (st_index[(int)AVMediaType.AVMEDIA_TYPE_VIDEO] >= 0)
+            if (streamIndexes[AVMediaType.AVMEDIA_TYPE_VIDEO] >= 0)
             {
-                ret = stream_component_open(st_index[(int)AVMediaType.AVMEDIA_TYPE_VIDEO]);
+                ret = stream_component_open(streamIndexes[AVMediaType.AVMEDIA_TYPE_VIDEO]);
             }
 
             if (show_mode == ShowMode.None)
                 show_mode = ret >= 0 ? ShowMode.Video : ShowMode.None;
 
-            if (st_index[(int)AVMediaType.AVMEDIA_TYPE_SUBTITLE] >= 0)
+            if (streamIndexes[AVMediaType.AVMEDIA_TYPE_SUBTITLE] >= 0)
             {
-                stream_component_open(st_index[(int)AVMediaType.AVMEDIA_TYPE_SUBTITLE]);
+                stream_component_open(streamIndexes[AVMediaType.AVMEDIA_TYPE_SUBTITLE]);
             }
 
             if (Video.StreamIndex < 0 && Audio.StreamIndex < 0)
@@ -808,29 +808,18 @@
                     }
                     else
                     {
-                        if (Audio.StreamIndex >= 0)
+                        foreach (var c in Components)
                         {
-                            Audio.Packets.Clear();
-                            Audio.Packets.PutFlush();
+                            if (c.StreamIndex < 0)
+                                continue;
+
+                            c.Packets.Clear();
+                            c.Packets.PutFlush();
                         }
-                        if (Subtitle.StreamIndex >= 0)
-                        {
-                            Subtitle.Packets.Clear();
-                            Subtitle.Packets.PutFlush();
-                        }
-                        if (Video.StreamIndex >= 0)
-                        {
-                            Video.Packets.Clear();
-                            Video.Packets.PutFlush();
-                        }
-                        if ((SeekFlags & ffmpeg.AVSEEK_FLAG_BYTE) != 0)
-                        {
-                            ExternalClock.Set(double.NaN, 0);
-                        }
-                        else
-                        {
-                            ExternalClock.Set(seek_target / (double)ffmpeg.AV_TIME_BASE, 0);
-                        }
+
+                        ExternalClock.Set((SeekFlags & ffmpeg.AVSEEK_FLAG_BYTE) != 0
+                            ? double.NaN
+                            : seek_target / (double)ffmpeg.AV_TIME_BASE, 0);
                     }
 
                     IsSeekRequested = false;
@@ -879,18 +868,19 @@
                     }
                 }
 
-                var pkt = ffmpeg.av_packet_alloc();
-                ret = ffmpeg.av_read_frame(ic, pkt);
+                var readPacket = ffmpeg.av_packet_alloc();
+                ret = ffmpeg.av_read_frame(ic, readPacket);
+
                 if (ret < 0)
                 {
                     if ((ret == ffmpeg.AVERROR_EOF || ffmpeg.avio_feof(ic->pb) != 0) && !IsAtEndOfStream)
                     {
-                        if (Video.StreamIndex >= 0)
-                            Video.Packets.PutNull();
-                        if (Audio.StreamIndex >= 0)
-                            Audio.Packets.PutNull();
-                        if (Subtitle.StreamIndex >= 0)
-                            Subtitle.Packets.PutNull();
+                        foreach (var c in Components)
+                        {
+                            if (c.StreamIndex >= 0)
+                                c.Packets.PutNull();
+                        }
+
                         IsAtEndOfStream = true;
                     }
                     if (ic->pb != null && ic->pb->error != 0)
@@ -910,30 +900,31 @@
                     IsAtEndOfStream = false;
                 }
 
-                /* check if packet is in play range specified by user, then queue, otherwise discard */
-                stream_start_time = ic->streams[pkt->stream_index]->start_time;
-                pkt_ts = pkt->pts == ffmpeg.AV_NOPTS_VALUE ? pkt->dts : pkt->pts;
-                pkt_in_play_range = o.duration == ffmpeg.AV_NOPTS_VALUE ||
-                        (pkt_ts - (stream_start_time != ffmpeg.AV_NOPTS_VALUE ? stream_start_time : 0)) *
-                        ffmpeg.av_q2d(ic->streams[pkt->stream_index]->time_base) -
-                        (double)(o.start_time != ffmpeg.AV_NOPTS_VALUE ? o.start_time : 0) / 1000000
-                        <= ((double)o.duration / 1000000);
-                if (pkt->stream_index == Audio.StreamIndex && pkt_in_play_range)
+                // check if packet is in play range specified by user, then queue, otherwise discard.
+                var streamStartPts = ic->streams[readPacket->stream_index]->start_time;
+                var packetPts = readPacket->pts == ffmpeg.AV_NOPTS_VALUE ? readPacket->dts : readPacket->pts;
+                var isPacketInPlayRange = o.duration == ffmpeg.AV_NOPTS_VALUE ||
+                        (packetPts - (streamStartPts != ffmpeg.AV_NOPTS_VALUE ? streamStartPts : 0)) *
+                        ffmpeg.av_q2d(ic->streams[readPacket->stream_index]->time_base) -
+                        (double)(o.start_time != ffmpeg.AV_NOPTS_VALUE ? o.start_time : 0) / ffmpeg.AV_TIME_BASE
+                        <= ((double)o.duration / ffmpeg.AV_TIME_BASE);
+
+                if (readPacket->stream_index == Audio.StreamIndex && isPacketInPlayRange)
                 {
-                    Audio.Packets.Put(pkt);
+                    Audio.Packets.Put(readPacket);
                 }
-                else if (pkt->stream_index == Video.StreamIndex && pkt_in_play_range
+                else if (readPacket->stream_index == Video.StreamIndex && isPacketInPlayRange
                          && (Video.Stream->disposition & ffmpeg.AV_DISPOSITION_ATTACHED_PIC) == 0)
                 {
-                    Video.Packets.Put(pkt);
+                    Video.Packets.Put(readPacket);
                 }
-                else if (pkt->stream_index == Subtitle.StreamIndex && pkt_in_play_range)
+                else if (readPacket->stream_index == Subtitle.StreamIndex && isPacketInPlayRange)
                 {
-                    Subtitle.Packets.Put(pkt);
+                    Subtitle.Packets.Put(readPacket);
                 }
                 else
                 {
-                    ffmpeg.av_packet_unref(pkt);
+                    ffmpeg.av_packet_unref(readPacket);
                 }
             }
 
