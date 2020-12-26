@@ -474,7 +474,7 @@
                     Audio.FilterSpec.Channels = codecContext->channels;
                     Audio.FilterSpec.Layout = (long)Helpers.get_valid_channel_layout(codecContext->channel_layout, codecContext->channels);
                     Audio.FilterSpec.SampleFormat = codecContext->sample_fmt;
-                    if ((ret = Audio.configure_audio_filters(false)) < 0)
+                    if ((ret = Audio.ConfigureFilters(false)) < 0)
                         goto fail;
 
                     var sampleRate = ffmpeg.av_buffersink_get_sample_rate(Audio.OutputFilter);

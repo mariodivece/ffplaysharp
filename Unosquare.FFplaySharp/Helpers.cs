@@ -59,10 +59,10 @@
                 return channel_count1 != channel_count2 || fmt1 != fmt2;
         }
 
-        public static ulong get_valid_channel_layout(ulong channel_layout, int channels)
+        public static ulong get_valid_channel_layout(ulong channelLayout, int channelCount)
         {
-            if (channel_layout != 0 && ffmpeg.av_get_channel_layout_nb_channels(channel_layout) == channels)
-                return channel_layout;
+            if (channelLayout != 0 && ffmpeg.av_get_channel_layout_nb_channels(channelLayout) == channelCount)
+                return channelLayout;
             else
                 return 0;
         }

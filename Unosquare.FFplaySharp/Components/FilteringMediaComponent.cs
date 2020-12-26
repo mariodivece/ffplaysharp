@@ -14,12 +14,13 @@
             // placeholder
         }
 
-        public static int configure_filtergraph(AVFilterGraph* filterGraph, string filterGraphLiteral,
+        protected static int MaterializeFilterGraph(AVFilterGraph* filterGraph, string filterGraphLiteral,
                          AVFilterContext* inputFilterContext, AVFilterContext* outputFilterContext)
         {
-            int ret;
-            var filterCount = filterGraph->nb_filters;
-            AVFilterInOut* outputs = null, inputs = null;
+            var ret = 0;
+            var initialFilterCount = filterGraph->nb_filters;
+            AVFilterInOut* outputs = null;
+            AVFilterInOut* inputs = null;
 
             if (!string.IsNullOrWhiteSpace(filterGraphLiteral))
             {
@@ -44,9 +45,9 @@
                     goto fail;
             }
 
-            /* Reorder the filters to ensure that inputs of the custom filters are merged first */
-            for (var i = 0; i < filterGraph->nb_filters - filterCount; i++)
-                Helpers.FFSWAP(filterGraph->filters, i, i + (int)filterCount);
+            // Reorder the filters to ensure that inputs of the custom filters are merged first
+            for (var i = 0; i < filterGraph->nb_filters - initialFilterCount; i++)
+                Helpers.FFSWAP(filterGraph->filters, i, i + (int)initialFilterCount);
 
             ret = ffmpeg.avfilter_graph_config(filterGraph, null);
 

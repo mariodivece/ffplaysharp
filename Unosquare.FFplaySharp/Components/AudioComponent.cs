@@ -28,21 +28,18 @@
 
         public override AVMediaType MediaType => AVMediaType.AVMEDIA_TYPE_AUDIO;
 
-        public int configure_audio_filters(bool forceOutputFormat)
+        public int ConfigureFilters(bool forceOutputFormat)
         {
+            const int SearhChildrenFlags = ffmpeg.AV_OPT_SEARCH_CHILDREN;
+
             var o = Container.Options;
             
             var sample_fmts = new[] { (int)AVSampleFormat.AV_SAMPLE_FMT_S16 };
-            // var sample_rates = new[] { 0 };
-            // var channel_layouts = new[] { 0L };
-            // var channels = new[] { 0 };
 
             AVFilterContext* inputFilterContext = null;
             AVFilterContext* outputFilterContext = null;
-            AVDictionaryEntry* e = null;
+            AVDictionaryEntry* entry = null;
 
-            string resamplerOptions = string.Empty;
-            string asrc_args = null;
             int ret;
 
             {
@@ -55,10 +52,11 @@
             FilterGraph = ffmpeg.avfilter_graph_alloc();
             FilterGraph->nb_threads = o.filter_nbthreads;
 
-            while ((e = ffmpeg.av_dict_get(o.swr_opts, "", e, ffmpeg.AV_DICT_IGNORE_SUFFIX)) != null)
+            string resamplerOptions = string.Empty;
+            while ((entry = ffmpeg.av_dict_get(o.swr_opts, "", entry, ffmpeg.AV_DICT_IGNORE_SUFFIX)) != null)
             {
-                var key = Helpers.PtrToString((IntPtr)e->key);
-                var value = Helpers.PtrToString((IntPtr)e->value);
+                var key = Helpers.PtrToString(entry->key);
+                var value = Helpers.PtrToString(entry->value);
                 resamplerOptions = $"{key}={value}:{resamplerOptions}";
             }
 
@@ -66,28 +64,34 @@
                 resamplerOptions = null;
 
             ffmpeg.av_opt_set(FilterGraph, "aresample_swr_opts", resamplerOptions, 0);
-            asrc_args = $"sample_rate={FilterSpec.Frequency}:sample_fmt={ffmpeg.av_get_sample_fmt_name(FilterSpec.SampleFormat)}:" +
+            var sourceBufferOptions = $"sample_rate={FilterSpec.Frequency}:sample_fmt={ffmpeg.av_get_sample_fmt_name(FilterSpec.SampleFormat)}:" +
                 $"channels={FilterSpec.Channels}:time_base={1}/{FilterSpec.Frequency}";
 
             if (FilterSpec.Layout != 0)
-                asrc_args = $"{asrc_args}:channel_layout=0x{FilterSpec.Layout:x16}";
+                sourceBufferOptions = $"{sourceBufferOptions}:channel_layout=0x{FilterSpec.Layout:x16}";
 
-            ret = ffmpeg.avfilter_graph_create_filter(&inputFilterContext,
-                                               ffmpeg.avfilter_get_by_name("abuffer"), "ffplay_abuffer",
-                                               asrc_args, null, FilterGraph);
+            const string SourceBufferName = "audioSourceBuffer";
+            const string SinkBufferName = "audioSinkBuffer";
+
+            var sourceBuffer = ffmpeg.avfilter_get_by_name("abuffer");
+            var sinkBuffer = ffmpeg.avfilter_get_by_name("abuffersink");
+
+            ret = ffmpeg.avfilter_graph_create_filter(
+                &inputFilterContext, sourceBuffer, SourceBufferName, sourceBufferOptions, null, FilterGraph);
+            
             if (ret < 0)
                 goto end;
 
-            ret = ffmpeg.avfilter_graph_create_filter(&outputFilterContext,
-                                               ffmpeg.avfilter_get_by_name("abuffersink"), "ffplay_abuffersink",
-                                               null, null, FilterGraph);
+            ret = ffmpeg.avfilter_graph_create_filter(
+                &outputFilterContext, sinkBuffer, SinkBufferName, null, null, FilterGraph);
+
             if (ret < 0)
                 goto end;
 
-            if ((ret = Helpers.av_opt_set_int_list(outputFilterContext, "sample_fmts", sample_fmts, ffmpeg.AV_OPT_SEARCH_CHILDREN)) < 0)
+            if ((ret = Helpers.av_opt_set_int_list(outputFilterContext, "sample_fmts", sample_fmts, SearhChildrenFlags)) < 0)
                 goto end;
 
-            if ((ret = ffmpeg.av_opt_set_int(outputFilterContext, "all_channel_counts", 1, ffmpeg.AV_OPT_SEARCH_CHILDREN)) < 0)
+            if ((ret = ffmpeg.av_opt_set_int(outputFilterContext, "all_channel_counts", 1, SearhChildrenFlags)) < 0)
                 goto end;
 
             if (forceOutputFormat)
@@ -96,18 +100,18 @@
                 var outputChannelCount = new[] { TargetSpec.Layout != 0 ? -1 : TargetSpec.Channels };
                 var outputSampleRates = new[] { TargetSpec.Frequency };
 
-                if ((ret = ffmpeg.av_opt_set_int(outputFilterContext, "all_channel_counts", 0, ffmpeg.AV_OPT_SEARCH_CHILDREN)) < 0)
+                if ((ret = ffmpeg.av_opt_set_int(outputFilterContext, "all_channel_counts", 0, SearhChildrenFlags)) < 0)
                     goto end;
-                if ((ret = Helpers.av_opt_set_int_list(outputFilterContext, "channel_layouts", outputChannelLayout, ffmpeg.AV_OPT_SEARCH_CHILDREN)) < 0)
+                if ((ret = Helpers.av_opt_set_int_list(outputFilterContext, "channel_layouts", outputChannelLayout, SearhChildrenFlags)) < 0)
                     goto end;
-                if ((ret = Helpers.av_opt_set_int_list(outputFilterContext, "channel_counts", outputChannelCount, ffmpeg.AV_OPT_SEARCH_CHILDREN)) < 0)
+                if ((ret = Helpers.av_opt_set_int_list(outputFilterContext, "channel_counts", outputChannelCount, SearhChildrenFlags)) < 0)
                     goto end;
-                if ((ret = Helpers.av_opt_set_int_list(outputFilterContext, "sample_rates", outputSampleRates, ffmpeg.AV_OPT_SEARCH_CHILDREN)) < 0)
+                if ((ret = Helpers.av_opt_set_int_list(outputFilterContext, "sample_rates", outputSampleRates, SearhChildrenFlags)) < 0)
                     goto end;
             }
 
             var filterGraphLiteral = o.afilters;
-            if ((ret = configure_filtergraph(FilterGraph, filterGraphLiteral, inputFilterContext, outputFilterContext)) < 0)
+            if ((ret = MaterializeFilterGraph(FilterGraph, filterGraphLiteral, inputFilterContext, outputFilterContext)) < 0)
                 goto end;
 
             InputFilter = inputFilterContext;
@@ -371,25 +375,27 @@
             }
         }
 
+        private int DecodeFrame(out AVFrame* frame) => DecodeFrame(out frame, out _);
+
         protected override void WorkerThreadMethod()
         {
             FrameHolder af;
             var last_serial = -1;
-            int got_frame = 0;
+            int gotSamples = 0;
             int ret = 0;
 
             var frame = ffmpeg.av_frame_alloc();
 
-            const int bufLength = 1024;
-            var buf1 = stackalloc byte[bufLength];
-            var buf2 = stackalloc byte[bufLength];
+            const int StringBufferLength = 1024;
+            var filterLayoutString = stackalloc byte[StringBufferLength];
+            var validLayoutString = stackalloc byte[StringBufferLength];
 
             do
             {
-                if ((got_frame = DecodeFrame(out frame, out _)) < 0)
+                if ((gotSamples = DecodeFrame(out frame)) < 0)
                     goto the_end;
 
-                if (got_frame != 0)
+                if (gotSamples != 0)
                 {
                     var tb = new AVRational() { num = 1, den = frame->sample_rate };
                     var dec_channel_layout = (long)Helpers.get_valid_channel_layout(frame->channel_layout, frame->channels);
@@ -403,12 +409,12 @@
 
                     if (reconfigure)
                     {
-                        ffmpeg.av_get_channel_layout_string(buf1, bufLength, -1, (ulong)FilterSpec.Layout);
-                        ffmpeg.av_get_channel_layout_string(buf2, bufLength, -1, (ulong)dec_channel_layout);
+                        ffmpeg.av_get_channel_layout_string(filterLayoutString, StringBufferLength, -1, (ulong)FilterSpec.Layout);
+                        ffmpeg.av_get_channel_layout_string(validLayoutString, StringBufferLength, -1, (ulong)dec_channel_layout);
                         ffmpeg.av_log(null, ffmpeg.AV_LOG_DEBUG,
                            $"Audio frame changed from " +
-                           $"rate:{FilterSpec.Frequency} ch:{FilterSpec.Channels} fmt:{ffmpeg.av_get_sample_fmt_name(FilterSpec.SampleFormat)} layout:{Helpers.PtrToString(buf1)} serial:{last_serial} to " +
-                           $"rate:{frame->sample_rate} ch:{frame->channels} fmt:{ffmpeg.av_get_sample_fmt_name((AVSampleFormat)frame->format)} layout:{Helpers.PtrToString(buf2)} serial:{PacketSerial}\n");
+                           $"rate:{FilterSpec.Frequency} ch:{FilterSpec.Channels} fmt:{ffmpeg.av_get_sample_fmt_name(FilterSpec.SampleFormat)} layout:{Helpers.PtrToString(filterLayoutString)} serial:{last_serial} to " +
+                           $"rate:{frame->sample_rate} ch:{frame->channels} fmt:{ffmpeg.av_get_sample_fmt_name((AVSampleFormat)frame->format)} layout:{Helpers.PtrToString(validLayoutString)} serial:{PacketSerial}\n");
 
                         FilterSpec.SampleFormat = (AVSampleFormat)frame->format;
                         FilterSpec.Channels = frame->channels;
@@ -416,7 +422,7 @@
                         FilterSpec.Frequency = frame->sample_rate;
                         last_serial = PacketSerial;
 
-                        if ((ret = configure_audio_filters(true)) < 0)
+                        if ((ret = ConfigureFilters(true)) < 0)
                             goto the_end;
                     }
 

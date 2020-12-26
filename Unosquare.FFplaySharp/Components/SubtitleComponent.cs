@@ -17,44 +17,37 @@
 
         protected override FrameQueue CreateFrameQueue() => new(Packets, Constants.SUBPICTURE_QUEUE_SIZE, false);
 
+        private int DecodeFrame(out AVSubtitle* frame) => DecodeFrame(out _, out frame);
+
         protected override void WorkerThreadMethod()
         {
-            FrameHolder decodedFrame;
-            var gotSubtitle = 0;
-            double pts;
-
             while (true)
             {
-                if ((decodedFrame = Frames.PeekWriteable()) == null)
-                    return; // 0;
+                var queuedFrame = Frames.PeekWriteable();
+                if (queuedFrame == null) break;
 
-                if ((gotSubtitle = DecodeFrame(out _, out var outputFrame)) < 0)
-                    break;
-                else
-                    decodedFrame.SubtitlePtr = outputFrame;
+                var gotSubtitle = DecodeFrame(out var decodedFrame);
+                if (gotSubtitle < 0) break;
 
-                pts = 0;
+                queuedFrame.SubtitlePtr = decodedFrame;
 
-                if (gotSubtitle != 0 && decodedFrame.SubtitlePtr->format == 0)
+                if (gotSubtitle != 0 && queuedFrame.SubtitlePtr->format == 0)
                 {
-                    if (decodedFrame.SubtitlePtr->pts != ffmpeg.AV_NOPTS_VALUE)
-                        pts = decodedFrame.SubtitlePtr->pts / (double)ffmpeg.AV_TIME_BASE;
-                    decodedFrame.Pts = pts;
-                    decodedFrame.Serial = PacketSerial;
-                    decodedFrame.Width = CodecContext->width;
-                    decodedFrame.Height = CodecContext->height;
-                    decodedFrame.uploaded = false;
+                    queuedFrame.Pts = queuedFrame.SubtitlePtr->pts != ffmpeg.AV_NOPTS_VALUE
+                        ? queuedFrame.SubtitlePtr->pts / (double)ffmpeg.AV_TIME_BASE : 0;
+                    queuedFrame.Serial = PacketSerial;
+                    queuedFrame.Width = CodecContext->width;
+                    queuedFrame.Height = CodecContext->height;
+                    queuedFrame.uploaded = false;
 
-                    /* now we can update the picture count */
+                    // now we can update the picture count
                     Frames.Push();
                 }
                 else if (gotSubtitle != 0)
                 {
-                    ffmpeg.avsubtitle_free(decodedFrame.SubtitlePtr);
+                    ffmpeg.avsubtitle_free(queuedFrame.SubtitlePtr);
                 }
             }
-
-            return; // 0
         }
     }
 }

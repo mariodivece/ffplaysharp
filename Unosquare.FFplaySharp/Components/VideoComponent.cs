@@ -194,7 +194,7 @@
             return gotPicture;
         }
 
-        private int ConfigureFilters(AVFilterGraph* graph, string filterLiteral, AVFrame* frame)
+        private int ConfigureFilters(AVFilterGraph* graph, string filterGraphLiteral, AVFrame* frame)
         {
             var outputFormats = new List<int>(MediaRenderer.sdl_texture_map.Count);
             var softwareScalerFlags = string.Empty;
@@ -285,7 +285,7 @@
                 }
             }
 
-            if ((ret = configure_filtergraph(graph, filterLiteral, sourceFilter, lastFilter)) < 0)
+            if ((ret = MaterializeFilterGraph(graph, filterGraphLiteral, sourceFilter, lastFilter)) < 0)
                 goto fail;
 
             InputFilter = sourceFilter;
