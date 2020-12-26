@@ -20,7 +20,7 @@
         public bool IsAbortRequested { get; private set; }
 
         public bool IsPaused { get; private set; }
-        
+
         public long SeekPosition { get; private set; }
 
         private long seek_rel;
@@ -437,9 +437,12 @@
             if (Options.fast != 0)
                 codecContext->flags2 |= ffmpeg.AV_CODEC_FLAG2_FAST;
 
+            const string ThreadsOptionKey = "threads";
+            const string ThreadsOptionValue = "auto";
+
             var codecOptions = Helpers.filter_codec_opts(Options.codec_opts, codecContext->codec_id, ic, ic->streams[streamIndex], codec);
-            if (ffmpeg.av_dict_get(codecOptions, "threads", null, 0) == null)
-                ffmpeg.av_dict_set(&codecOptions, "threads", "auto", 0);
+            if (ffmpeg.av_dict_get(codecOptions, ThreadsOptionKey, null, 0) == null)
+                ffmpeg.av_dict_set(&codecOptions, ThreadsOptionKey, ThreadsOptionValue, 0);
 
             if (lowResFactor != 0)
                 ffmpeg.av_dict_set_int(&codecOptions, "lowres", lowResFactor, 0);
@@ -525,11 +528,11 @@
                 default:
                     break;
             }
-            goto @out;
+            goto exit;
 
         fail:
             ffmpeg.avcodec_free_context(&codecContext);
-        @out:
+        exit:
             ffmpeg.av_dict_free(&codecOptions);
 
             return ret;

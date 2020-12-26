@@ -9,6 +9,8 @@
 
     public unsafe class MediaRenderer
     {
+        private uint AudioDeviceId;
+
         public long last_mouse_left_click;
 
         public long audio_callback_time;
@@ -21,7 +23,7 @@
         private IntPtr RenderingWindow;
         private IntPtr SdlRenderer;
         public SDL.SDL_RendererInfo SdlRendererInfo;
-        public uint audio_dev;
+
         public string window_title;
 
         public IntPtr sub_texture;
@@ -108,7 +110,7 @@
             FrameHolder vp;
             FrameHolder sp = null;
             SDL.SDL_Rect rect = new();
-            
+
             vp = container.Video.Frames.PeekLast();
             if (container.Subtitle.Stream != null)
             {
@@ -158,7 +160,7 @@
                                     var targetStride = new[] { pitch };
                                     var targetScan = default(byte_ptrArray8);
                                     targetScan[0] = (byte*)pixels;
-                                    
+
                                     ffmpeg.sws_scale(container.Subtitle.ConvertContext, sp.SubtitlePtr->rects[i]->data, sp.SubtitlePtr->rects[i]->linesize,
                                       0, sp.SubtitlePtr->rects[i]->h, targetScan, targetStride);
 
@@ -298,31 +300,34 @@
         }
 
 
-        public int audio_open(long wanted_channel_layout, int wanted_nb_channels, int wanted_sample_rate, ref AudioParams audio_hw_params)
+        public int audio_open(long wantedChannelLayout, int wantedChannelCount, int wantedSampleRate, ref AudioParams audio_hw_params)
         {
-            SDL.SDL_AudioSpec wantedSpec = new();
-            SDL.SDL_AudioSpec spec = new();
-
             var next_nb_channels = new[] { 0, 0, 1, 6, 2, 6, 4, 6 };
             var next_sample_rates = new[] { 0, 44100, 48000, 96000, 192000 };
             int next_sample_rate_idx = next_sample_rates.Length - 1;
 
-            var env = Environment.GetEnvironmentVariable("SDL_AUDIO_CHANNELS");
+            const string ChannelCountEnvVariable = "SDL_AUDIO_CHANNELS";
+            var env = Environment.GetEnvironmentVariable(ChannelCountEnvVariable);
             if (!string.IsNullOrWhiteSpace(env))
             {
-                wanted_nb_channels = int.Parse(env);
-                wanted_channel_layout = ffmpeg.av_get_default_channel_layout(wanted_nb_channels);
+                wantedChannelCount = int.Parse(env);
+                wantedChannelLayout = ffmpeg.av_get_default_channel_layout(wantedChannelCount);
             }
 
-            if (wanted_channel_layout == 0 || wanted_nb_channels != ffmpeg.av_get_channel_layout_nb_channels((ulong)wanted_channel_layout))
+            if (wantedChannelLayout == 0 || wantedChannelCount != ffmpeg.av_get_channel_layout_nb_channels((ulong)wantedChannelLayout))
             {
-                wanted_channel_layout = ffmpeg.av_get_default_channel_layout(wanted_nb_channels);
-                wanted_channel_layout &= ~ffmpeg.AV_CH_LAYOUT_STEREO_DOWNMIX;
+                wantedChannelLayout = ffmpeg.av_get_default_channel_layout(wantedChannelCount);
+                wantedChannelLayout &= ~ffmpeg.AV_CH_LAYOUT_STEREO_DOWNMIX;
             }
 
-            wanted_nb_channels = ffmpeg.av_get_channel_layout_nb_channels((ulong)wanted_channel_layout);
-            wantedSpec.channels = (byte)wanted_nb_channels;
-            wantedSpec.freq = wanted_sample_rate;
+            wantedChannelCount = ffmpeg.av_get_channel_layout_nb_channels((ulong)wantedChannelLayout);
+
+            var wantedSpec = new SDL.SDL_AudioSpec
+            {
+                channels = (byte)wantedChannelCount,
+                freq = wantedSampleRate
+            };
+
             if (wantedSpec.freq <= 0 || wantedSpec.channels <= 0)
             {
                 ffmpeg.av_log(null, ffmpeg.AV_LOG_ERROR, "Invalid sample rate or channel count!\n");
@@ -337,14 +342,17 @@
             wantedSpec.samples = (ushort)Math.Max(Constants.SDL_AUDIO_MIN_BUFFER_SIZE, 2 << ffmpeg.av_log2((uint)(wantedSpec.freq / Constants.SDL_AUDIO_MAX_CALLBACKS_PER_SEC)));
             wantedSpec.callback = sdl_audio_callback;
             // wanted_spec.userdata = GCHandle.ToIntPtr(VideoStateHandle);
-            while ((audio_dev = SDL.SDL_OpenAudioDevice(null, 0, ref wantedSpec, out spec, (int)(SDL.SDL_AUDIO_ALLOW_FREQUENCY_CHANGE | SDL.SDL_AUDIO_ALLOW_CHANNELS_CHANGE))) == 0)
+
+            const int AudioDeviceFlags = (int)(SDL.SDL_AUDIO_ALLOW_FREQUENCY_CHANGE | SDL.SDL_AUDIO_ALLOW_CHANNELS_CHANGE);
+            SDL.SDL_AudioSpec deviceSpec;
+            while ((AudioDeviceId = SDL.SDL_OpenAudioDevice(null, 0, ref wantedSpec, out deviceSpec, AudioDeviceFlags)) == 0)
             {
                 ffmpeg.av_log(null, ffmpeg.AV_LOG_WARNING, $"SDL_OpenAudio ({wantedSpec.channels} channels, {wantedSpec.freq} Hz): {SDL.SDL_GetError()}\n");
                 wantedSpec.channels = (byte)next_nb_channels[Math.Min(7, (int)wantedSpec.channels)];
                 if (wantedSpec.channels == 0)
                 {
                     wantedSpec.freq = next_sample_rates[next_sample_rate_idx--];
-                    wantedSpec.channels = (byte)wanted_nb_channels;
+                    wantedSpec.channels = (byte)wantedChannelCount;
                     if (wantedSpec.freq == 0)
                     {
                         ffmpeg.av_log(null, ffmpeg.AV_LOG_ERROR, "No more combinations to try, audio open failed\n");
@@ -352,29 +360,31 @@
                     }
                 }
 
-                wanted_channel_layout = ffmpeg.av_get_default_channel_layout(wantedSpec.channels);
+                wantedChannelLayout = ffmpeg.av_get_default_channel_layout(wantedSpec.channels);
             }
-            if (spec.format != SDL.AUDIO_S16SYS)
+
+            if (deviceSpec.format != SDL.AUDIO_S16SYS)
             {
                 ffmpeg.av_log(null, ffmpeg.AV_LOG_ERROR,
-                       $"SDL advised audio format {spec.format} is not supported!\n");
+                       $"SDL advised audio format {deviceSpec.format} is not supported!\n");
                 return -1;
             }
-            if (spec.channels != wantedSpec.channels)
+
+            if (deviceSpec.channels != wantedSpec.channels)
             {
-                wanted_channel_layout = ffmpeg.av_get_default_channel_layout(spec.channels);
-                if (wanted_channel_layout == 0)
+                wantedChannelLayout = ffmpeg.av_get_default_channel_layout(deviceSpec.channels);
+                if (wantedChannelLayout == 0)
                 {
                     ffmpeg.av_log(null, ffmpeg.AV_LOG_ERROR,
-                           $"SDL advised channel count {spec.channels} is not supported!\n");
+                           $"SDL advised channel count {deviceSpec.channels} is not supported!\n");
                     return -1;
                 }
             }
 
             audio_hw_params.SampleFormat = AVSampleFormat.AV_SAMPLE_FMT_S16;
-            audio_hw_params.Frequency = spec.freq;
-            audio_hw_params.Layout = wanted_channel_layout;
-            audio_hw_params.Channels = spec.channels;
+            audio_hw_params.Frequency = deviceSpec.freq;
+            audio_hw_params.Layout = wantedChannelLayout;
+            audio_hw_params.Channels = deviceSpec.channels;
             audio_hw_params.FrameSize = ffmpeg.av_samples_get_buffer_size(null, audio_hw_params.Channels, 1, audio_hw_params.SampleFormat, 1);
             audio_hw_params.BytesPerSecond = ffmpeg.av_samples_get_buffer_size(null, audio_hw_params.Channels, audio_hw_params.Frequency, audio_hw_params.SampleFormat, 1);
             if (audio_hw_params.BytesPerSecond <= 0 || audio_hw_params.FrameSize <= 0)
@@ -383,7 +393,7 @@
                 return -1;
             }
 
-            return (int)spec.size;
+            return (int)deviceSpec.size;
         }
 
 
@@ -404,12 +414,12 @@
 
         public void CloseAudio()
         {
-            SDL.SDL_CloseAudioDevice(audio_dev);
+            SDL.SDL_CloseAudioDevice(AudioDeviceId);
         }
 
         public void PauseAudio()
         {
-            SDL.SDL_PauseAudioDevice(audio_dev, 0);
+            SDL.SDL_PauseAudioDevice(AudioDeviceId, 0);
         }
 
         public void video_display(MediaContainer container)
@@ -864,7 +874,7 @@
                 stream += len1;
                 audio_buf_index += len1;
             }
-            
+
             audio_write_buf_size = (int)(Container.audio_buf_size - audio_buf_index);
             /* Let's assume the audio driver that is used by SDL has two periods. */
             if (!double.IsNaN(Container.Audio.audio_clock))

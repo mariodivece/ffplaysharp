@@ -92,7 +92,7 @@
 
             if (forceOutputFormat)
             {
-                var outputChannelLayout = new[] { Convert.ToInt32(TargetSpec.Layout) };
+                var outputChannelLayout = new[] { TargetSpec.Layout };
                 var outputChannelCount = new[] { TargetSpec.Layout != 0 ? -1 : TargetSpec.Channels };
                 var outputSampleRates = new[] { TargetSpec.Frequency };
 
