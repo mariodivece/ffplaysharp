@@ -379,83 +379,85 @@
 
         protected override void WorkerThreadMethod()
         {
-            FrameHolder af;
             var last_serial = -1;
             int gotSamples = 0;
             int ret = 0;
 
-            var frame = ffmpeg.av_frame_alloc();
+            AVFrame* decodedFrame;
 
             const int StringBufferLength = 1024;
             var filterLayoutString = stackalloc byte[StringBufferLength];
-            var validLayoutString = stackalloc byte[StringBufferLength];
+            var decoderLayoutString = stackalloc byte[StringBufferLength];
 
             do
             {
-                if ((gotSamples = DecodeFrame(out frame)) < 0)
+                if ((gotSamples = DecodeFrame(out decodedFrame)) < 0)
                     goto the_end;
 
                 if (gotSamples != 0)
                 {
-                    var tb = new AVRational() { num = 1, den = frame->sample_rate };
-                    var dec_channel_layout = (long)Helpers.get_valid_channel_layout(frame->channel_layout, frame->channels);
+                    var decoderTimeBase = new AVRational() { num = 1, den = decodedFrame->sample_rate };
+                    var decoderChannelLayout = Helpers.ValidateChannelLayout(decodedFrame->channel_layout, decodedFrame->channels);
 
                     var reconfigure =
                         Helpers.cmp_audio_fmts(FilterSpec.SampleFormat, FilterSpec.Channels,
-                                       (AVSampleFormat)frame->format, frame->channels) ||
-                        FilterSpec.Layout != dec_channel_layout ||
-                        FilterSpec.Frequency != frame->sample_rate ||
+                                       (AVSampleFormat)decodedFrame->format, decodedFrame->channels) ||
+                        FilterSpec.Layout != decoderChannelLayout ||
+                        FilterSpec.Frequency != decodedFrame->sample_rate ||
                         PacketSerial != last_serial;
 
                     if (reconfigure)
                     {
                         ffmpeg.av_get_channel_layout_string(filterLayoutString, StringBufferLength, -1, (ulong)FilterSpec.Layout);
-                        ffmpeg.av_get_channel_layout_string(validLayoutString, StringBufferLength, -1, (ulong)dec_channel_layout);
+                        ffmpeg.av_get_channel_layout_string(decoderLayoutString, StringBufferLength, -1, (ulong)decoderChannelLayout);
                         ffmpeg.av_log(null, ffmpeg.AV_LOG_DEBUG,
                            $"Audio frame changed from " +
                            $"rate:{FilterSpec.Frequency} ch:{FilterSpec.Channels} fmt:{ffmpeg.av_get_sample_fmt_name(FilterSpec.SampleFormat)} layout:{Helpers.PtrToString(filterLayoutString)} serial:{last_serial} to " +
-                           $"rate:{frame->sample_rate} ch:{frame->channels} fmt:{ffmpeg.av_get_sample_fmt_name((AVSampleFormat)frame->format)} layout:{Helpers.PtrToString(validLayoutString)} serial:{PacketSerial}\n");
+                           $"rate:{decodedFrame->sample_rate} ch:{decodedFrame->channels} fmt:{ffmpeg.av_get_sample_fmt_name((AVSampleFormat)decodedFrame->format)} layout:{Helpers.PtrToString(decoderLayoutString)} serial:{PacketSerial}\n");
 
-                        FilterSpec.SampleFormat = (AVSampleFormat)frame->format;
-                        FilterSpec.Channels = frame->channels;
-                        FilterSpec.Layout = dec_channel_layout;
-                        FilterSpec.Frequency = frame->sample_rate;
+                        FilterSpec.SampleFormat = (AVSampleFormat)decodedFrame->format;
+                        FilterSpec.Channels = decodedFrame->channels;
+                        FilterSpec.Layout = decoderChannelLayout;
+                        FilterSpec.Frequency = decodedFrame->sample_rate;
                         last_serial = PacketSerial;
 
                         if ((ret = ConfigureFilters(true)) < 0)
                             goto the_end;
                     }
 
-                    if ((ret = ffmpeg.av_buffersrc_add_frame(InputFilter, frame)) < 0)
+                    if ((ret = ffmpeg.av_buffersrc_add_frame(InputFilter, decodedFrame)) < 0)
                         goto the_end;
 
-                    while ((ret = ffmpeg.av_buffersink_get_frame_flags(OutputFilter, frame, 0)) >= 0)
+                    while ((ret = ffmpeg.av_buffersink_get_frame_flags(OutputFilter, decodedFrame, 0)) >= 0)
                     {
-                        tb = ffmpeg.av_buffersink_get_time_base(OutputFilter);
+                        decoderTimeBase = ffmpeg.av_buffersink_get_time_base(OutputFilter);
+                        var queuedFrame = Frames.PeekWriteable();
 
-                        if ((af = Frames.PeekWriteable()) == null)
+                        if (queuedFrame == null)
                             goto the_end;
 
-                        af.Pts = (frame->pts == ffmpeg.AV_NOPTS_VALUE) ? double.NaN : frame->pts * ffmpeg.av_q2d(tb);
-                        af.Position = frame->pkt_pos;
-                        af.Serial = PacketSerial;
-                        af.Duration = ffmpeg.av_q2d(new AVRational() { num = frame->nb_samples, den = frame->sample_rate });
+                        queuedFrame.Pts = (decodedFrame->pts == ffmpeg.AV_NOPTS_VALUE) ? double.NaN : decodedFrame->pts * ffmpeg.av_q2d(decoderTimeBase);
+                        queuedFrame.Position = decodedFrame->pkt_pos;
+                        queuedFrame.Serial = PacketSerial;
+                        queuedFrame.Duration = ffmpeg.av_q2d(new AVRational() { num = decodedFrame->nb_samples, den = decodedFrame->sample_rate });
 
-                        ffmpeg.av_frame_move_ref(af.FramePtr, frame);
+                        ffmpeg.av_frame_move_ref(queuedFrame.FramePtr, decodedFrame);
                         Frames.Push();
 
                         if (Packets.Serial != PacketSerial)
                             break;
                     }
+
                     if (ret == ffmpeg.AVERROR_EOF)
                         HasFinished = PacketSerial;
                 }
             } while (ret >= 0 || ret == ffmpeg.AVERROR(ffmpeg.EAGAIN) || ret == ffmpeg.AVERROR_EOF);
+
         the_end:
             var agraph = FilterGraph;
             ffmpeg.avfilter_graph_free(&agraph);
             agraph = null;
-            ffmpeg.av_frame_free(&frame);
+            ffmpeg.av_frame_free(&decodedFrame);
         }
     }
 

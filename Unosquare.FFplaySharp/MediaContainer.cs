@@ -472,7 +472,7 @@
                 case AVMediaType.AVMEDIA_TYPE_AUDIO:
                     Audio.FilterSpec.Frequency = codecContext->sample_rate;
                     Audio.FilterSpec.Channels = codecContext->channels;
-                    Audio.FilterSpec.Layout = (long)Helpers.get_valid_channel_layout(codecContext->channel_layout, codecContext->channels);
+                    Audio.FilterSpec.Layout = Helpers.ValidateChannelLayout(codecContext->channel_layout, codecContext->channels);
                     Audio.FilterSpec.SampleFormat = codecContext->sample_fmt;
                     if ((ret = Audio.ConfigureFilters(false)) < 0)
                         goto fail;

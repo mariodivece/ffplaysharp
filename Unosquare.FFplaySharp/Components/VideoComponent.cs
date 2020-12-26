@@ -262,25 +262,25 @@
 
                 if (Math.Abs(theta - 90) < 1.0)
                 {
-                    if (!Helpers.INSERT_FILT("transpose", "clock", graph, ref ret, lastFilter))
+                    if (!Helpers.InsertFilter("transpose", "clock", graph, ref ret, ref lastFilter))
                         goto fail;
                 }
                 else if (Math.Abs(theta - 180) < 1.0)
                 {
-                    if (!Helpers.INSERT_FILT("hflip", null, graph, ref ret, lastFilter))
+                    if (!Helpers.InsertFilter("hflip", null, graph, ref ret, ref lastFilter))
                         goto fail;
 
-                    if (!Helpers.INSERT_FILT("vflip", null, graph, ref ret, lastFilter))
+                    if (!Helpers.InsertFilter("vflip", null, graph, ref ret, ref lastFilter))
                         goto fail;
                 }
                 else if (Math.Abs(theta - 270) < 1.0)
                 {
-                    if (!Helpers.INSERT_FILT("transpose", "cclock", graph, ref ret, lastFilter))
+                    if (!Helpers.InsertFilter("transpose", "cclock", graph, ref ret, ref lastFilter))
                         goto fail;
                 }
                 else if (Math.Abs(theta) > 1.0)
                 {
-                    if (!Helpers.INSERT_FILT("rotate", $"{theta}*PI/180", graph, ref ret, lastFilter))
+                    if (!Helpers.InsertFilter("rotate", $"{theta}*PI/180", graph, ref ret, ref lastFilter))
                         goto fail;
                 }
             }

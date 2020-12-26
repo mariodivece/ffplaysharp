@@ -59,10 +59,10 @@
                 return channel_count1 != channel_count2 || fmt1 != fmt2;
         }
 
-        public static ulong get_valid_channel_layout(ulong channelLayout, int channelCount)
+        public static long ValidateChannelLayout(ulong channelLayout, int channelCount)
         {
             if (channelLayout != 0 && ffmpeg.av_get_channel_layout_nb_channels(channelLayout) == channelCount)
-                return channelLayout;
+                return (long)channelLayout;
             else
                 return 0;
         }
@@ -74,23 +74,26 @@
             array[a] = temp;
         }
 
-        public static unsafe bool INSERT_FILT(string name, string arg, AVFilterGraph* graph, ref int ret, AVFilterContext* last_filter)
+        public static unsafe bool InsertFilter(
+            string filterName, string filterArgs, AVFilterGraph* filterGraph, ref int ret, ref AVFilterContext* lastFilterContext)
         {
             do
             {
-                AVFilterContext* filt_ctx;
+                AVFilterContext* insertedFilterContext;
+                var insertedFilter = ffmpeg.avfilter_get_by_name(filterName);
 
-                ret = ffmpeg.avfilter_graph_create_filter(&filt_ctx,
-                                                   ffmpeg.avfilter_get_by_name(name),
-                                                   $"ffplay_{name}", arg, null, graph);
+                ret = ffmpeg.avfilter_graph_create_filter(
+                    &insertedFilterContext, insertedFilter, $"ff_{filterName}", filterArgs, null, filterGraph);
+
                 if (ret < 0)
                     return false;
 
-                ret = ffmpeg.avfilter_link(filt_ctx, 0, last_filter, 0);
+                ret = ffmpeg.avfilter_link(insertedFilterContext, 0, lastFilterContext, 0);
+
                 if (ret < 0)
                     return false;
 
-                last_filter = filt_ctx;
+                lastFilterContext = insertedFilterContext;
             } while (false);
 
             return true;
@@ -102,17 +105,14 @@
 
         public static unsafe double av_display_rotation_get(int* matrix)
         {
-            double rotation;
             var scale = new double[2];
-            var num = matrix[0];
-
             scale[0] = hypot(CONV_FP(matrix[0]), CONV_FP(matrix[3]));
             scale[1] = hypot(CONV_FP(matrix[1]), CONV_FP(matrix[4]));
 
             if (scale[0] == 0.0 || scale[1] == 0.0)
                 return double.NaN;
 
-            rotation = Math.Atan2(CONV_FP(matrix[1]) / scale[1],
+            var rotation = Math.Atan2(CONV_FP(matrix[1]) / scale[1],
                              CONV_FP(matrix[0]) / scale[0]) * 180 / Math.PI;
 
             return -rotation;

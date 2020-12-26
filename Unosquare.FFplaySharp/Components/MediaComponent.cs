@@ -78,11 +78,11 @@
             StreamIndex = -1;
         }
 
-        protected int DecodeFrame(out AVFrame* frame, out AVSubtitle* sub)
+        protected int DecodeFrame(out AVFrame* decodedFrame, out AVSubtitle* decodedSubtitle)
         {
-            int ret = ffmpeg.AVERROR(ffmpeg.EAGAIN);
-            sub = null;
-            frame = null;
+            var resultCode = ffmpeg.AVERROR(ffmpeg.EAGAIN);
+            decodedSubtitle = null;
+            decodedFrame = null;
 
             for (; ; )
             {
@@ -98,52 +98,54 @@
                         switch (CodecContext->codec_type)
                         {
                             case AVMediaType.AVMEDIA_TYPE_VIDEO:
-                                if (frame == null) frame = ffmpeg.av_frame_alloc();
+                                if (decodedFrame == null)
+                                    decodedFrame = ffmpeg.av_frame_alloc();
 
-                                ret = ffmpeg.avcodec_receive_frame(CodecContext, frame);
-                                if (ret >= 0)
+                                resultCode = ffmpeg.avcodec_receive_frame(CodecContext, decodedFrame);
+                                if (resultCode >= 0)
                                 {
                                     if (ReorderPts == -1)
-                                    {
-                                        frame->pts = frame->best_effort_timestamp;
-                                    }
+                                        decodedFrame->pts = decodedFrame->best_effort_timestamp;
                                     else if (ReorderPts == 0)
-                                    {
-                                        frame->pts = frame->pkt_dts;
-                                    }
+                                        decodedFrame->pts = decodedFrame->pkt_dts;
                                 }
                                 break;
                             case AVMediaType.AVMEDIA_TYPE_AUDIO:
-                                if (frame == null) frame = ffmpeg.av_frame_alloc();
+                                if (decodedFrame == null) decodedFrame = ffmpeg.av_frame_alloc();
 
-                                ret = ffmpeg.avcodec_receive_frame(CodecContext, frame);
-                                if (ret >= 0)
+                                resultCode = ffmpeg.avcodec_receive_frame(CodecContext, decodedFrame);
+                                if (resultCode >= 0)
                                 {
-                                    AVRational tb = new();
-                                    tb.num = 1;
-                                    tb.den = frame->sample_rate;
-
-                                    if (frame->pts != ffmpeg.AV_NOPTS_VALUE)
-                                        frame->pts = ffmpeg.av_rescale_q(frame->pts, CodecContext->pkt_timebase, tb);
-                                    else if (NextPts != ffmpeg.AV_NOPTS_VALUE)
-                                        frame->pts = ffmpeg.av_rescale_q(NextPts, NextPtsTimeBase, tb);
-                                    if (frame->pts != ffmpeg.AV_NOPTS_VALUE)
+                                    var decoderTimeBase = new AVRational
                                     {
-                                        NextPts = frame->pts + frame->nb_samples;
-                                        NextPtsTimeBase = tb;
+                                        num = 1,
+                                        den = decodedFrame->sample_rate
+                                    };
+
+                                    if (decodedFrame->pts != ffmpeg.AV_NOPTS_VALUE)
+                                        decodedFrame->pts = ffmpeg.av_rescale_q(decodedFrame->pts, CodecContext->pkt_timebase, decoderTimeBase);
+                                    else if (NextPts != ffmpeg.AV_NOPTS_VALUE)
+                                        decodedFrame->pts = ffmpeg.av_rescale_q(NextPts, NextPtsTimeBase, decoderTimeBase);
+
+                                    if (decodedFrame->pts != ffmpeg.AV_NOPTS_VALUE)
+                                    {
+                                        NextPts = decodedFrame->pts + decodedFrame->nb_samples;
+                                        NextPtsTimeBase = decoderTimeBase;
                                     }
                                 }
                                 break;
                         }
-                        if (ret == ffmpeg.AVERROR_EOF)
+                        if (resultCode == ffmpeg.AVERROR_EOF)
                         {
                             HasFinished = PacketSerial;
                             ffmpeg.avcodec_flush_buffers(CodecContext);
                             return 0;
                         }
-                        if (ret >= 0)
+
+                        if (resultCode >= 0)
                             return 1;
-                    } while (ret != ffmpeg.AVERROR(ffmpeg.EAGAIN));
+
+                    } while (resultCode != ffmpeg.AVERROR(ffmpeg.EAGAIN));
                 }
 
                 do
@@ -184,23 +186,23 @@
                 {
                     if (CodecContext->codec_type == AVMediaType.AVMEDIA_TYPE_SUBTITLE)
                     {
-                        int got_frame = 0;
-                        sub = (AVSubtitle*)ffmpeg.av_malloc((ulong)sizeof(AVSubtitle));
-                        ret = ffmpeg.avcodec_decode_subtitle2(CodecContext, sub, &got_frame, currentPacket.PacketPtr);
+                        var gotSubtitle = 0;
+                        decodedSubtitle = (AVSubtitle*)ffmpeg.av_malloc((ulong)sizeof(AVSubtitle));
+                        resultCode = ffmpeg.avcodec_decode_subtitle2(CodecContext, decodedSubtitle, &gotSubtitle, currentPacket.PacketPtr);
 
-                        if (ret < 0)
+                        if (resultCode < 0)
                         {
-                            ret = ffmpeg.AVERROR(ffmpeg.EAGAIN);
+                            resultCode = ffmpeg.AVERROR(ffmpeg.EAGAIN);
                         }
                         else
                         {
-                            if (got_frame != 0 && currentPacket.PacketPtr->data == null)
+                            if (gotSubtitle != 0 && currentPacket.PacketPtr->data == null)
                             {
                                 IsPacketPending = true;
                                 PendingPacket = new PacketHolder(ffmpeg.av_packet_clone(currentPacket.PacketPtr));
                             }
 
-                            ret = got_frame != 0 ? 0 : (currentPacket.PacketPtr->data != null ? ffmpeg.AVERROR(ffmpeg.EAGAIN) : ffmpeg.AVERROR_EOF);
+                            resultCode = gotSubtitle != 0 ? 0 : (currentPacket.PacketPtr->data != null ? ffmpeg.AVERROR(ffmpeg.EAGAIN) : ffmpeg.AVERROR_EOF);
                         }
                     }
                     else
