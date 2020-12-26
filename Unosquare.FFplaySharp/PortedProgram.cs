@@ -263,22 +263,18 @@
                         }
                         else
                         {
-                            var tns = (int)(container.InputContext->duration / 1000000L);
-                            var thh = tns / 3600;
-                            var tmm = (tns % 3600) / 60;
-                            var tss = (tns % 60);
-                            var frac = x / container.width;
-                            var ns = (int)(frac * tns);
-                            var hh = ns / 3600;
-                            var mm = (ns % 3600) / 60;
-                            var ss = (ns % 60);
-                            var ts = (long)(frac * container.InputContext->duration);
+                            var seekPercent = (x / container.width);
+                            var durationSecs = (double)container.InputContext->duration / ffmpeg.AV_TIME_BASE;
+                            var totalDuration = TimeSpan.FromSeconds(durationSecs);
+                            var targetTime = TimeSpan.FromSeconds(seekPercent * durationSecs);
+                            var targetPosition = Convert.ToInt64(seekPercent * container.InputContext->duration);
 
-                            ffmpeg.av_log(null, ffmpeg.AV_LOG_INFO, $"Seek to {(frac * 100)} ({hh}:{mm}:{ss}) of total duration ({thh}:{tmm}:{tss})       \n");
+                            ffmpeg.av_log(null, ffmpeg.AV_LOG_INFO, $"Seek to {(seekPercent * 100):0.00} ({targetTime}) of total duration ({totalDuration})       \n");
                             
                             if (container.InputContext->start_time != ffmpeg.AV_NOPTS_VALUE)
-                                ts += container.InputContext->start_time;
-                            container.stream_seek(ts, 0, false);
+                                targetPosition += container.InputContext->start_time;
+
+                            container.stream_seek(targetPosition, 0, false);
                         }
                         break;
                     case (int)SDL.SDL_EventType.SDL_WINDOWEVENT:

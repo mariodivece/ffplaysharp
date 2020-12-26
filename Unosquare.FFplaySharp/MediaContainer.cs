@@ -12,7 +12,8 @@
     {
         private bool WasPaused;
         private bool IsPictureAttachmentPending;
-        private bool IsSeekRequested;
+        public bool IsSeekRequested { get; private set; }
+
         private int SeekFlags;
         private Thread ReadingThread;
         private AVInputFormat* InputFormat = null;
