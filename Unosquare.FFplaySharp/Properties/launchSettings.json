@@ -1,0 +1,8 @@
+{
+  "profiles": {
+    "Unosquare.FFplaySharp": {
+      "commandName": "Project",
+      "nativeDebugging": true
+    }
+  }
+}

@@ -74,31 +74,6 @@
             array[a] = temp;
         }
 
-        public static unsafe bool InsertFilter(
-            string filterName, string filterArgs, AVFilterGraph* filterGraph, ref int ret, ref AVFilterContext* lastFilterContext)
-        {
-            do
-            {
-                AVFilterContext* insertedFilterContext;
-                var insertedFilter = ffmpeg.avfilter_get_by_name(filterName);
-
-                ret = ffmpeg.avfilter_graph_create_filter(
-                    &insertedFilterContext, insertedFilter, $"ff_{filterName}", filterArgs, null, filterGraph);
-
-                if (ret < 0)
-                    return false;
-
-                ret = ffmpeg.avfilter_link(insertedFilterContext, 0, lastFilterContext, 0);
-
-                if (ret < 0)
-                    return false;
-
-                lastFilterContext = insertedFilterContext;
-            } while (false);
-
-            return true;
-        }
-
         public static double CONV_FP(int m) => Convert.ToDouble(m);
 
         public static double hypot(double s1, double s2) => Math.Sqrt((s1 * s1) + (s2 * s2));

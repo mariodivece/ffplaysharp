@@ -8,7 +8,7 @@
     public unsafe sealed class PacketQueue : ISerialProvider, IDisposable
     {
         private readonly object SyncLock = new();
-        private readonly ManualResetEventSlim IsAvailableEvent = new(false);
+        private readonly AutoResetEvent IsAvailableEvent = new(false);
         private bool m_IsClosed = true; // starts in a blocked state
         private PacketHolder First;
         private PacketHolder Last;
@@ -92,7 +92,7 @@
                     Count++;
                     Size += newPacket.PacketPtr->size + sizeof(IntPtr);
                     Duration += newPacket.PacketPtr->duration;
-                    // IsAvailableEvent.Set();
+                    IsAvailableEvent.Set();
                 }
 
                 if (!newPacket.IsFlushPacket && !result)
@@ -106,8 +106,8 @@
         {
             lock (SyncLock)
             {
-                for (var pkt = First; pkt != null; pkt = pkt?.Next)
-                    pkt?.Dispose();
+                for (var currentPacket = First; currentPacket != null; currentPacket = currentPacket?.Next)
+                    currentPacket?.Dispose();
 
                 Last = null;
                 First = null;
@@ -125,6 +125,7 @@
                 Clear();
             }
 
+            IsAvailableEvent.Set();
             IsAvailableEvent.Dispose();
         }
 
@@ -133,7 +134,7 @@
             lock (SyncLock)
                 m_IsClosed = true;
 
-            // IsAvailableEvent.Set();
+            IsAvailableEvent.Set();
         }
 
         public void Open()
@@ -163,7 +164,7 @@
 
                         Count--;
                         Size -= (item.PacketPtr->size + sizeof(IntPtr));
-                        Duration -= (item.PacketPtr->duration);
+                        Duration -= item.PacketPtr->duration;
                         return item;
                     }
                 }
@@ -171,7 +172,7 @@
                 if (!block)
                     return null;
                 else
-                    IsAvailableEvent.Wait(10);
+                    IsAvailableEvent.WaitOne(1000);
             }
         }
     }

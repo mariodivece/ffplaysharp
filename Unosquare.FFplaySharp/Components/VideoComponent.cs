@@ -194,32 +194,58 @@
             return gotPicture;
         }
 
-        private int ConfigureFilters(AVFilterGraph* graph, string filterGraphLiteral, AVFrame* frame)
+        private static unsafe bool InsertFilter(
+            string filterName, string filterArgs, AVFilterGraph* filterGraph, ref int ret, ref AVFilterContext* lastFilterContext)
         {
-            var outputFormats = new List<int>(MediaRenderer.sdl_texture_map.Count);
-            var softwareScalerFlags = string.Empty;
+            do
+            {
+                var insertedFilter = ffmpeg.avfilter_get_by_name(filterName);
+                AVFilterContext* insertedFilterContext;
 
+                ret = ffmpeg.avfilter_graph_create_filter(
+                    &insertedFilterContext, insertedFilter, $"ff_{filterName}", filterArgs, null, filterGraph);
+
+                if (ret < 0)
+                    return false;
+
+                ret = ffmpeg.avfilter_link(insertedFilterContext, 0, lastFilterContext, 0);
+
+                if (ret < 0)
+                    return false;
+
+                lastFilterContext = insertedFilterContext;
+            } while (false);
+
+            return true;
+        }
+
+
+        private int ConfigureFilters(AVFilterGraph* filterGraph, string filterGraphLiteral, AVFrame* decoderFrame)
+        {
             int ret;
-            AVFilterContext* sourceFilter = null, outputFilter = null, lastFilter = null;
+            AVFilterContext* sourceFilter = null;
+            AVFilterContext* outputFilter = null;
+            AVFilterContext* lastFilter = null;
+
             var codecParameters = Stream->codecpar;
             var frameRate = ffmpeg.av_guess_frame_rate(Container.InputContext, Stream, null);
-            AVDictionaryEntry* e = null;
 
+            var outputPixelFormats = new List<int>(MediaRenderer.sdl_texture_map.Count);
             for (var i = 0; i < Container.Renderer.SdlRendererInfo.num_texture_formats; i++)
             {
                 foreach (var kvp in MediaRenderer.sdl_texture_map)
                 {
                     if (kvp.Value == Container.Renderer.SdlRendererInfo.texture_formats[i])
-                        outputFormats.Add((int)kvp.Key);
+                        outputPixelFormats.Add((int)kvp.Key);
                 }
             }
 
-            //pix_fmts.Add(AVPixelFormat.AV_PIX_FMT_NONE);
-
-            while ((e = ffmpeg.av_dict_get(Container.Options.sws_dict, "", e, ffmpeg.AV_DICT_IGNORE_SUFFIX)) != null)
+            var softwareScalerFlags = string.Empty;
+            AVDictionaryEntry* optionEntry = null;
+            while ((optionEntry = ffmpeg.av_dict_get(Container.Options.sws_dict, "", optionEntry, ffmpeg.AV_DICT_IGNORE_SUFFIX)) != null)
             {
-                var key = Helpers.PtrToString(e->key);
-                var value = Helpers.PtrToString(e->value);
+                var key = Helpers.PtrToString(optionEntry->key);
+                var value = Helpers.PtrToString(optionEntry->value);
 
                 softwareScalerFlags = (key == "sws_flags")
                     ? $"flags={value}:{softwareScalerFlags}"
@@ -229,29 +255,35 @@
             if (string.IsNullOrWhiteSpace(softwareScalerFlags))
                 softwareScalerFlags = null;
 
-            graph->scale_sws_opts = softwareScalerFlags != null ? ffmpeg.av_strdup(softwareScalerFlags) : null;
+            filterGraph->scale_sws_opts = softwareScalerFlags != null ? ffmpeg.av_strdup(softwareScalerFlags) : null;
             var sourceFilterArguments =
-                $"video_size={frame->width}x{frame->height}" +
-                $":pix_fmt={frame->format}" +
+                $"video_size={decoderFrame->width}x{decoderFrame->height}" +
+                $":pix_fmt={decoderFrame->format}" +
                 $":time_base={Stream->time_base.num}/{Stream->time_base.den}" +
                 $":pixel_aspect={codecParameters->sample_aspect_ratio.num}/{Math.Max(codecParameters->sample_aspect_ratio.den, 1)}";
 
             if (frameRate.num != 0 && frameRate.den != 0)
                 sourceFilterArguments = $"{sourceFilterArguments}:frame_rate={frameRate.num}/{frameRate.den}";
 
+            const string SourceBufferName = "videoSourceBuffer";
+            const string SinkBufferName = "videoSinkBuffer";
+
+            var sourceBuffer = ffmpeg.avfilter_get_by_name("buffer");
+            var sinkBuffer = ffmpeg.avfilter_get_by_name("buffersink");
+
             ret = ffmpeg.avfilter_graph_create_filter(
-                &sourceFilter, ffmpeg.avfilter_get_by_name("buffer"), "video_source", sourceFilterArguments, null, graph);
+                &sourceFilter, sourceBuffer, SourceBufferName, sourceFilterArguments, null, filterGraph);
 
             if (ret < 0)
                 goto fail;
 
             ret = ffmpeg.avfilter_graph_create_filter(
-                &outputFilter, ffmpeg.avfilter_get_by_name("buffersink"), "video_sink", null, null, graph);
+                &outputFilter, sinkBuffer, SinkBufferName, null, null, filterGraph);
 
             if (ret < 0)
                 goto fail;
 
-            ret = Helpers.av_opt_set_int_list(outputFilter, "pix_fmts", outputFormats.ToArray(), ffmpeg.AV_OPT_SEARCH_CHILDREN);
+            ret = Helpers.av_opt_set_int_list(outputFilter, "pix_fmts", outputPixelFormats.ToArray(), ffmpeg.AV_OPT_SEARCH_CHILDREN);
             if (ret < 0)
                 goto fail;
 
@@ -262,30 +294,30 @@
 
                 if (Math.Abs(theta - 90) < 1.0)
                 {
-                    if (!Helpers.InsertFilter("transpose", "clock", graph, ref ret, ref lastFilter))
+                    if (!InsertFilter("transpose", "clock", filterGraph, ref ret, ref lastFilter))
                         goto fail;
                 }
                 else if (Math.Abs(theta - 180) < 1.0)
                 {
-                    if (!Helpers.InsertFilter("hflip", null, graph, ref ret, ref lastFilter))
+                    if (!InsertFilter("hflip", null, filterGraph, ref ret, ref lastFilter))
                         goto fail;
 
-                    if (!Helpers.InsertFilter("vflip", null, graph, ref ret, ref lastFilter))
+                    if (!InsertFilter("vflip", null, filterGraph, ref ret, ref lastFilter))
                         goto fail;
                 }
                 else if (Math.Abs(theta - 270) < 1.0)
                 {
-                    if (!Helpers.InsertFilter("transpose", "cclock", graph, ref ret, ref lastFilter))
+                    if (!InsertFilter("transpose", "cclock", filterGraph, ref ret, ref lastFilter))
                         goto fail;
                 }
                 else if (Math.Abs(theta) > 1.0)
                 {
-                    if (!Helpers.InsertFilter("rotate", $"{theta}*PI/180", graph, ref ret, ref lastFilter))
+                    if (!InsertFilter("rotate", $"{theta}*PI/180", filterGraph, ref ret, ref lastFilter))
                         goto fail;
                 }
             }
 
-            if ((ret = MaterializeFilterGraph(graph, filterGraphLiteral, sourceFilter, lastFilter)) < 0)
+            if ((ret = MaterializeFilterGraph(filterGraph, filterGraphLiteral, sourceFilter, lastFilter)) < 0)
                 goto fail;
 
             InputFilter = sourceFilter;

@@ -36,7 +36,7 @@
         {
             var packetPtr = PacketPtr;
 
-            if (packetPtr != null)
+            if (packetPtr != null && !IsFlushPacket)
                 ffmpeg.av_packet_free(&packetPtr);
 
             PacketPtr = null;
