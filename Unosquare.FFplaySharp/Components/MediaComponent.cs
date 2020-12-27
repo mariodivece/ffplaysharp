@@ -46,13 +46,18 @@
 
         public bool IsSubtitle => MediaType == AVMediaType.AVMEDIA_TYPE_SUBTITLE;
 
+        public bool IsPictureAttachmentStream =>
+            MediaType == AVMediaType.AVMEDIA_TYPE_VIDEO &&
+            Stream != null &&
+            (Stream->disposition & ffmpeg.AV_DISPOSITION_ATTACHED_PIC) != 0;
+
         public bool HasEnoughPackets
         {
             get
             {
                 return StreamIndex < 0 ||
                    Packets.IsClosed ||
-                   (Stream->disposition & ffmpeg.AV_DISPOSITION_ATTACHED_PIC) != 0 ||
+                   IsPictureAttachmentStream ||
                    Packets.Count > Constants.MIN_FRAMES && (Packets.Duration == 0 ||
                    ffmpeg.av_q2d(Stream->time_base) * Packets.Duration > 1.0);
             }

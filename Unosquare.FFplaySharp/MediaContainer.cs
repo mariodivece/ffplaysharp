@@ -321,13 +321,13 @@
             return IsAbortRequested ? 1 : 0;
         }
 
-        static bool is_realtime(AVFormatContext* ic)
+        private static bool IsInputFormatRealtime(AVFormatContext* ic)
         {
-            var iformat = Helpers.PtrToString(ic->iformat->name);
-            if (iformat == "rtp" || iformat == "rtsp" || iformat == "sdp")
+            var inputFormatName = Helpers.PtrToString(ic->iformat->name);
+            if (inputFormatName == "rtp" || inputFormatName == "rtsp" || inputFormatName == "sdp")
                 return true;
 
-            var url = Helpers.PtrToString(ic->url);
+            var url = Helpers.PtrToString(ic->url)?.ToLowerInvariant();
             url = string.IsNullOrEmpty(url) ? string.Empty : url;
 
             if (ic->pb != null && (url.StartsWith("rtp:") || url.StartsWith("udp:")))
@@ -570,9 +570,22 @@
             sample_array = null;
         }
 
-        private bool HasEnoughPackets => Components.All(c => c.HasEnoughPackets);
+        private bool HasEnoughPacketCount => Components.All(c => c.HasEnoughPackets);
 
         private long PacketQueueSize => Components.Sum(c => c.Packets.Size);
+
+        private bool HasEnoughPacketSize => PacketQueueSize > Constants.MAX_QUEUE_SIZE;
+
+        private MediaComponent ComponentFromStreamIndex(int streamIndex)
+        {
+            foreach (var c in Components)
+            {
+                if (c.StreamIndex == streamIndex)
+                    return c;
+            }
+
+            return null;
+        }
 
         /* this thread gets the stream from the disk or the network */
         private void read_thread()
@@ -669,20 +682,17 @@
             /* if seeking requested, we execute it */
             if (o.start_time != ffmpeg.AV_NOPTS_VALUE)
             {
-                long timestamp;
-
-                timestamp = o.start_time;
+                var timestamp = o.start_time;
                 /* add the stream start time */
                 if (ic->start_time != ffmpeg.AV_NOPTS_VALUE)
                     timestamp += ic->start_time;
+
                 ret = ffmpeg.avformat_seek_file(ic, -1, long.MinValue, timestamp, long.MaxValue, 0);
                 if (ret < 0)
-                {
                     ffmpeg.av_log(null, ffmpeg.AV_LOG_WARNING, $"{filename}: could not seek to position {((double)timestamp / ffmpeg.AV_TIME_BASE)}\n");
-                }
             }
 
-            IsRealtime = is_realtime(ic);
+            IsRealtime = IsInputFormatRealtime(ic);
 
             if (o.show_status != 0)
                 ffmpeg.av_dump_format(ic, 0, filename, 0);
@@ -827,7 +837,7 @@
 
                 if (IsPictureAttachmentPending)
                 {
-                    if (Video.Stream != null && (Video.Stream->disposition & ffmpeg.AV_DISPOSITION_ATTACHED_PIC) != 0)
+                    if (Video.IsPictureAttachmentStream)
                     {
                         var copy = ffmpeg.av_packet_clone(&Video.Stream->attached_pic);
                         Video.Packets.Put(copy);
@@ -838,7 +848,7 @@
                 }
 
                 /* if the queue are full, no need to read more */
-                if (o.infinite_buffer < 1 && (PacketQueueSize > Constants.MAX_QUEUE_SIZE || HasEnoughPackets))
+                if (o.infinite_buffer < 1 && (HasEnoughPacketSize || HasEnoughPacketCount))
                 {
                     /* wait 10 ms */
                     continue_read_thread.WaitOne(10);
@@ -900,23 +910,11 @@
                         (double)(o.start_time != ffmpeg.AV_NOPTS_VALUE ? o.start_time : 0) / ffmpeg.AV_TIME_BASE
                         <= ((double)o.duration / ffmpeg.AV_TIME_BASE);
 
-                if (readPacket->stream_index == Audio.StreamIndex && isPacketInPlayRange)
-                {
-                    Audio.Packets.Put(readPacket);
-                }
-                else if (readPacket->stream_index == Video.StreamIndex && isPacketInPlayRange
-                         && (Video.Stream->disposition & ffmpeg.AV_DISPOSITION_ATTACHED_PIC) == 0)
-                {
-                    Video.Packets.Put(readPacket);
-                }
-                else if (readPacket->stream_index == Subtitle.StreamIndex && isPacketInPlayRange)
-                {
-                    Subtitle.Packets.Put(readPacket);
-                }
+                var component = ComponentFromStreamIndex(readPacket->stream_index);
+                if (component != null && !component.IsPictureAttachmentStream && isPacketInPlayRange)
+                    component.Packets.Put(readPacket);
                 else
-                {
                     ffmpeg.av_packet_unref(readPacket);
-                }
             }
 
             ret = 0;
