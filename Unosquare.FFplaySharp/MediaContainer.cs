@@ -4,6 +4,7 @@
     using SDL2;
     using System;
     using System.Collections.Generic;
+    using System.Linq;
     using System.Threading;
     using Unosquare.FFplaySharp.Components;
     using Unosquare.FFplaySharp.Primitives;
@@ -315,7 +316,7 @@
             ReadingThread.Start();
         }
 
-        private int decode_interrupt_cb(void* ctx)
+        private int InputInterrupt(void* opaque)
         {
             return IsAbortRequested ? 1 : 0;
         }
@@ -569,36 +570,28 @@
             sample_array = null;
         }
 
+        private bool HasEnoughPackets => Components.All(c => c.HasEnoughPackets);
+
+        private long PacketQueueSize => Components.Sum(c => c.Packets.Size);
 
         /* this thread gets the stream from the disk or the network */
         private void read_thread()
         {
-            var mediaTypeCount = (int)AVMediaType.AVMEDIA_TYPE_NB;
+            const int MediaTypeCount = (int)AVMediaType.AVMEDIA_TYPE_NB;
 
             var o = Options;
-            AVFormatContext* ic = null;
             int err, i, ret;
-            var streamIndexes = new Dictionary<AVMediaType, int>(mediaTypeCount);
-            // AVPacket pkt1;
-            // AVPacket* pkt = &pkt1;
-            AVDictionaryEntry* t;
+            var streamIndexes = new Dictionary<AVMediaType, int>(MediaTypeCount);
             bool scan_all_pmts_set = false;
 
-            for (var mediaType = 0; mediaType < mediaTypeCount; mediaType++)
+            for (var mediaType = 0; mediaType < MediaTypeCount; mediaType++)
                 streamIndexes[(AVMediaType)mediaType] = -1;
 
             IsAtEndOfStream = false;
 
-            ic = ffmpeg.avformat_alloc_context();
-            if (ic == null)
-            {
-                ffmpeg.av_log(null, ffmpeg.AV_LOG_FATAL, "Could not allocate context.\n");
-                ret = ffmpeg.AVERROR(ffmpeg.ENOMEM);
-                goto fail;
-            }
+            var ic = ffmpeg.avformat_alloc_context();
+            ic->interrupt_callback.callback = (AVIOInterruptCB_callback)InputInterrupt;
 
-            ic->interrupt_callback.callback = (AVIOInterruptCB_callback)decode_interrupt_cb;
-            // ic->interrupt_callback.opaque = (void*)GCHandle.ToIntPtr(VideoStateHandle);
             if (ffmpeg.av_dict_get(o.format_opts, "scan_all_pmts", null, ffmpeg.AV_DICT_MATCH_CASE) == null)
             {
                 var formatOptions = o.format_opts;
@@ -619,6 +612,7 @@
                 ret = -1;
                 goto fail;
             }
+
             if (scan_all_pmts_set)
             {
                 var formatOptions = o.format_opts;
@@ -626,9 +620,10 @@
                 o.format_opts = formatOptions;
             }
 
-            if ((t = ffmpeg.av_dict_get(o.format_opts, "", null, ffmpeg.AV_DICT_IGNORE_SUFFIX)) != null)
+            AVDictionaryEntry* formatOption;
+            if ((formatOption = ffmpeg.av_dict_get(o.format_opts, string.Empty, null, ffmpeg.AV_DICT_IGNORE_SUFFIX)) != null)
             {
-                ffmpeg.av_log(null, ffmpeg.AV_LOG_ERROR, $"Option {Helpers.PtrToString(t->key)} not found.\n");
+                ffmpeg.av_log(null, ffmpeg.AV_LOG_ERROR, $"Option {Helpers.PtrToString(formatOption->key)} not found.\n");
                 ret = ffmpeg.AVERROR_OPTION_NOT_FOUND;
                 goto fail;
             }
@@ -668,8 +663,8 @@
 
             max_frame_duration = (ic->iformat->flags & ffmpeg.AVFMT_TS_DISCONT) != 0 ? 10.0 : 3600.0;
 
-            if (string.IsNullOrWhiteSpace(Renderer.window_title) && (t = ffmpeg.av_dict_get(ic->metadata, "title", null, 0)) != null)
-                Renderer.window_title = $"{Helpers.PtrToString(t->value)} - {o.input_filename}";
+            if (string.IsNullOrWhiteSpace(Renderer.window_title) && (formatOption = ffmpeg.av_dict_get(ic->metadata, "title", null, 0)) != null)
+                Renderer.window_title = $"{Helpers.PtrToString(formatOption->value)} - {o.input_filename}";
 
             /* if seeking requested, we execute it */
             if (o.start_time != ffmpeg.AV_NOPTS_VALUE)
@@ -843,11 +838,7 @@
                 }
 
                 /* if the queue are full, no need to read more */
-                if (o.infinite_buffer < 1 &&
-                      (Audio.Packets.Size + Video.Packets.Size + Subtitle.Packets.Size > Constants.MAX_QUEUE_SIZE
-                    || (Audio.HasEnoughPackets &&
-                        Video.HasEnoughPackets &&
-                        Subtitle.HasEnoughPackets)))
+                if (o.infinite_buffer < 1 && (PacketQueueSize > Constants.MAX_QUEUE_SIZE || HasEnoughPackets))
                 {
                     /* wait 10 ms */
                     continue_read_thread.WaitOne(10);
