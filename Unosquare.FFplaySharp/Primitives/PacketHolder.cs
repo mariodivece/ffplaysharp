@@ -2,24 +2,25 @@
 {
     using FFmpeg.AutoGen;
     using System;
+    using System.Runtime.InteropServices;
 
     public unsafe sealed class PacketHolder : ISerialProvider, IDisposable
     {
-        static PacketHolder()
-        {
-            var flushPacket = ffmpeg.av_packet_alloc();
-            ffmpeg.av_init_packet(flushPacket);
-            flushPacket->data = (byte*)flushPacket;
-            FlushPacket = flushPacket;
-        }
-
         public PacketHolder(AVPacket* packetPtr)
         {
             PacketPtr = packetPtr;
             IsFlushPacket = HasFlushData(packetPtr);
         }
 
-        public static AVPacket* FlushPacket { get; }
+        public static AVPacket* CreateFlushPacket()
+        {
+            var flushPacket = ffmpeg.av_packet_alloc();
+            ffmpeg.av_init_packet(flushPacket);
+            flushPacket->data = (byte*)flushPacket;
+            return flushPacket;
+        }
+
+        public static int PacketStructureSize { get; } = Marshal.SizeOf<AVPacket>();
 
         public AVPacket* PacketPtr { get; private set; }
 
@@ -30,13 +31,13 @@
         public PacketHolder Next { get; set; }
 
         public static bool HasFlushData(AVPacket* packet)
-            => packet != null && packet->data == FlushPacket->data;
+            => packet != null && packet->data == (byte*)packet;
 
         public void Dispose()
         {
             var packetPtr = PacketPtr;
 
-            if (packetPtr != null && !IsFlushPacket)
+            if (packetPtr != null)
                 ffmpeg.av_packet_free(&packetPtr);
 
             PacketPtr = null;

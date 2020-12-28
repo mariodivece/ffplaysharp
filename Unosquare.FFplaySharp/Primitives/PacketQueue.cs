@@ -54,7 +54,7 @@
             get { lock (SyncLock) return m_IsClosed; }
         }
 
-        public bool PutFlush() => Put(PacketHolder.FlushPacket);
+        public bool PutFlush() => Put(PacketHolder.CreateFlushPacket());
 
         public bool PutNull()
         {
@@ -95,7 +95,7 @@
                     IsAvailableEvent.Set();
                 }
 
-                if (!newPacket.IsFlushPacket && !result)
+                if (!result)
                     newPacket.Dispose();
             }
 
@@ -142,7 +142,7 @@
             lock (SyncLock)
             {
                 m_IsClosed = false;
-                Put(PacketHolder.FlushPacket);
+                PutFlush();
             }
         }
 
@@ -163,7 +163,7 @@
                             Last = null;
 
                         Count--;
-                        Size -= (item.PacketPtr->size + sizeof(IntPtr));
+                        Size -= (item.PacketPtr->size + PacketHolder.PacketStructureSize);
                         Duration -= item.PacketPtr->duration;
                         return item;
                     }
