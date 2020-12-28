@@ -9,6 +9,7 @@
 
     public unsafe class MediaRenderer
     {
+        private readonly SDL.SDL_AudioCallback AudioCallback;
         private uint AudioDeviceId;
 
         public long last_mouse_left_click;
@@ -43,6 +44,11 @@
         public long last_time_status = 0;
 
         public int audio_volume;
+
+        public MediaRenderer()
+        {
+            AudioCallback = new(sdl_audio_callback);
+        }
 
         public MediaContainer Container { get; private set; }
 
@@ -340,7 +346,7 @@
             wantedSpec.format = SDL.AUDIO_S16SYS;
             wantedSpec.silence = 0;
             wantedSpec.samples = (ushort)Math.Max(Constants.SDL_AUDIO_MIN_BUFFER_SIZE, 2 << ffmpeg.av_log2((uint)(wantedSpec.freq / Constants.SDL_AUDIO_MAX_CALLBACKS_PER_SEC)));
-            wantedSpec.callback = sdl_audio_callback;
+            wantedSpec.callback = AudioCallback;
             // wanted_spec.userdata = GCHandle.ToIntPtr(VideoStateHandle);
 
             const int AudioDeviceFlags = (int)(SDL.SDL_AUDIO_ALLOW_FREQUENCY_CHANGE | SDL.SDL_AUDIO_ALLOW_CHANNELS_CHANGE);

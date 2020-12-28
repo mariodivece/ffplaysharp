@@ -33,7 +33,7 @@
             const int SearhChildrenFlags = ffmpeg.AV_OPT_SEARCH_CHILDREN;
 
             var o = Container.Options;
-            
+
             var sample_fmts = new[] { (int)AVSampleFormat.AV_SAMPLE_FMT_S16 };
 
             AVFilterContext* inputFilterContext = null;
@@ -44,9 +44,8 @@
 
             {
                 var audioFilterGraph = FilterGraph;
-                // TODO: sometimes agraph has weird memory.
-                if (audioFilterGraph != null && audioFilterGraph->nb_filters > 0)
-                    ffmpeg.avfilter_graph_free(&audioFilterGraph);
+                ffmpeg.avfilter_graph_free(&audioFilterGraph);
+                FilterGraph = null;
             }
 
             FilterGraph = ffmpeg.avfilter_graph_alloc();
@@ -78,7 +77,7 @@
 
             ret = ffmpeg.avfilter_graph_create_filter(
                 &inputFilterContext, sourceBuffer, SourceBufferName, sourceBufferOptions, null, FilterGraph);
-            
+
             if (ret < 0)
                 goto end;
 
@@ -120,8 +119,8 @@
         end:
             if (ret < 0)
             {
-                var audioFilterGraph = FilterGraph;
-                ffmpeg.avfilter_graph_free(&audioFilterGraph);
+                var filterGraph = FilterGraph;
+                ffmpeg.avfilter_graph_free(&filterGraph);
                 FilterGraph = null;
             }
 
@@ -454,9 +453,9 @@
             } while (ret >= 0 || ret == ffmpeg.AVERROR(ffmpeg.EAGAIN) || ret == ffmpeg.AVERROR_EOF);
 
         the_end:
-            var agraph = FilterGraph;
-            ffmpeg.avfilter_graph_free(&agraph);
-            agraph = null;
+            var filterGraph = FilterGraph;
+            ffmpeg.avfilter_graph_free(&filterGraph);
+            FilterGraph = null;
             ffmpeg.av_frame_free(&decodedFrame);
         }
     }

@@ -192,7 +192,11 @@
                     if (CodecContext->codec_type == AVMediaType.AVMEDIA_TYPE_SUBTITLE)
                     {
                         var gotSubtitle = 0;
-                        decodedSubtitle = (AVSubtitle*)ffmpeg.av_malloc((ulong)sizeof(AVSubtitle));
+
+                        // TODO: ensure subtatile gets freed. Pretty sure there is a memory leak around here.
+                        if (decodedSubtitle == null)
+                            decodedSubtitle = (AVSubtitle*)ffmpeg.av_malloc((ulong)sizeof(AVSubtitle));
+
                         resultCode = ffmpeg.avcodec_decode_subtitle2(CodecContext, decodedSubtitle, &gotSubtitle, currentPacket.PacketPtr);
 
                         if (resultCode < 0)

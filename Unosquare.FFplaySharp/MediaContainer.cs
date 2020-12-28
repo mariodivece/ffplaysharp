@@ -11,6 +11,7 @@
 
     public unsafe class MediaContainer
     {
+        private readonly AVIOInterruptCB_callback InputInterruptCallback;
         private bool WasPaused;
         private bool IsPictureAttachmentPending;
         public bool IsSeekRequested { get; private set; }
@@ -91,6 +92,7 @@
 
         private MediaContainer(ProgramOptions options, MediaRenderer renderer)
         {
+            InputInterruptCallback = new(InputInterrupt);
             Options = options ?? new();
             Audio = new(this);
             Video = new(this);
@@ -603,7 +605,7 @@
             IsAtEndOfStream = false;
 
             var ic = ffmpeg.avformat_alloc_context();
-            ic->interrupt_callback.callback = (AVIOInterruptCB_callback)InputInterrupt;
+            ic->interrupt_callback.callback = InputInterruptCallback;
 
             if (ffmpeg.av_dict_get(o.format_opts, "scan_all_pmts", null, ffmpeg.AV_DICT_MATCH_CASE) == null)
             {
