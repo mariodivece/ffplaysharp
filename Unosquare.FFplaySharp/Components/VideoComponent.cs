@@ -110,9 +110,9 @@
                         : 0);
 
                     var tb = ffmpeg.av_buffersink_get_time_base(outputFilter);
-                    var pts = (decodedFrame->pts == ffmpeg.AV_NOPTS_VALUE)
-                        ? double.NaN
-                        : decodedFrame->pts * ffmpeg.av_q2d(tb);
+                    var pts = decodedFrame->pts.IsValidPts()
+                        ? decodedFrame->pts * ffmpeg.av_q2d(tb)
+                        : double.NaN;
 
                     ret = EnqueueFrame(decodedFrame, pts, duration, PacketSerial);
                     ffmpeg.av_frame_unref(decodedFrame);
@@ -166,18 +166,17 @@
 
             if (gotPicture != 0)
             {
-                var dpts = double.NaN;
-
-                if (frame->pts != ffmpeg.AV_NOPTS_VALUE)
-                    dpts = ffmpeg.av_q2d(Stream->time_base) * frame->pts;
+                var decoderPts = frame->pts.IsValidPts()
+                    ? ffmpeg.av_q2d(Stream->time_base) * frame->pts
+                    : double.NaN;
 
                 frame->sample_aspect_ratio = ffmpeg.av_guess_sample_aspect_ratio(Container.InputContext, Stream, frame);
 
                 if (Container.Options.framedrop > 0 || (Container.Options.framedrop != 0 && Container.MasterSyncMode != ClockSync.Video))
                 {
-                    if (frame->pts != ffmpeg.AV_NOPTS_VALUE)
+                    if (frame->pts.IsValidPts())
                     {
-                        var diff = dpts - Container.MasterTime;
+                        var diff = decoderPts - Container.MasterTime;
                         if (!double.IsNaN(diff) && Math.Abs(diff) < Constants.AV_NOSYNC_THRESHOLD &&
                             diff - Container.frame_last_filter_delay < 0 &&
                             PacketSerial == Container.VideoClock.Serial &&

@@ -14,9 +14,10 @@
 
         public long last_mouse_left_click;
 
-        public long audio_callback_time;
-        public int audio_buf_index; /* in bytes */
-        public int audio_write_buf_size;
+        public long audio_callback_time { get; private set; }
+
+        private int audio_buf_index; /* in bytes */
+        private int audio_write_buf_size;
 
         public int default_width = 640;
         public int default_height = 480;
@@ -317,16 +318,16 @@
             if (!string.IsNullOrWhiteSpace(env))
             {
                 wantedChannelCount = int.Parse(env);
-                wantedChannelLayout = ffmpeg.av_get_default_channel_layout(wantedChannelCount);
+                wantedChannelLayout = AudioParams.DefaultChannelLayoutFor(wantedChannelCount);
             }
 
-            if (wantedChannelLayout == 0 || wantedChannelCount != ffmpeg.av_get_channel_layout_nb_channels((ulong)wantedChannelLayout))
+            if (wantedChannelLayout == 0 || wantedChannelCount != AudioParams.ChannelCountFor(wantedChannelLayout))
             {
-                wantedChannelLayout = ffmpeg.av_get_default_channel_layout(wantedChannelCount);
+                wantedChannelLayout = AudioParams.DefaultChannelLayoutFor(wantedChannelCount);
                 wantedChannelLayout &= ~ffmpeg.AV_CH_LAYOUT_STEREO_DOWNMIX;
             }
 
-            wantedChannelCount = ffmpeg.av_get_channel_layout_nb_channels((ulong)wantedChannelLayout);
+            wantedChannelCount = AudioParams.ChannelCountFor(wantedChannelLayout);
 
             var wantedSpec = new SDL.SDL_AudioSpec
             {
@@ -366,7 +367,7 @@
                     }
                 }
 
-                wantedChannelLayout = ffmpeg.av_get_default_channel_layout(wantedSpec.channels);
+                wantedChannelLayout = AudioParams.DefaultChannelLayoutFor(wantedSpec.channels);
             }
 
             if (deviceSpec.format != SDL.AUDIO_S16SYS)
@@ -378,7 +379,7 @@
 
             if (deviceSpec.channels != wantedSpec.channels)
             {
-                wantedChannelLayout = ffmpeg.av_get_default_channel_layout(deviceSpec.channels);
+                wantedChannelLayout = AudioParams.DefaultChannelLayoutFor(deviceSpec.channels);
                 if (wantedChannelLayout == 0)
                 {
                     ffmpeg.av_log(null, ffmpeg.AV_LOG_ERROR,
@@ -391,13 +392,14 @@
             audio_hw_params.Frequency = deviceSpec.freq;
             audio_hw_params.Layout = wantedChannelLayout;
             audio_hw_params.Channels = deviceSpec.channels;
-            audio_hw_params.FrameSize = ffmpeg.av_samples_get_buffer_size(null, audio_hw_params.Channels, 1, audio_hw_params.SampleFormat, 1);
-            audio_hw_params.BytesPerSecond = ffmpeg.av_samples_get_buffer_size(null, audio_hw_params.Channels, audio_hw_params.Frequency, audio_hw_params.SampleFormat, 1);
+
             if (audio_hw_params.BytesPerSecond <= 0 || audio_hw_params.FrameSize <= 0)
             {
                 ffmpeg.av_log(null, ffmpeg.AV_LOG_ERROR, "av_samples_get_buffer_size failed\n");
                 return -1;
             }
+
+            audio_buf_index = 0;
 
             return (int)deviceSpec.size;
         }

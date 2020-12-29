@@ -3,6 +3,7 @@
     using FFmpeg.AutoGen;
     using SDL2;
     using System;
+    using System.Threading;
     using Unosquare.FFplaySharp.Primitives;
 
     public static unsafe class PortedProgram
@@ -57,7 +58,7 @@
 
         static SDL.SDL_Event refresh_loop_wait_event(MediaContainer container)
         {
-            var remainingTime = 0.0;
+            var remainingTime = 0d;
             SDL.SDL_PumpEvents();
             var events = new SDL.SDL_Event[1];
 
@@ -70,7 +71,7 @@
                 }
 
                 if (remainingTime > 0.0)
-                    ffmpeg.av_usleep((uint)(remainingTime * 1000000.0));
+                    Thread.Sleep(TimeSpan.FromSeconds(remainingTime));
 
                 remainingTime = Constants.REFRESH_RATE;
 
@@ -205,7 +206,7 @@
                                     if (double.IsNaN(pos))
                                         pos = (double)container.SeekPosition / ffmpeg.AV_TIME_BASE;
                                     pos += incr;
-                                    if (container.InputContext->start_time != ffmpeg.AV_NOPTS_VALUE && pos < container.InputContext->start_time / (double)ffmpeg.AV_TIME_BASE)
+                                    if (container.InputContext->start_time.IsValidPts() && pos < container.InputContext->start_time / (double)ffmpeg.AV_TIME_BASE)
                                         pos = container.InputContext->start_time / (double)ffmpeg.AV_TIME_BASE;
                                     container.stream_seek((long)(pos * ffmpeg.AV_TIME_BASE), (long)(incr * ffmpeg.AV_TIME_BASE), false);
                                 }
@@ -271,7 +272,7 @@
 
                             ffmpeg.av_log(null, ffmpeg.AV_LOG_INFO, $"Seek to {(seekPercent * 100):0.00} ({targetTime}) of total duration ({totalDuration})       \n");
                             
-                            if (container.InputContext->start_time != ffmpeg.AV_NOPTS_VALUE)
+                            if (container.InputContext->start_time.IsValidPts())
                                 targetPosition += container.InputContext->start_time;
 
                             container.stream_seek(targetPosition, 0, false);

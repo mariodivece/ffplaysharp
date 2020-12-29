@@ -127,12 +127,12 @@
                                         den = decodedFrame->sample_rate
                                     };
 
-                                    if (decodedFrame->pts != ffmpeg.AV_NOPTS_VALUE)
+                                    if (decodedFrame->pts.IsValidPts())
                                         decodedFrame->pts = ffmpeg.av_rescale_q(decodedFrame->pts, CodecContext->pkt_timebase, decoderTimeBase);
-                                    else if (NextPts != ffmpeg.AV_NOPTS_VALUE)
+                                    else if (NextPts.IsValidPts())
                                         decodedFrame->pts = ffmpeg.av_rescale_q(NextPts, NextPtsTimeBase, decoderTimeBase);
 
-                                    if (decodedFrame->pts != ffmpeg.AV_NOPTS_VALUE)
+                                    if (decodedFrame->pts.IsValidPts())
                                     {
                                         NextPts = decodedFrame->pts + decodedFrame->nb_samples;
                                         NextPtsTimeBase = decoderTimeBase;

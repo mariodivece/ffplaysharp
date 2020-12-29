@@ -51,9 +51,9 @@
         public int audio_clock_serial;
         public int audio_hw_buf_size;
         public byte* audio_buf;
-        public byte* audio_buf1;
+        
         public uint audio_buf_size; /* in bytes */
-        public uint audio_buf1_size;
+        
 
         public bool IsMuted { get; private set; }
         public int frame_drops_early;
@@ -492,7 +492,6 @@
                     audio_hw_buf_size = ret;
                     Audio.SourceSpec = Audio.TargetSpec;
                     audio_buf_size = 0;
-                    Renderer.audio_buf_index = 0;
 
                     /* init averaging filter */
                     Audio.audio_diff_avg_coef = Math.Exp(Math.Log(0.01) / Constants.AUDIO_DIFF_AVG_NB);
@@ -863,7 +862,7 @@
                 {
                     if (o.loop != 1 && (o.loop == 0 || (--o.loop) > 0))
                     {
-                        stream_seek(o.start_time != ffmpeg.AV_NOPTS_VALUE ? o.start_time : 0, 0, false);
+                        stream_seek(o.start_time.IsValidPts() ? o.start_time : 0, 0, false);
                     }
                     else if (o.autoexit)
                     {
@@ -906,11 +905,14 @@
 
                 // check if packet is in play range specified by user, then queue, otherwise discard.
                 var streamStartPts = ic->streams[readPacket->stream_index]->start_time;
-                var packetPts = readPacket->pts == ffmpeg.AV_NOPTS_VALUE ? readPacket->dts : readPacket->pts;
-                var isPacketInPlayRange = o.duration == ffmpeg.AV_NOPTS_VALUE ||
-                        (packetPts - (streamStartPts != ffmpeg.AV_NOPTS_VALUE ? streamStartPts : 0)) *
+                var packetPts = readPacket->pts.IsValidPts()
+                    ? readPacket->pts
+                    : readPacket->dts;
+
+                var isPacketInPlayRange = !o.duration.IsValidPts() ||
+                        (packetPts - (streamStartPts.IsValidPts() ? streamStartPts : 0)) *
                         ffmpeg.av_q2d(ic->streams[readPacket->stream_index]->time_base) -
-                        (double)(o.start_time != ffmpeg.AV_NOPTS_VALUE ? o.start_time : 0) / ffmpeg.AV_TIME_BASE
+                        (double)(o.start_time.IsValidPts() ? o.start_time : 0) / ffmpeg.AV_TIME_BASE
                         <= ((double)o.duration / ffmpeg.AV_TIME_BASE);
 
                 var component = ComponentFromStreamIndex(readPacket->stream_index);

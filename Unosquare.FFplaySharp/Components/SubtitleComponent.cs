@@ -33,7 +33,7 @@
 
                 if (gotSubtitle != 0 && queuedFrame.SubtitlePtr->format == 0)
                 {
-                    queuedFrame.Pts = queuedFrame.SubtitlePtr->pts != ffmpeg.AV_NOPTS_VALUE
+                    queuedFrame.Pts = queuedFrame.SubtitlePtr->pts.IsValidPts()
                         ? queuedFrame.SubtitlePtr->pts / (double)ffmpeg.AV_TIME_BASE : 0;
                     queuedFrame.Serial = PacketSerial;
                     queuedFrame.Width = CodecContext->width;

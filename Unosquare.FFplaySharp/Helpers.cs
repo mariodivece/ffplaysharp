@@ -5,6 +5,7 @@
     using System.Collections.Generic;
     using System.IO;
     using System.Runtime.InteropServices;
+    using Unosquare.FFplaySharp.Primitives;
 
     public static class Helpers
     {
@@ -61,7 +62,7 @@
 
         public static long ValidateChannelLayout(ulong channelLayout, int channelCount)
         {
-            if (channelLayout != 0 && ffmpeg.av_get_channel_layout_nb_channels(channelLayout) == channelCount)
+            if (channelLayout != 0 && AudioParams.ChannelCountFor(channelLayout) == channelCount)
                 return (long)channelLayout;
             else
                 return 0;
@@ -237,5 +238,7 @@
 
             return opts;
         }
+
+        public static bool IsValidPts(this long pts) => pts != ffmpeg.AV_NOPTS_VALUE;
     }
 }
