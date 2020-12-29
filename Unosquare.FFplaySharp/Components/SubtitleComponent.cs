@@ -19,7 +19,7 @@
 
         private int DecodeFrame(out AVSubtitle* frame) => DecodeFrame(out _, out frame);
 
-        protected override void WorkerThreadMethod()
+        protected override void DecodingThreadMethod()
         {
             while (true)
             {

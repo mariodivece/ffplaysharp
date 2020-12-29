@@ -20,7 +20,7 @@
 
         protected override FrameQueue CreateFrameQueue() => new(Packets, Constants.VIDEO_PICTURE_QUEUE_SIZE, true);
 
-        protected override void WorkerThreadMethod()
+        protected override void DecodingThreadMethod()
         {
             int ret;
             var frameRate = ffmpeg.av_guess_frame_rate(Container.InputContext, Stream, null);
@@ -327,5 +327,4 @@
             return ret;
         }
     }
-
 }

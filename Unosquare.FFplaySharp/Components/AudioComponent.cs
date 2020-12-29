@@ -376,7 +376,7 @@
 
         private int DecodeFrame(out AVFrame* frame) => DecodeFrame(out frame, out _);
 
-        protected override void WorkerThreadMethod()
+        protected override void DecodingThreadMethod()
         {
             var last_serial = -1;
             int gotSamples = 0;

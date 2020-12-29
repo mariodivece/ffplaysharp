@@ -88,7 +88,7 @@
         public int vfilter_idx;
         public MediaRenderer Renderer { get; }
 
-        public AutoResetEvent continue_read_thread = new(true);
+        public AutoResetEvent NeedsMorePacketsEvent = new(true);
 
         private MediaContainer(ProgramOptions options, MediaRenderer renderer)
         {
@@ -306,7 +306,7 @@
         the_end:
             if (program != null && nextStreamIndex != -1)
                 nextStreamIndex = (int)program->stream_index[nextStreamIndex];
-            ffmpeg.av_log(null, ffmpeg.AV_LOG_INFO, $"Switch {ffmpeg.av_get_media_type_string(component.MediaType)} stream from #{component.StreamIndex} to #{nextStreamIndex}\n");
+            ffmpeg.av_log(null, ffmpeg.AV_LOG_INFO, $"Switch {component.MediaTypeString} stream from #{component.StreamIndex} to #{nextStreamIndex}\n");
 
             component.Close();
             stream_component_open(nextStreamIndex);
@@ -314,7 +314,7 @@
 
         public void StartReadThread()
         {
-            ReadingThread = new Thread(read_thread) { IsBackground = true, Name = nameof(read_thread) };
+            ReadingThread = new Thread(ReadingThreadMethod) { IsBackground = true, Name = nameof(ReadingThreadMethod) };
             ReadingThread.Start();
         }
 
@@ -359,7 +359,7 @@
                 SeekFlags |= ffmpeg.AVSEEK_FLAG_BYTE;
 
             IsSeekRequested = true;
-            continue_read_thread.Set();
+            NeedsMorePacketsEvent.Set();
         }
 
         public void seek_chapter(int incrementCount)
@@ -564,7 +564,7 @@
                 component.Frames?.Dispose();
             }
 
-            continue_read_thread.Dispose();
+            NeedsMorePacketsEvent.Dispose();
             ffmpeg.sws_freeContext(Video.ConvertContext);
             ffmpeg.sws_freeContext(Subtitle.ConvertContext);
 
@@ -590,7 +590,7 @@
         }
 
         /* this thread gets the stream from the disk or the network */
-        private void read_thread()
+        private void ReadingThreadMethod()
         {
             const int MediaTypeCount = (int)AVMediaType.AVMEDIA_TYPE_NB;
 
@@ -781,6 +781,7 @@
             {
                 if (IsAbortRequested)
                     break;
+
                 if (IsPaused != WasPaused)
                 {
                     WasPaused = IsPaused;
@@ -853,7 +854,7 @@
                 if (o.infinite_buffer < 1 && (HasEnoughPacketSize || HasEnoughPacketCount))
                 {
                     /* wait 10 ms */
-                    continue_read_thread.WaitOne(10);
+                    NeedsMorePacketsEvent.WaitOne(10);
                     continue;
                 }
                 if (!IsPaused &&
@@ -894,7 +895,7 @@
                             break;
                     }
 
-                    continue_read_thread.WaitOne(10);
+                    NeedsMorePacketsEvent.WaitOne(10);
 
                     continue;
                 }

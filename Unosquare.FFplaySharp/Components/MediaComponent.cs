@@ -7,7 +7,6 @@
     public abstract unsafe class MediaComponent
     {
         private readonly int ReorderPts;
-        private readonly AutoResetEvent EmptyQueueEvent;
 
         private PacketHolder PendingPacket;
         private bool IsPacketPending;
@@ -20,7 +19,6 @@
             Container = container;
             Packets = new(this);
             Frames = CreateFrameQueue();
-            EmptyQueueEvent = Container.continue_read_thread;
             ReorderPts = Container.Options.decoder_reorder_pts;
         }
 
@@ -39,6 +37,8 @@
         public int LastStreamIndex;
 
         public abstract AVMediaType MediaType { get; }
+
+        public string MediaTypeString => ffmpeg.av_get_media_type_string(MediaType);
 
         public bool IsAudio => MediaType == AVMediaType.AVMEDIA_TYPE_AUDIO;
 
@@ -156,7 +156,7 @@
                 do
                 {
                     if (Packets.Count == 0)
-                        EmptyQueueEvent.Set();
+                        Container.NeedsMorePacketsEvent.Set();
 
                     if (IsPacketPending)
                     {
@@ -261,10 +261,10 @@
             Worker.Start();
         }
 
-        public virtual void Start() => Start(WorkerThreadMethod, $"{GetType().Name}Worker");
+        public virtual void Start() => Start(DecodingThreadMethod, $"{GetType().Name}Worker");
 
         protected abstract FrameQueue CreateFrameQueue();
 
-        protected abstract void WorkerThreadMethod();
+        protected abstract void DecodingThreadMethod();
     }
 }
