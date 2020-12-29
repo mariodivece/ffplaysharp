@@ -58,7 +58,6 @@
         public const int VIDEO_PICTURE_QUEUE_SIZE = 3;
         public const int SUBPICTURE_QUEUE_SIZE = 16;
         public const int SAMPLE_QUEUE_SIZE = 9;
-        public static readonly int FRAME_QUEUE_SIZE = Math.Max(SAMPLE_QUEUE_SIZE, Math.Max(VIDEO_PICTURE_QUEUE_SIZE, SUBPICTURE_QUEUE_SIZE));
 
         public static readonly AVRational AV_TIME_BASE_Q = new() { num = 1, den = ffmpeg.AV_TIME_BASE };
 

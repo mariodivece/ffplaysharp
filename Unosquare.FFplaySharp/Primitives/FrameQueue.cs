@@ -17,13 +17,17 @@
 
         public FrameQueue(PacketQueue packets, int maxSize, bool keepLast)
         {
-            Frames = new FrameHolder[Constants.FRAME_QUEUE_SIZE];
-            for (var i = 0; i < Frames.Length; i++)
-                Frames[i] = new FrameHolder();
+            var maxSizeLimit = Math.Max(
+                Constants.SAMPLE_QUEUE_SIZE, Math.Max(
+                    Constants.VIDEO_PICTURE_QUEUE_SIZE, Constants.SUBPICTURE_QUEUE_SIZE));
 
             Packets = packets;
-            MaxSize = Math.Min(maxSize, Constants.FRAME_QUEUE_SIZE);
+            MaxSize = Math.Min(maxSize, maxSizeLimit);
             KeepLast = keepLast;
+
+            Frames = new FrameHolder[MaxSize];
+            for (var i = 0; i < Frames.Length; i++)
+                Frames[i] = new FrameHolder();
         }
 
         public bool IsReadIndexShown
@@ -106,7 +110,7 @@
         {
             lock (SyncLock)
             {
-                if (++WriteIndex == MaxSize)
+                if (++WriteIndex >= MaxSize)
                     WriteIndex = 0;
 
                 Size++;
@@ -126,7 +130,7 @@
                 }
 
                 Frames[ReadIndex].Unreference();
-                if (++ReadIndex == MaxSize)
+                if (++ReadIndex >= MaxSize)
                     ReadIndex = 0;
 
                 Size--;
@@ -152,9 +156,9 @@
             {
                 lock (SyncLock)
                 {
-                    var fp = Frames[ReadIndex];
-                    if (IsReadIndexShown && fp.Serial == Packets.Serial)
-                        return fp.Position;
+                    var currentFrame = Frames[ReadIndex];
+                    if (IsReadIndexShown && currentFrame.Serial == Packets.Serial)
+                        return currentFrame.Position;
                     else
                         return -1;
                 }
@@ -163,7 +167,7 @@
 
         public void Dispose()
         {
-            for (var i = 0; i < MaxSize; i++)
+            for (var i = 0; i < Frames.Length; i++)
             {
                 Frames[i].Dispose();
                 Frames[i] = null;
