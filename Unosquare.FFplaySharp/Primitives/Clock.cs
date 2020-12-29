@@ -68,12 +68,12 @@
             }
         }
 
-        public void SyncToSlave(Clock slave)
+        public void SyncToSlave(Clock slaveClock)
         {
-            var clock = Time;
-            var slave_clock = slave.Time;
-            if (!double.IsNaN(slave_clock) && (double.IsNaN(clock) || Math.Abs(clock - slave_clock) > Constants.AV_NOSYNC_THRESHOLD))
-                Set(slave_clock, slave.Serial);
+            var currentTime = Time;
+            var slaveTime = slaveClock.Time;
+            if (!double.IsNaN(slaveTime) && (double.IsNaN(currentTime) || Math.Abs(currentTime - slaveTime) > Constants.AV_NOSYNC_THRESHOLD))
+                Set(slaveTime, slaveClock.Serial);
         }
     }
 }

@@ -19,7 +19,13 @@
         public AVSubtitle* SubtitlePtr { get; set; }
 
         public int Serial;
-        public double Pts;           /* presentation timestamp for the frame */
+        
+        /// <summary>
+        /// Gets or sets the Presentation time in seconds.
+        /// This is not a timestamp.
+        /// </summary>
+        public double Time { get; set; }
+
         public double Duration;      /* estimated duration of the frame */
         public long Position;          /* byte position of the frame in the input file */
         public int Width;
@@ -28,6 +34,8 @@
         public AVRational Sar;
         public bool uploaded;
         public bool FlipVertical;
+
+        public bool HasValidTime => !double.IsNaN(Time);
 
         public void Unreference()
         {

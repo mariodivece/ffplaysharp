@@ -64,7 +64,7 @@
         {
             /* wait until we have space to put a new frame */
             while (Size >= MaxSize && !Packets.IsClosed)
-                ChangedEvent.WaitOne(10);
+                ChangedEvent.WaitOne(1);
 
             lock (SyncLock)
             {
@@ -97,7 +97,7 @@
         {
             /* wait until we have a readable a new frame */
             while (Size - (IsReadIndexShown ? 1 : 0) <= 0 && !Packets.IsClosed)
-                ChangedEvent.WaitOne(10);
+                ChangedEvent.WaitOne(1);
 
             if (Packets.IsClosed)
                 return null;

@@ -135,7 +135,8 @@
         {
             var frameSlot = Frames.PeekWriteable();
 
-            if (frameSlot == null) return -1;
+            if (frameSlot == null)
+                return -1;
 
             frameSlot.Sar = sourceFrame->sample_aspect_ratio;
             frameSlot.uploaded = false;
@@ -144,7 +145,7 @@
             frameSlot.Height = sourceFrame->height;
             frameSlot.Format = sourceFrame->format;
 
-            frameSlot.Pts = pts;
+            frameSlot.Time = pts;
             frameSlot.Duration = duration;
             frameSlot.Position = sourceFrame->pkt_pos;
             frameSlot.Serial = serial;

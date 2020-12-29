@@ -125,7 +125,7 @@
                 {
                     sp = container.Subtitle.Frames.Peek();
 
-                    if (vp.Pts >= sp.Pts + ((float)sp.SubtitlePtr->start_display_time / 1000))
+                    if (vp.Time >= sp.Time + ((float)sp.SubtitlePtr->start_display_time / 1000))
                     {
                         if (!sp.uploaded)
                         {
@@ -606,8 +606,8 @@
                     if (delay > 0 && time - container.frame_timer > Constants.AV_SYNC_THRESHOLD_MAX)
                         container.frame_timer = time;
 
-                    if (!double.IsNaN(vp.Pts))
-                        update_video_pts(container, vp.Pts, vp.Position, vp.Serial);
+                    if (vp.HasValidTime)
+                        update_video_pts(container, vp.Time, vp.Position, vp.Serial);
 
                     if (container.Video.Frames.PendingCount > 1)
                     {
@@ -636,8 +636,8 @@
                                 sp2 = null;
 
                             if (sp.Serial != container.Subtitle.Packets.Serial
-                                    || (container.VideoClock.Pts > (sp.Pts + ((float)sp.SubtitlePtr->end_display_time / 1000)))
-                                    || (sp2 != null && container.VideoClock.Pts > (sp2.Pts + ((float)sp2.SubtitlePtr->start_display_time / 1000))))
+                                    || (container.VideoClock.Pts > (sp.Time + ((float)sp.SubtitlePtr->end_display_time / 1000)))
+                                    || (sp2 != null && container.VideoClock.Pts > (sp2.Time + ((float)sp2.SubtitlePtr->start_display_time / 1000))))
                             {
                                 if (sp.uploaded)
                                 {
@@ -885,9 +885,9 @@
 
             audio_write_buf_size = (int)(Container.audio_buf_size - audio_buf_index);
             /* Let's assume the audio driver that is used by SDL has two periods. */
-            if (!double.IsNaN(Container.Audio.audio_clock))
+            if (!double.IsNaN(Container.Audio.FrameTime))
             {
-                Container.AudioClock.Set(Container.Audio.audio_clock - (double)(2 * Container.audio_hw_buf_size + audio_write_buf_size) / Container.Audio.TargetSpec.BytesPerSecond, Container.audio_clock_serial, audio_callback_time / 1000000.0);
+                Container.AudioClock.Set(Container.Audio.FrameTime - (double)(2 * Container.audio_hw_buf_size + audio_write_buf_size) / Container.Audio.TargetSpec.BytesPerSecond, Container.audio_clock_serial, audio_callback_time / 1000000.0);
                 Container.ExternalClock.SyncToSlave(Container.AudioClock);
             }
         }
@@ -930,13 +930,13 @@
             return delay;
         }
 
-        static double vp_duration(MediaContainer container, FrameHolder vp, FrameHolder nextvp)
+        static double vp_duration(MediaContainer container, FrameHolder currentFrame, FrameHolder nextFrame)
         {
-            if (vp.Serial == nextvp.Serial)
+            if (currentFrame.Serial == nextFrame.Serial)
             {
-                double duration = nextvp.Pts - vp.Pts;
+                var duration = nextFrame.Time - currentFrame.Time;
                 if (double.IsNaN(duration) || duration <= 0 || duration > container.max_frame_duration)
-                    return vp.Duration;
+                    return currentFrame.Duration;
                 else
                     return duration;
             }

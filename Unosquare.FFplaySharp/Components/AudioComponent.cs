@@ -8,11 +8,16 @@
 
     public unsafe sealed class AudioComponent : FilteringMediaComponent
     {
-        private byte* audio_buf1;
-        private uint audio_buf1_size;
+        private byte* ResampledOutputBuffer;
+        private uint ResampledOutputBufferSize;
 
-        public double audio_clock;
-        public double last_audio_clock = 0;
+        /// <summary>
+        /// Gets or sets the Frame Time (ported from audio_clock)
+        /// </summary>
+        public double FrameTime { get; private set; }
+
+        private double LastFrameTime = 0;
+
         public double audio_diff_cum; /* used for AV difference average computation */
         public double audio_diff_threshold;
         public double audio_diff_avg_coef;
@@ -140,8 +145,6 @@
 */
         public int audio_decode_frame()
         {
-
-            double audio_clock0 = 0d;
             FrameHolder af;
 
             if (Container.IsPaused)
@@ -229,23 +232,23 @@
                     }
                 }
 
-                if (audio_buf1 == null)
+                if (ResampledOutputBuffer == null)
                 {
-                    audio_buf1 = (byte*)ffmpeg.av_mallocz((ulong)outputBufferSize);
-                    audio_buf1_size = (uint)outputBufferSize;
+                    ResampledOutputBuffer = (byte*)ffmpeg.av_mallocz((ulong)outputBufferSize);
+                    ResampledOutputBufferSize = (uint)outputBufferSize;
                 }
 
-                if (audio_buf1_size < outputBufferSize && audio_buf1 != null)
+                if (ResampledOutputBufferSize < outputBufferSize && ResampledOutputBuffer != null)
                 {
-                    ffmpeg.av_free(audio_buf1);
-                    audio_buf1 = (byte*)ffmpeg.av_mallocz((ulong)outputBufferSize);
-                    audio_buf1_size = (uint)outputBufferSize;
+                    ffmpeg.av_free(ResampledOutputBuffer);
+                    ResampledOutputBuffer = (byte*)ffmpeg.av_mallocz((ulong)outputBufferSize);
+                    ResampledOutputBufferSize = (uint)outputBufferSize;
                 }
 
                 var audioBufferIn = af.FramePtr->extended_data;
-                var audioBufferOut = audio_buf1;
+                var audioBufferOut = ResampledOutputBuffer;
                 var outputSampleCount = ffmpeg.swr_convert(ConvertContext, &audioBufferOut, wantedOutputSize, audioBufferIn, af.FramePtr->nb_samples);
-                audio_buf1 = audioBufferOut;
+                ResampledOutputBuffer = audioBufferOut;
                 af.FramePtr->extended_data = audioBufferIn;
 
                 if (outputSampleCount < 0)
@@ -264,7 +267,7 @@
                     }
                 }
 
-                Container.audio_buf = audio_buf1;
+                Container.audio_buf = ResampledOutputBuffer;
                 resampledBufferSize = outputSampleCount * TargetSpec.Channels * TargetSpec.BytesPerSample;
             }
             else
@@ -273,18 +276,18 @@
                 resampledBufferSize = frameBufferSize;
             }
 
-            audio_clock0 = audio_clock;
+            var currentFrameTime = FrameTime;
 
             // update the audio clock with the pts
-            audio_clock = !double.IsNaN(af.Pts)
-                ? af.Pts + (double)af.FramePtr->nb_samples / af.FramePtr->sample_rate
+            FrameTime = af.HasValidTime
+                ? af.Time + (double)af.FramePtr->nb_samples / af.FramePtr->sample_rate
                 : double.NaN;
 
             Container.audio_clock_serial = af.Serial;
             if (Debugger.IsAttached)
             {
-                Console.WriteLine($"audio: delay={(audio_clock - last_audio_clock),-8:0.####} clock={audio_clock,-8:0.####} clock0={audio_clock0,-8:0.####}");
-                last_audio_clock = audio_clock;
+                Console.WriteLine($"audio: delay={(FrameTime - LastFrameTime),-8:0.####} clock={FrameTime,-8:0.####} clock0={currentFrameTime,-8:0.####}");
+                LastFrameTime = FrameTime;
             }
 
             return resampledBufferSize;
@@ -323,7 +326,7 @@
                         }
 
                         ffmpeg.av_log(
-                            null, ffmpeg.AV_LOG_TRACE, $"diff={diff} adiff={avg_diff} sample_diff={(wantedSampleCount - sampleCount)} apts={audio_clock} {audio_diff_threshold}\n");
+                            null, ffmpeg.AV_LOG_TRACE, $"diff={diff} adiff={avg_diff} sample_diff={(wantedSampleCount - sampleCount)} apts={FrameTime} {audio_diff_threshold}\n");
                     }
                 }
                 else
@@ -351,11 +354,11 @@
             ffmpeg.swr_free(&contextPointer);
             ConvertContext = null;
 
-            if (audio_buf1 != null)
-                ffmpeg.av_free(audio_buf1);
+            if (ResampledOutputBuffer != null)
+                ffmpeg.av_free(ResampledOutputBuffer);
 
-            audio_buf1 = null;
-            audio_buf1_size = 0;
+            ResampledOutputBuffer = null;
+            ResampledOutputBufferSize = 0;
             Container.audio_buf = null;
 
             Container.InputContext->streams[StreamIndex]->discard = AVDiscard.AVDISCARD_ALL;
@@ -439,7 +442,7 @@
                         if (queuedFrame == null)
                             goto the_end;
 
-                        queuedFrame.Pts = decodedFrame->pts.IsValidPts()
+                        queuedFrame.Time = decodedFrame->pts.IsValidPts()
                             ? decodedFrame->pts * ffmpeg.av_q2d(decoderTimeBase)
                             : double.NaN;
 
