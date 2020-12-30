@@ -49,17 +49,21 @@
         public bool IsPictureAttachmentStream =>
             MediaType == AVMediaType.AVMEDIA_TYPE_VIDEO &&
             Stream != null &&
-            (Stream->disposition & ffmpeg.AV_DISPOSITION_ATTACHED_PIC) != 0;
+            Stream->disposition.HasFlag(ffmpeg.AV_DISPOSITION_ATTACHED_PIC);
 
         public bool HasEnoughPackets
         {
             get
             {
-                return StreamIndex < 0 ||
-                   Packets.IsClosed ||
-                   IsPictureAttachmentStream ||
-                   Packets.Count > Constants.MIN_FRAMES && (Packets.Duration == 0 ||
-                   ffmpeg.av_q2d(Stream->time_base) * Packets.Duration > 1.0);
+                var duration = Packets.DurationUnits > 0
+                    ? ffmpeg.av_q2d(Stream->time_base) * Packets.DurationUnits
+                    : 0d;
+
+                return StreamIndex < 0
+                    || Packets.IsClosed
+                    || IsPictureAttachmentStream
+                    || Packets.Count > Constants.MinPacketCount
+                    && (duration <= 0 || duration > 1.0);
             }
         }
 

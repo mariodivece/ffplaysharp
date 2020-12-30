@@ -12,9 +12,9 @@
         private readonly SDL.SDL_AudioCallback AudioCallback;
         private uint AudioDeviceId;
 
-        public long last_mouse_left_click;
+        public double last_mouse_left_click;
 
-        public long audio_callback_time { get; private set; }
+        public double audio_callback_time { get; private set; }
 
         private int audio_buf_index; /* in bytes */
         private int audio_write_buf_size;
@@ -42,7 +42,7 @@
         public bool force_refresh;
 
         // inlined static variables
-        public long last_time_status = 0;
+        public double last_time_status = 0;
 
         public int audio_volume;
 
@@ -548,14 +548,12 @@
         {
             double time;
 
-            FrameHolder sp, sp2;
-
             if (!container.IsPaused && container.MasterSyncMode == ClockSync.External && container.IsRealtime)
                 container.check_external_clock_speed();
 
             if (!container.Options.display_disable && container.show_mode != ShowMode.Video && container.Audio.Stream != null)
             {
-                time = ffmpeg.av_gettime_relative() / 1000000.0;
+                time = Clock.SystemTime;
                 if (force_refresh || container.last_vis_time + rdftspeed < time)
                 {
                     video_display(container);
@@ -573,8 +571,6 @@
                 }
                 else
                 {
-                    double last_duration, duration, delay;
-
                     /* dequeue the picture */
                     var lastvp = container.Video.Frames.PeekLast();
                     var vp = container.Video.Frames.Peek();
@@ -586,16 +582,16 @@
                     }
 
                     if (lastvp.Serial != vp.Serial)
-                        container.frame_timer = ffmpeg.av_gettime_relative() / 1000000.0;
+                        container.frame_timer = Clock.SystemTime;
 
                     if (container.IsPaused)
                         goto display;
 
                     /* compute nominal last_duration */
-                    last_duration = vp_duration(container, lastvp, vp);
-                    delay = compute_target_delay(last_duration, container);
+                    var last_duration = vp_duration(container, lastvp, vp);
+                    var delay = compute_target_delay(last_duration, container);
 
-                    time = ffmpeg.av_gettime_relative() / 1000000.0;
+                    time = Clock.SystemTime;
                     if (time < container.frame_timer + delay)
                     {
                         remaining_time = Math.Min(container.frame_timer + delay - time, remaining_time);
@@ -612,7 +608,7 @@
                     if (container.Video.Frames.PendingCount > 1)
                     {
                         var nextvp = container.Video.Frames.PeekNext();
-                        duration = vp_duration(container, vp, nextvp);
+                        var duration = vp_duration(container, vp, nextvp);
                         if (container.step == false &&
                             (container.Options.framedrop > 0 ||
                             (container.Options.framedrop != 0 && container.MasterSyncMode != ClockSync.Video))
@@ -628,12 +624,10 @@
                     {
                         while (container.Subtitle.Frames.PendingCount > 0)
                         {
-                            sp = container.Subtitle.Frames.Peek();
-
-                            if (container.Subtitle.Frames.PendingCount > 1)
-                                sp2 = container.Subtitle.Frames.PeekNext();
-                            else
-                                sp2 = null;
+                            var sp = container.Subtitle.Frames.Peek();
+                            var sp2 = container.Subtitle.Frames.PendingCount > 1
+                                ? container.Subtitle.Frames.PeekNext()
+                                : null;
 
                             if (sp.Serial != container.Subtitle.Packets.Serial
                                     || (container.VideoClock.Pts > (sp.Time + ((float)sp.SubtitlePtr->end_display_time / 1000)))
@@ -690,24 +684,16 @@
             force_refresh = false;
             if (container.Options.show_status != 0)
             {
-
-                long cur_time;
                 int aqsize, vqsize, sqsize;
-                double av_diff;
 
-                cur_time = ffmpeg.av_gettime_relative();
-                if (last_time_status == 0 || (cur_time - last_time_status) >= 30000)
+                var currentTime = Clock.SystemTime;
+                if (last_time_status == 0 || (currentTime - last_time_status) >= 0.03)
                 {
-                    aqsize = 0;
-                    vqsize = 0;
-                    sqsize = 0;
-                    if (container.Audio.Stream != null)
-                        aqsize = container.Audio.Packets.Size;
-                    if (container.Video.Stream != null)
-                        vqsize = container.Video.Packets.Size;
-                    if (container.Subtitle.Stream != null)
-                        sqsize = container.Subtitle.Packets.Size;
-                    av_diff = 0;
+                    aqsize = container.Audio.Stream != null ? container.Audio.Packets.Size : 0;
+                    vqsize = container.Video.Stream != null ? container.Video.Packets.Size : 0;
+                    sqsize = container.Subtitle.Stream != null ? container.Subtitle.Packets.Size : 0;
+
+                    var av_diff = 0d;
                     if (container.Audio.Stream != null && container.Video.Stream != null)
                         av_diff = container.AudioClock.Time - container.VideoClock.Time;
                     else if (container.Video.Stream != null)
@@ -726,12 +712,12 @@
                     buf.Append($" f={(container.Video.Stream != null ? container.Video.CodecContext->pts_correction_num_faulty_dts : 0)} / ");
                     buf.Append($"{(container.Video.Stream != null ? container.Video.CodecContext->pts_correction_num_faulty_pts : 0)}");
 
-                    if (container.Options.show_status == 1 && ffmpeg.AV_LOG_INFO > ffmpeg.av_log_get_level())
+                    if (container.Options.show_status == 1 && ffmpeg.av_log_get_level() < ffmpeg.AV_LOG_INFO)
                         Console.WriteLine(buf.ToString());
                     else
                         ffmpeg.av_log(null, ffmpeg.AV_LOG_INFO, $"{buf}\n");
 
-                    last_time_status = cur_time;
+                    last_time_status = currentTime;
                 }
             }
         }
@@ -836,7 +822,7 @@
         {
             int audio_size, len1;
 
-            audio_callback_time = ffmpeg.av_gettime_relative();
+            audio_callback_time = Clock.SystemTime;
 
             while (len > 0)
             {
@@ -885,9 +871,9 @@
 
             audio_write_buf_size = (int)(Container.audio_buf_size - audio_buf_index);
             /* Let's assume the audio driver that is used by SDL has two periods. */
-            if (!double.IsNaN(Container.Audio.FrameTime))
+            if (!Container.Audio.FrameTime.IsNaN())
             {
-                Container.AudioClock.Set(Container.Audio.FrameTime - (double)(2 * Container.audio_hw_buf_size + audio_write_buf_size) / Container.Audio.TargetSpec.BytesPerSecond, Container.audio_clock_serial, audio_callback_time / 1000000.0);
+                Container.AudioClock.Set(Container.Audio.FrameTime - (double)(2 * Container.audio_hw_buf_size + audio_write_buf_size) / Container.Audio.TargetSpec.BytesPerSecond, Container.audio_clock_serial, audio_callback_time);
                 Container.ExternalClock.SyncToSlave(Container.AudioClock);
             }
         }
@@ -901,7 +887,7 @@
 
         static double compute_target_delay(double delay, MediaContainer container)
         {
-            double sync_threshold, diff = 0;
+            var diff = 0d;
 
             /* update delay to follow master synchronisation source */
             if (container.MasterSyncMode != ClockSync.Video)
@@ -913,14 +899,14 @@
                 /* skip or repeat frame. We take into account the
                    delay to compute the threshold. I still don't know
                    if it is the best guess */
-                sync_threshold = Math.Max(Constants.AV_SYNC_THRESHOLD_MIN, Math.Min(Constants.AV_SYNC_THRESHOLD_MAX, delay));
-                if (!double.IsNaN(diff) && Math.Abs(diff) < container.max_frame_duration)
+                var syncThreshold = Math.Max(Constants.AV_SYNC_THRESHOLD_MIN, Math.Min(Constants.AV_SYNC_THRESHOLD_MAX, delay));
+                if (!diff.IsNaN() && Math.Abs(diff) < container.max_frame_duration)
                 {
-                    if (diff <= -sync_threshold)
+                    if (diff <= -syncThreshold)
                         delay = Math.Max(0, delay + diff);
-                    else if (diff >= sync_threshold && delay > Constants.AV_SYNC_FRAMEDUP_THRESHOLD)
+                    else if (diff >= syncThreshold && delay > Constants.AV_SYNC_FRAMEDUP_THRESHOLD)
                         delay += diff;
-                    else if (diff >= sync_threshold)
+                    else if (diff >= syncThreshold)
                         delay = 2 * delay;
                 }
             }
@@ -935,7 +921,7 @@
             if (currentFrame.Serial == nextFrame.Serial)
             {
                 var duration = nextFrame.Time - currentFrame.Time;
-                if (double.IsNaN(duration) || duration <= 0 || duration > container.max_frame_duration)
+                if (duration.IsNaN() || duration <= 0 || duration > container.max_frame_duration)
                     return currentFrame.Duration;
                 else
                     return duration;

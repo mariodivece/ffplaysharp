@@ -13,19 +13,19 @@
         private bool m_IsReadIndexShown;
         private int m_ReadIndex;
         private int m_WriteIndex;
-        private int m_Size;
+        private int m_Count;
 
-        public FrameQueue(PacketQueue packets, int maxSize, bool keepLast)
+        public FrameQueue(PacketQueue packets, int capacity, bool keepLast)
         {
-            var maxSizeLimit = Math.Max(
-                Constants.SAMPLE_QUEUE_SIZE, Math.Max(
-                    Constants.VIDEO_PICTURE_QUEUE_SIZE, Constants.SUBPICTURE_QUEUE_SIZE));
+            var capacityLimit = Math.Max(
+                Constants.AudioFrameQueueCapacity, Math.Max(
+                    Constants.VideoFrameQueueCapacity, Constants.SubtitleFrameQueueCapacity));
 
             Packets = packets;
-            MaxSize = Math.Min(maxSize, maxSizeLimit);
+            Capacity = Math.Min(capacity, capacityLimit);
             KeepLast = keepLast;
 
-            Frames = new FrameHolder[MaxSize];
+            Frames = new FrameHolder[Capacity];
             for (var i = 0; i < Frames.Length; i++)
                 Frames[i] = new FrameHolder();
         }
@@ -36,7 +36,7 @@
             private set { lock (SyncLock) m_IsReadIndexShown = value; }
         }
 
-        public int MaxSize { get; }
+        public int Capacity { get; }
 
         public bool KeepLast { get; }
 
@@ -52,10 +52,10 @@
             private set { lock (SyncLock) m_WriteIndex = value; }
         }
 
-        public int Size
+        public int Count
         {
-            get { lock (SyncLock) return m_Size; }
-            private set { lock (SyncLock) m_Size = value; }
+            get { lock (SyncLock) return m_Count; }
+            private set { lock (SyncLock) m_Count = value; }
         }
 
         public void SignalChanged() => ChangedEvent.Set();
@@ -63,7 +63,7 @@
         public FrameHolder PeekWriteable()
         {
             /* wait until we have space to put a new frame */
-            while (Size >= MaxSize && !Packets.IsClosed)
+            while (Count >= Capacity && !Packets.IsClosed)
                 ChangedEvent.WaitOne(1);
 
             lock (SyncLock)
@@ -78,13 +78,13 @@
         public FrameHolder Peek()
         {
             lock (SyncLock)
-                return Frames[(ReadIndex + (IsReadIndexShown ? 1 : 0)) % MaxSize];
+                return Frames[(ReadIndex + (IsReadIndexShown ? 1 : 0)) % Capacity];
         }
 
         public FrameHolder PeekNext()
         {
             lock (SyncLock)
-                return Frames[(ReadIndex + (IsReadIndexShown ? 1 : 0) + 1) % MaxSize];
+                return Frames[(ReadIndex + (IsReadIndexShown ? 1 : 0) + 1) % Capacity];
         }
 
         public FrameHolder PeekLast()
@@ -96,24 +96,24 @@
         public FrameHolder PeekReadable()
         {
             /* wait until we have a readable a new frame */
-            while (Size - (IsReadIndexShown ? 1 : 0) <= 0 && !Packets.IsClosed)
+            while (Count - (IsReadIndexShown ? 1 : 0) <= 0 && !Packets.IsClosed)
                 ChangedEvent.WaitOne(1);
 
             if (Packets.IsClosed)
                 return null;
 
             lock (SyncLock)
-                return Frames[(ReadIndex + (IsReadIndexShown ? 1 : 0)) % MaxSize];
+                return Frames[(ReadIndex + (IsReadIndexShown ? 1 : 0)) % Capacity];
         }
 
         public void Push()
         {
             lock (SyncLock)
             {
-                if (++WriteIndex >= MaxSize)
+                if (++WriteIndex >= Capacity)
                     WriteIndex = 0;
 
-                Size++;
+                Count++;
             }
 
             ChangedEvent.Set();
@@ -130,10 +130,10 @@
                 }
 
                 Frames[ReadIndex].Unreference();
-                if (++ReadIndex >= MaxSize)
+                if (++ReadIndex >= Capacity)
                     ReadIndex = 0;
 
-                Size--;
+                Count--;
             }
 
             ChangedEvent.Set();
@@ -145,7 +145,7 @@
             get
             {
                 lock (SyncLock)
-                    return Size - (IsReadIndexShown ? 1 : 0);
+                    return Count - (IsReadIndexShown ? 1 : 0);
             }
         }
 

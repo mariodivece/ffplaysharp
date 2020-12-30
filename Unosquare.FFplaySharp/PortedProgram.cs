@@ -64,7 +64,7 @@
 
             while (SDL.SDL_PeepEvents(events, 1, SDL.SDL_eventaction.SDL_GETEVENT, SDL.SDL_EventType.SDL_FIRSTEVENT, SDL.SDL_EventType.SDL_LASTEVENT) == 0)
             {
-                if (!container.Options.cursor_hidden && ffmpeg.av_gettime_relative() - container.Options.cursor_last_shown > Constants.CURSOR_HIDE_DELAY)
+                if (!container.Options.cursor_hidden && Clock.SystemTime - container.Options.cursor_last_shown > Constants.CURSOR_HIDE_DELAY)
                 {
                     SDL.SDL_ShowCursor(0);
                     container.Options.cursor_hidden = true;
@@ -203,12 +203,12 @@
                                 else
                                 {
                                     pos = container.MasterTime;
-                                    if (double.IsNaN(pos))
-                                        pos = (double)container.SeekPosition / ffmpeg.AV_TIME_BASE;
+                                    if (pos.IsNaN())
+                                        pos = container.SeekPosition / Clock.TimeBaseMicros;
                                     pos += incr;
-                                    if (container.InputContext->start_time.IsValidPts() && pos < container.InputContext->start_time / (double)ffmpeg.AV_TIME_BASE)
-                                        pos = container.InputContext->start_time / (double)ffmpeg.AV_TIME_BASE;
-                                    container.stream_seek((long)(pos * ffmpeg.AV_TIME_BASE), (long)(incr * ffmpeg.AV_TIME_BASE), false);
+                                    if (container.InputContext->start_time.IsValidPts() && pos < container.InputContext->start_time / Clock.TimeBaseMicros)
+                                        pos = container.InputContext->start_time / Clock.TimeBaseMicros;
+                                    container.stream_seek(Convert.ToInt64(pos * Clock.TimeBaseMicros), Convert.ToInt64(incr * Clock.TimeBaseMicros), false);
                                 }
                                 break;
                             default:
@@ -225,15 +225,15 @@
                         if (sdlEvent.button.button == SDL.SDL_BUTTON_LEFT)
                         {
                             // last_mouse_left_click = 0;
-                            if (ffmpeg.av_gettime_relative() - SdlRenderer.last_mouse_left_click <= 500000)
+                            if (Clock.SystemTime - SdlRenderer.last_mouse_left_click <= 0.5d)
                             {
                                 SdlRenderer.toggle_full_screen();
                                 SdlRenderer.force_refresh = true;
-                                SdlRenderer.last_mouse_left_click = 0;
+                                SdlRenderer.last_mouse_left_click = 0d;
                             }
                             else
                             {
-                                SdlRenderer.last_mouse_left_click = ffmpeg.av_gettime_relative();
+                                SdlRenderer.last_mouse_left_click = Clock.SystemTime;
                             }
                         }
 
@@ -244,7 +244,7 @@
                             SDL.SDL_ShowCursor(1);
                             container.Options.cursor_hidden = false;
                         }
-                        container.Options.cursor_last_shown = ffmpeg.av_gettime_relative();
+                        container.Options.cursor_last_shown = Clock.SystemTime;
                         if (sdlEvent.type == SDL.SDL_EventType.SDL_MOUSEBUTTONDOWN)
                         {
                             if (sdlEvent.button.button != SDL.SDL_BUTTON_RIGHT)
@@ -265,7 +265,7 @@
                         else
                         {
                             var seekPercent = (x / container.width);
-                            var durationSecs = (double)container.InputContext->duration / ffmpeg.AV_TIME_BASE;
+                            var durationSecs = (double)container.InputContext->duration / Clock.TimeBaseMicros;
                             var totalDuration = TimeSpan.FromSeconds(durationSecs);
                             var targetTime = TimeSpan.FromSeconds(seekPercent * durationSecs);
                             var targetPosition = Convert.ToInt64(seekPercent * container.InputContext->duration);

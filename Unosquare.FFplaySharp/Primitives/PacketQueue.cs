@@ -15,7 +15,7 @@
 
         private int m_Count;
         private int m_Size;
-        private long m_Duration;
+        private long m_DurationUnits;
         private int m_Serial;
 
         public PacketQueue(MediaComponent component)
@@ -37,10 +37,10 @@
             private set { lock (SyncLock) m_Size = value; }
         }
 
-        public long Duration
+        public long DurationUnits
         {
-            get { lock (SyncLock) return m_Duration; }
-            private set { lock (SyncLock) m_Duration = value; }
+            get { lock (SyncLock) return m_DurationUnits; }
+            private set { lock (SyncLock) m_DurationUnits = value; }
         }
 
         public int Serial
@@ -90,8 +90,8 @@
 
                     Last = newPacket;
                     Count++;
-                    Size += newPacket.PacketPtr->size + sizeof(IntPtr);
-                    Duration += newPacket.PacketPtr->duration;
+                    Size += newPacket.PacketPtr->size + PacketHolder.PacketStructureSize;
+                    DurationUnits += newPacket.PacketPtr->duration;
                     IsAvailableEvent.Set();
                 }
 
@@ -113,7 +113,7 @@
                 First = null;
                 Count = 0;
                 Size = 0;
-                Duration = 0;
+                DurationUnits = 0;
             }
         }
 
@@ -163,8 +163,8 @@
                             Last = null;
 
                         Count--;
-                        Size -= (item.PacketPtr->size + PacketHolder.PacketStructureSize);
-                        Duration -= item.PacketPtr->duration;
+                        Size -= item.PacketPtr->size + PacketHolder.PacketStructureSize;
+                        DurationUnits -= item.PacketPtr->duration;
                         return item;
                     }
                 }

@@ -13,6 +13,8 @@
         private const string FFmpegDirectory = @"c:\ffmpeg\x64";
         private const string SdlDirectory = @"c:\ffmpeg\x64";
 
+        
+
         private static readonly IList<string> NativeLibraryPaths = new List<string>()
         {
             Path.Combine(SdlDirectory, "SDL2.dll"),
@@ -46,6 +48,7 @@
             public static extern IntPtr LoadLibrary(string dllToLoad);
         }
 
+        public static bool HasFlag(this int flagsVariable, int flagValue) => (flagsVariable & flagValue) != 0;
 
         public static int AV_CEIL_RSHIFT(int a, int b) => ((a) + (1 << (b)) - 1) >> (b);
 
@@ -240,5 +243,11 @@
         }
 
         public static bool IsValidPts(this long pts) => pts != ffmpeg.AV_NOPTS_VALUE;
+
+        public static bool IsAuto(this int x) => x < 0;
+
+        public static bool IsFalse(this int x) => x == 0;
+
+        public static bool IsNaN(this double x) => double.IsNaN(x);
     }
 }

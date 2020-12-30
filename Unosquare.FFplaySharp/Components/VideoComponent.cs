@@ -8,6 +8,8 @@
 
     public unsafe sealed class VideoComponent : FilteringMediaComponent
     {
+        private double FilterDelay;
+
         public VideoComponent(MediaContainer container)
             : base(container)
         {
@@ -18,7 +20,7 @@
 
         public override AVMediaType MediaType => AVMediaType.AVMEDIA_TYPE_VIDEO;
 
-        protected override FrameQueue CreateFrameQueue() => new(Packets, Constants.VIDEO_PICTURE_QUEUE_SIZE, true);
+        protected override FrameQueue CreateFrameQueue() => new(Packets, Constants.VideoFrameQueueCapacity, true);
 
         protected override void DecodingThreadMethod()
         {
@@ -90,7 +92,7 @@
 
                 while (ret >= 0)
                 {
-                    Container.frame_last_returned_time = ffmpeg.av_gettime_relative() / 1000000.0;
+                    var preFilteringTime = Clock.SystemTime;
 
                     ret = ffmpeg.av_buffersink_get_frame_flags(outputFilter, decodedFrame, 0);
                     if (ret < 0)
@@ -101,9 +103,9 @@
                         break;
                     }
 
-                    Container.frame_last_filter_delay = ffmpeg.av_gettime_relative() / 1000000.0 - Container.frame_last_returned_time;
-                    if (Math.Abs(Container.frame_last_filter_delay) > Constants.AV_NOSYNC_THRESHOLD / 10.0)
-                        Container.frame_last_filter_delay = 0;
+                    FilterDelay = Clock.SystemTime - preFilteringTime;
+                    if (Math.Abs(FilterDelay) > Constants.AV_NOSYNC_THRESHOLD / 10.0)
+                        FilterDelay = 0;
 
                     var duration = (frameRate.num != 0 && frameRate.den != 0
                         ? ffmpeg.av_q2d(new AVRational() { num = frameRate.den, den = frameRate.num })
@@ -160,33 +162,31 @@
         private int DecodeFrame(out AVFrame* frame)
         {
             frame = null;
-            var gotPicture = default(int);
+            var gotPicture = DecodeFrame(out frame, out _);
 
-            if ((gotPicture = DecodeFrame(out frame, out _)) < 0)
+            if (gotPicture < 0)
                 return -1;
 
-            if (gotPicture != 0)
+            if (gotPicture == 0)
+                return 0;
+
+            frame->sample_aspect_ratio = ffmpeg.av_guess_sample_aspect_ratio(Container.InputContext, Stream, frame);
+
+            if (Container.Options.framedrop > 0 || (Container.Options.framedrop != 0 && Container.MasterSyncMode != ClockSync.Video))
             {
-                var decoderPts = frame->pts.IsValidPts()
-                    ? ffmpeg.av_q2d(Stream->time_base) * frame->pts
-                    : double.NaN;
-
-                frame->sample_aspect_ratio = ffmpeg.av_guess_sample_aspect_ratio(Container.InputContext, Stream, frame);
-
-                if (Container.Options.framedrop > 0 || (Container.Options.framedrop != 0 && Container.MasterSyncMode != ClockSync.Video))
+                if (frame->pts.IsValidPts())
                 {
-                    if (frame->pts.IsValidPts())
+                    var frameTime = ffmpeg.av_q2d(Stream->time_base) * frame->pts;
+                    var frameDelay = frameTime - Container.MasterTime;
+
+                    if (!frameDelay.IsNaN() && Math.Abs(frameDelay) < Constants.AV_NOSYNC_THRESHOLD &&
+                        frameDelay - FilterDelay < 0 &&
+                        PacketSerial == Container.VideoClock.Serial &&
+                        Packets.Count != 0)
                     {
-                        var diff = decoderPts - Container.MasterTime;
-                        if (!double.IsNaN(diff) && Math.Abs(diff) < Constants.AV_NOSYNC_THRESHOLD &&
-                            diff - Container.frame_last_filter_delay < 0 &&
-                            PacketSerial == Container.VideoClock.Serial &&
-                            Packets.Count != 0)
-                        {
-                            Container.frame_drops_early++;
-                            ffmpeg.av_frame_unref(frame);
-                            gotPicture = 0;
-                        }
+                        Container.frame_drops_early++;
+                        ffmpeg.av_frame_unref(frame);
+                        gotPicture = 0;
                     }
                 }
             }
@@ -255,7 +255,10 @@
             if (string.IsNullOrWhiteSpace(softwareScalerFlags))
                 softwareScalerFlags = null;
 
-            filterGraph->scale_sws_opts = softwareScalerFlags != null ? ffmpeg.av_strdup(softwareScalerFlags) : null;
+            filterGraph->scale_sws_opts = softwareScalerFlags != null
+                ? ffmpeg.av_strdup(softwareScalerFlags)
+                : null;
+
             var sourceFilterArguments =
                 $"video_size={decoderFrame->width}x{decoderFrame->height}" +
                 $":pix_fmt={decoderFrame->format}" +

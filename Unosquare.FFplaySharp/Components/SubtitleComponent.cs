@@ -15,7 +15,7 @@
 
         public override AVMediaType MediaType => AVMediaType.AVMEDIA_TYPE_SUBTITLE;
 
-        protected override FrameQueue CreateFrameQueue() => new(Packets, Constants.SUBPICTURE_QUEUE_SIZE, false);
+        protected override FrameQueue CreateFrameQueue() => new(Packets, Constants.SubtitleFrameQueueCapacity, false);
 
         private int DecodeFrame(out AVSubtitle* frame) => DecodeFrame(out _, out frame);
 
@@ -34,7 +34,7 @@
                 if (gotSubtitle != 0 && queuedFrame.SubtitlePtr->format == 0)
                 {
                     queuedFrame.Time = queuedFrame.SubtitlePtr->pts.IsValidPts()
-                        ? queuedFrame.SubtitlePtr->pts / (double)ffmpeg.AV_TIME_BASE : 0;
+                        ? queuedFrame.SubtitlePtr->pts / Clock.TimeBaseMicros : 0;
                     queuedFrame.Serial = PacketSerial;
                     queuedFrame.Width = CodecContext->width;
                     queuedFrame.Height = CodecContext->height;

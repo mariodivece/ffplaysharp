@@ -71,8 +71,7 @@
         public double last_vis_time;
 
         public double frame_timer;
-        public double frame_last_returned_time;
-        public double frame_last_filter_delay;
+        
 
         public double max_frame_duration;      // maximum duration of a frame - above this, we consider the jump a timestamp discontinuity
 
@@ -222,7 +221,7 @@
         {
             if (IsPaused)
             {
-                frame_timer += ffmpeg.av_gettime_relative() / 1000000.0 - VideoClock.LastUpdated;
+                frame_timer += Clock.SystemTime - VideoClock.LastUpdated;
                 if (read_pause_return != ffmpeg.AVERROR(38))
                 {
                     VideoClock.IsPaused = false;
@@ -365,7 +364,7 @@
         public void seek_chapter(int incrementCount)
         {
             var i = 0;
-            var pos = (long)(MasterTime * ffmpeg.AV_TIME_BASE);
+            var pos = (long)(MasterTime * Clock.TimeBaseMicros);
 
             if (InputContext->nb_chapters <= 0)
                 return;
@@ -505,7 +504,7 @@
                     Audio.Stream = ic->streams[streamIndex];
 
                     Audio.InitializeDecoder(codecContext);
-                    if ((ic->iformat->flags & (ffmpeg.AVFMT_NOBINSEARCH | ffmpeg.AVFMT_NOGENSEARCH | ffmpeg.AVFMT_NO_BYTE_SEEK)) != 0 &&
+                    if (ic->iformat->flags.HasFlag(ffmpeg.AVFMT_NOBINSEARCH | ffmpeg.AVFMT_NOGENSEARCH | ffmpeg.AVFMT_NO_BYTE_SEEK) &&
                         ic->iformat->read_seek.Pointer == IntPtr.Zero)
                     {
                         Audio.StartPts = Audio.Stream->start_time;
@@ -672,25 +671,25 @@
             if (ic->pb != null)
                 ic->pb->eof_reached = 0; // FIXME hack, ffplay maybe should not use avio_feof() to test for the end
 
-            if (o.seek_by_bytes < 0)
-                o.seek_by_bytes = ((ic->iformat->flags & ffmpeg.AVFMT_TS_DISCONT) > 0 && Helpers.PtrToString(ic->iformat->name) != "ogg") ? 1 : 0;
+            if (o.seek_by_bytes.IsAuto())
+                o.seek_by_bytes = ic->iformat->flags.HasFlag(ffmpeg.AVFMT_TS_DISCONT) && Helpers.PtrToString(ic->iformat->name) != "ogg" ? 1 : 0;
 
-            max_frame_duration = (ic->iformat->flags & ffmpeg.AVFMT_TS_DISCONT) != 0 ? 10.0 : 3600.0;
+            max_frame_duration = ic->iformat->flags.HasFlag(ffmpeg.AVFMT_TS_DISCONT) ? 10.0 : 3600.0;
 
             if (string.IsNullOrWhiteSpace(Renderer.window_title) && (formatOption = ffmpeg.av_dict_get(ic->metadata, "title", null, 0)) != null)
                 Renderer.window_title = $"{Helpers.PtrToString(formatOption->value)} - {o.input_filename}";
 
             /* if seeking requested, we execute it */
-            if (o.start_time != ffmpeg.AV_NOPTS_VALUE)
+            if (o.start_time.IsValidPts())
             {
                 var timestamp = o.start_time;
                 /* add the stream start time */
-                if (ic->start_time != ffmpeg.AV_NOPTS_VALUE)
+                if (ic->start_time.IsValidPts())
                     timestamp += ic->start_time;
 
                 ret = ffmpeg.avformat_seek_file(ic, -1, long.MinValue, timestamp, long.MaxValue, 0);
                 if (ret < 0)
-                    ffmpeg.av_log(null, ffmpeg.AV_LOG_WARNING, $"{filename}: could not seek to position {((double)timestamp / ffmpeg.AV_TIME_BASE)}\n");
+                    ffmpeg.av_log(null, ffmpeg.AV_LOG_WARNING, $"{filename}: could not seek to position {(timestamp / Clock.TimeBaseMicros)}\n");
             }
 
             IsRealtime = IsInputFormatRealtime(ic);
@@ -824,9 +823,9 @@
                             c.Packets.PutFlush();
                         }
 
-                        ExternalClock.Set((SeekFlags & ffmpeg.AVSEEK_FLAG_BYTE) != 0
+                        ExternalClock.Set(SeekFlags.HasFlag(ffmpeg.AVSEEK_FLAG_BYTE)
                             ? double.NaN
-                            : seek_target / (double)ffmpeg.AV_TIME_BASE, 0);
+                            : seek_target / Clock.TimeBaseMicros, 0);
                     }
 
                     IsSeekRequested = false;
@@ -912,8 +911,8 @@
                 var isPacketInPlayRange = !o.duration.IsValidPts() ||
                         (packetPts - (streamStartPts.IsValidPts() ? streamStartPts : 0)) *
                         ffmpeg.av_q2d(ic->streams[readPacket->stream_index]->time_base) -
-                        (double)(o.start_time.IsValidPts() ? o.start_time : 0) / ffmpeg.AV_TIME_BASE
-                        <= ((double)o.duration / ffmpeg.AV_TIME_BASE);
+                        (o.start_time.IsValidPts() ? o.start_time : 0) / Clock.TimeBaseMicros
+                        <= (o.duration / Clock.TimeBaseMicros);
 
                 var component = ComponentFromStreamIndex(readPacket->stream_index);
                 if (component != null && !component.IsPictureAttachmentStream && isPacketInPlayRange)

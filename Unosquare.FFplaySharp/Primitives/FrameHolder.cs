@@ -35,7 +35,7 @@
         public bool uploaded;
         public bool FlipVertical;
 
-        public bool HasValidTime => !double.IsNaN(Time);
+        public bool HasValidTime => !Time.IsNaN();
 
         public void Unreference()
         {

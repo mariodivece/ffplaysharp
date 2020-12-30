@@ -154,7 +154,7 @@
             {
                 while (Frames.PendingCount == 0)
                 {
-                    if ((ffmpeg.av_gettime_relative() - Container.Renderer.audio_callback_time) > ffmpeg.AV_TIME_BASE * Container.audio_hw_buf_size / TargetSpec.BytesPerSecond / 2)
+                    if ((Clock.SystemTime - Container.Renderer.audio_callback_time) > Container.audio_hw_buf_size / TargetSpec.BytesPerSecond / 2)
                         return -1;
 
                     Thread.Sleep(1);
@@ -302,11 +302,11 @@
             /* if not master, then we try to remove or add samples to correct the clock */
             if (Container.MasterSyncMode != ClockSync.Audio)
             {
-                var diff = Container.AudioClock.Time - Container.MasterTime;
+                var clockDelay = Container.AudioClock.Time - Container.MasterTime;
 
-                if (!double.IsNaN(diff) && Math.Abs(diff) < Constants.AV_NOSYNC_THRESHOLD)
+                if (!clockDelay.IsNaN() && Math.Abs(clockDelay) < Constants.AV_NOSYNC_THRESHOLD)
                 {
-                    audio_diff_cum = diff + audio_diff_avg_coef * audio_diff_cum;
+                    audio_diff_cum = clockDelay + audio_diff_avg_coef * audio_diff_cum;
                     if (audio_diff_avg_count < Constants.AUDIO_DIFF_AVG_NB)
                     {
                         /* not enough measures to have a correct estimate */
@@ -319,14 +319,14 @@
 
                         if (Math.Abs(avg_diff) >= audio_diff_threshold)
                         {
-                            wantedSampleCount = sampleCount + (int)(diff * SourceSpec.Frequency);
+                            wantedSampleCount = sampleCount + (int)(clockDelay * SourceSpec.Frequency);
                             var minSampleCount = (int)((sampleCount * (100 - Constants.SAMPLE_CORRECTION_PERCENT_MAX) / 100));
                             var maxSampleCount = (int)((sampleCount * (100 + Constants.SAMPLE_CORRECTION_PERCENT_MAX) / 100));
                             wantedSampleCount = Helpers.av_clip(wantedSampleCount, minSampleCount, maxSampleCount);
                         }
 
                         ffmpeg.av_log(
-                            null, ffmpeg.AV_LOG_TRACE, $"diff={diff} adiff={avg_diff} sample_diff={(wantedSampleCount - sampleCount)} apts={FrameTime} {audio_diff_threshold}\n");
+                            null, ffmpeg.AV_LOG_TRACE, $"diff={clockDelay} adiff={avg_diff} sample_diff={(wantedSampleCount - sampleCount)} apts={FrameTime} {audio_diff_threshold}\n");
                     }
                 }
                 else
@@ -366,14 +366,14 @@
             StreamIndex = -1;
         }
 
-        protected override FrameQueue CreateFrameQueue() => new(Packets, Constants.SAMPLE_QUEUE_SIZE, true);
+        protected override FrameQueue CreateFrameQueue() => new(Packets, Constants.AudioFrameQueueCapacity, true);
 
         public override unsafe void InitializeDecoder(AVCodecContext* codecContext)
         {
             base.InitializeDecoder(codecContext);
 
             var ic = Container.InputContext;
-            if ((ic->iformat->flags & (ffmpeg.AVFMT_NOBINSEARCH | ffmpeg.AVFMT_NOGENSEARCH | ffmpeg.AVFMT_NO_BYTE_SEEK)) != 0 &&
+            if (ic->iformat->flags.HasFlag(ffmpeg.AVFMT_NOBINSEARCH | ffmpeg.AVFMT_NOGENSEARCH | ffmpeg.AVFMT_NO_BYTE_SEEK) &&
                 ic->iformat->read_seek.Pointer == IntPtr.Zero)
             {
                 StartPts = Stream->start_time;

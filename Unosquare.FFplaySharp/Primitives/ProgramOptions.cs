@@ -38,7 +38,7 @@
         public string SubtitleForcedCodecName;
         public string VideoForcedCodecName;
 
-        public long cursor_last_shown;
+        public double cursor_last_shown;
         public bool cursor_hidden = false;
 
         public List<string> vfilters_list = new(32);

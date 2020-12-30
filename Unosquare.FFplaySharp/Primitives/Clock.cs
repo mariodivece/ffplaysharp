@@ -5,7 +5,11 @@
 
     public class Clock : ISerialProvider
     {
+        public static double TimeBaseMicros { get; } = Convert.ToDouble(ffmpeg.AV_TIME_BASE);
+
         private readonly ISerialProvider SerialProvider;
+
+        public static double SystemTime => Convert.ToDouble(ffmpeg.av_gettime_relative()) / TimeBaseMicros;
 
         public double Pts { get; private set; }           /* clock base */
         
@@ -39,7 +43,7 @@
 
         public void Set(double pts, int serial)
         {
-            var time = ffmpeg.av_gettime_relative() / 1000000.0;
+            var time = SystemTime;
             Set(pts, serial, time);
         }
 
@@ -62,7 +66,7 @@
                 }
                 else
                 {
-                    var time = ffmpeg.av_gettime_relative() / 1000000.0;
+                    var time = SystemTime;
                     return PtsDrift + time - (time - LastUpdated) * (1.0 - SpeedRatio);
                 }
             }
@@ -72,7 +76,7 @@
         {
             var currentTime = Time;
             var slaveTime = slaveClock.Time;
-            if (!double.IsNaN(slaveTime) && (double.IsNaN(currentTime) || Math.Abs(currentTime - slaveTime) > Constants.AV_NOSYNC_THRESHOLD))
+            if (!slaveTime.IsNaN() && (currentTime.IsNaN() || Math.Abs(currentTime - slaveTime) > Constants.AV_NOSYNC_THRESHOLD))
                 Set(slaveTime, slaveClock.Serial);
         }
     }

@@ -10,7 +10,7 @@
         public const int program_birth_year = 2003;
 
         public const int MAX_QUEUE_SIZE = 15 * 1024 * 1024;
-        public const int MIN_FRAMES = 25;
+        public const int MinPacketCount = 25;
         public const int EXTERNAL_CLOCK_MIN_FRAMES = 2;
         public const int EXTERNAL_CLOCK_MAX_FRAMES = 10;
 
@@ -49,15 +49,15 @@
         /* TODO: We assume that a decoded and resampled frame fits into this buffer */
         public const int SAMPLE_ARRAY_SIZE = (8 * 65536);
 
-        public const int CURSOR_HIDE_DELAY = 1000000;
+        public const double CURSOR_HIDE_DELAY = 1d;
 
         public const int USE_ONEPASS_SUBTITLE_RENDER = 1;
 
         public static int sws_flags = ffmpeg.SWS_BICUBIC;
 
-        public const int VIDEO_PICTURE_QUEUE_SIZE = 3;
-        public const int SUBPICTURE_QUEUE_SIZE = 16;
-        public const int SAMPLE_QUEUE_SIZE = 9;
+        public const int VideoFrameQueueCapacity = 3;
+        public const int SubtitleFrameQueueCapacity = 16;
+        public const int AudioFrameQueueCapacity = 9;
 
         public static readonly AVRational AV_TIME_BASE_Q = new() { num = 1, den = ffmpeg.AV_TIME_BASE };
 
