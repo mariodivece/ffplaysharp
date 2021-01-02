@@ -7,11 +7,8 @@
     public abstract unsafe class MediaComponent
     {
         private readonly int ReorderPts;
-
         private PacketHolder PendingPacket;
         private bool IsPacketPending;
-        private long NextPts;
-        private AVRational NextPtsTimeBase;
         private Thread Worker;
 
         protected MediaComponent(MediaContainer container)
@@ -71,10 +68,6 @@
 
         public int HasFinished { get; set; }
 
-        public long StartPts { get; set; }
-
-        public AVRational StartPtsTimeBase { get; set; }
-
         public virtual void Close()
         {
             if (StreamIndex < 0 || StreamIndex >= Container.InputContext->nb_streams)
@@ -123,25 +116,6 @@
                                 if (decodedFrame == null) decodedFrame = ffmpeg.av_frame_alloc();
 
                                 resultCode = ffmpeg.avcodec_receive_frame(CodecContext, decodedFrame);
-                                if (resultCode >= 0)
-                                {
-                                    var decoderTimeBase = new AVRational
-                                    {
-                                        num = 1,
-                                        den = decodedFrame->sample_rate
-                                    };
-
-                                    if (decodedFrame->pts.IsValidPts())
-                                        decodedFrame->pts = ffmpeg.av_rescale_q(decodedFrame->pts, CodecContext->pkt_timebase, decoderTimeBase);
-                                    else if (NextPts.IsValidPts())
-                                        decodedFrame->pts = ffmpeg.av_rescale_q(NextPts, NextPtsTimeBase, decoderTimeBase);
-
-                                    if (decodedFrame->pts.IsValidPts())
-                                    {
-                                        NextPts = decodedFrame->pts + decodedFrame->nb_samples;
-                                        NextPtsTimeBase = decoderTimeBase;
-                                    }
-                                }
                                 break;
                         }
                         if (resultCode == ffmpeg.AVERROR_EOF)
@@ -186,10 +160,7 @@
 
                 if (currentPacket.IsFlushPacket)
                 {
-                    ffmpeg.avcodec_flush_buffers(CodecContext);
-                    HasFinished = 0;
-                    NextPts = StartPts;
-                    NextPtsTimeBase = StartPtsTimeBase;
+                    FlushCodecBuffers();
                 }
                 else
                 {
@@ -237,12 +208,18 @@
             }
         }
 
-        public virtual void InitializeDecoder(AVCodecContext* codecContext)
+        protected virtual void FlushCodecBuffers()
         {
+            ffmpeg.avcodec_flush_buffers(CodecContext);
+            HasFinished = 0;
+        }
+
+        public virtual void InitializeDecoder(AVCodecContext* codecContext, int streamIndex)
+        {
+            StreamIndex = streamIndex;
+            Stream = Container.InputContext->streams[streamIndex];
             CodecContext = codecContext;
-            StartPts = ffmpeg.AV_NOPTS_VALUE;
             PacketSerial = -1;
-            StartPtsTimeBase = new();
         }
 
         public void DisposeDecoder()

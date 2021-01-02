@@ -522,28 +522,19 @@
                     // we correct audio sync only if larger than this threshold.
                     Audio.audio_diff_threshold = (double)audio_hw_buf_size / Audio.TargetSpec.BytesPerSecond;
 
-                    Audio.StreamIndex = streamIndex;
-                    Audio.Stream = ic->streams[streamIndex];
-                    Audio.InitializeDecoder(codecContext);
-
-                    if (IsSeekMethodUnknown)
-                    {
-                        Audio.StartPts = Audio.Stream->start_time;
-                        Audio.StartPtsTimeBase = Audio.Stream->time_base;
-                    }
-
+                    Audio.InitializeDecoder(codecContext, streamIndex);
                     Audio.Start();
                     Renderer.PauseAudio();
                     break;
                 case AVMediaType.AVMEDIA_TYPE_VIDEO:
                 case AVMediaType.AVMEDIA_TYPE_SUBTITLE:
-                    targetComponent.StreamIndex = streamIndex;
-                    targetComponent.Stream = ic->streams[streamIndex];
-                    targetComponent.InitializeDecoder(codecContext);
+
+                    targetComponent.InitializeDecoder(codecContext, streamIndex);
                     targetComponent.Start();
 
                     if (targetComponent.IsVideo)
                         IsPictureAttachmentPending = true;
+
                     break;
                 default:
                     break;

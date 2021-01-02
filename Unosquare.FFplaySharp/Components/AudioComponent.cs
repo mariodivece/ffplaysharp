@@ -10,6 +10,10 @@
     {
         private byte* ResampledOutputBuffer;
         private uint ResampledOutputBufferSize;
+        private long StartPts;
+        private AVRational StartPtsTimeBase;
+        private long NextPts;
+        private AVRational NextPtsTimeBase;
 
         /// <summary>
         /// Gets or sets the Frame Time (ported from audio_clock)
@@ -368,17 +372,54 @@
 
         protected override FrameQueue CreateFrameQueue() => new(Packets, Constants.AudioFrameQueueCapacity, true);
 
-        public override unsafe void InitializeDecoder(AVCodecContext* codecContext)
+        public override unsafe void InitializeDecoder(AVCodecContext* codecContext, int streamIndex)
         {
-            base.InitializeDecoder(codecContext);
+            base.InitializeDecoder(codecContext, streamIndex);
+
             if (Container.IsSeekMethodUnknown)
             {
                 StartPts = Stream->start_time;
                 StartPtsTimeBase = Stream->time_base;
             }
+            else
+            {
+                StartPts = ffmpeg.AV_NOPTS_VALUE;
+                StartPtsTimeBase = new();
+            }
         }
 
-        private int DecodeFrame(out AVFrame* frame) => DecodeFrame(out frame, out _);
+        private int DecodeFrame(out AVFrame* frame)
+        {
+            var resultCode = DecodeFrame(out frame, out _);
+            if (resultCode >= 0)
+            {
+                var decoderTimeBase = new AVRational
+                {
+                    num = 1,
+                    den = frame->sample_rate
+                };
+
+                if (frame->pts.IsValidPts())
+                    frame->pts = ffmpeg.av_rescale_q(frame->pts, CodecContext->pkt_timebase, decoderTimeBase);
+                else if (NextPts.IsValidPts())
+                    frame->pts = ffmpeg.av_rescale_q(NextPts, NextPtsTimeBase, decoderTimeBase);
+
+                if (frame->pts.IsValidPts())
+                {
+                    NextPts = frame->pts + frame->nb_samples;
+                    NextPtsTimeBase = decoderTimeBase;
+                }
+            }
+
+            return resultCode;
+        }
+
+        protected override void FlushCodecBuffers()
+        {
+            base.FlushCodecBuffers();
+            NextPts = StartPts;
+            NextPtsTimeBase = StartPtsTimeBase;
+        }
 
         protected override void DecodingThreadMethod()
         {
