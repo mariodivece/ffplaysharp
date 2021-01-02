@@ -79,12 +79,13 @@
 
         public int realloc_texture(ref IntPtr texture, uint new_format, int new_width, int new_height, SDL.SDL_BlendMode blendmode, bool init_texture)
         {
-            if (texture == IntPtr.Zero || SDL.SDL_QueryTexture(texture, out var format, out var _, out var w, out var h) < 0 || new_width != w || new_height != h || new_format != format)
+            if (texture.IsNull() || SDL.SDL_QueryTexture(texture, out var format, out var _, out var w, out var h) < 0 || new_width != w || new_height != h || new_format != format)
             {
-                if (texture != IntPtr.Zero)
+                if (!texture.IsNull())
                     SDL.SDL_DestroyTexture(texture);
 
-                if (IntPtr.Zero == (texture = SDL.SDL_CreateTexture(SdlRenderer, new_format, (int)SDL.SDL_TextureAccess.SDL_TEXTUREACCESS_STREAMING, new_width, new_height)))
+                texture = SDL.SDL_CreateTexture(SdlRenderer, new_format, (int)SDL.SDL_TextureAccess.SDL_TEXTUREACCESS_STREAMING, new_width, new_height);
+                if (texture.IsNull())
                     return -1;
 
                 if (SDL.SDL_SetTextureBlendMode(texture, blendmode) < 0)
@@ -281,22 +282,22 @@
 
                 SDL.SDL_SetHint(SDL.SDL_HINT_RENDER_SCALE_QUALITY, "linear");
 
-                if (RenderingWindow != IntPtr.Zero)
+                if (!RenderingWindow.IsNull())
                 {
                     SdlRenderer = SDL.SDL_CreateRenderer(RenderingWindow, -1, SDL.SDL_RendererFlags.SDL_RENDERER_ACCELERATED | SDL.SDL_RendererFlags.SDL_RENDERER_PRESENTVSYNC);
-                    if (SdlRenderer == IntPtr.Zero)
+                    if (SdlRenderer.IsNull())
                     {
                         ffmpeg.av_log(null, ffmpeg.AV_LOG_WARNING, $"Failed to initialize a hardware accelerated renderer: {SDL.SDL_GetError()}\n");
                         SdlRenderer = SDL.SDL_CreateRenderer(RenderingWindow, -1, 0);
                     }
 
-                    if (SdlRenderer != IntPtr.Zero)
+                    if (!SdlRenderer.IsNull())
                     {
                         if (SDL.SDL_GetRendererInfo(SdlRenderer, out SdlRendererInfo) == 0)
                             ffmpeg.av_log(null, ffmpeg.AV_LOG_VERBOSE, $"Initialized {Helpers.PtrToString(SdlRendererInfo.name)} renderer.\n");
                     }
                 }
-                if (RenderingWindow == IntPtr.Zero || SdlRenderer == IntPtr.Zero || SdlRendererInfo.num_texture_formats <= 0)
+                if (RenderingWindow.IsNull() || SdlRenderer.IsNull() || SdlRendererInfo.num_texture_formats <= 0)
                 {
                     ffmpeg.av_log(null, ffmpeg.AV_LOG_FATAL, $"Failed to create window or renderer: {SDL.SDL_GetError()}");
                     return false;
@@ -407,16 +408,16 @@
 
         public void CloseVideo()
         {
-            if (SdlRenderer != IntPtr.Zero)
+            if (!SdlRenderer.IsNull())
                 SDL.SDL_DestroyRenderer(SdlRenderer);
 
-            if (RenderingWindow != IntPtr.Zero)
+            if (!RenderingWindow.IsNull())
                 SDL.SDL_DestroyWindow(RenderingWindow);
 
-            if (vid_texture != IntPtr.Zero)
+            if (!vid_texture.IsNull())
                 SDL.SDL_DestroyTexture(vid_texture);
 
-            if (sub_texture != IntPtr.Zero)
+            if (!sub_texture.IsNull())
                 SDL.SDL_DestroyTexture(sub_texture);
         }
 

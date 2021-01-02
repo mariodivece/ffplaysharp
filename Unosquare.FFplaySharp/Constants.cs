@@ -62,5 +62,7 @@
         public static readonly AVRational AV_TIME_BASE_Q = new() { num = 1, den = ffmpeg.AV_TIME_BASE };
 
         public const int FF_QUIT_EVENT = (int)SDL.SDL_EventType.SDL_USEREVENT + 2;
+
+        public const int SeekMethodUnknownFlags = ffmpeg.AVFMT_NOBINSEARCH | ffmpeg.AVFMT_NOGENSEARCH | ffmpeg.AVFMT_NO_BYTE_SEEK;
     }
 }

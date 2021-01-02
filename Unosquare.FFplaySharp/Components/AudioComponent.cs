@@ -371,10 +371,7 @@
         public override unsafe void InitializeDecoder(AVCodecContext* codecContext)
         {
             base.InitializeDecoder(codecContext);
-
-            var ic = Container.InputContext;
-            if (ic->iformat->flags.HasFlag(ffmpeg.AVFMT_NOBINSEARCH | ffmpeg.AVFMT_NOGENSEARCH | ffmpeg.AVFMT_NO_BYTE_SEEK) &&
-                ic->iformat->read_seek.Pointer == IntPtr.Zero)
+            if (Container.IsSeekMethodUnknown)
             {
                 StartPts = Stream->start_time;
                 StartPtsTimeBase = Stream->time_base;
@@ -402,12 +399,10 @@
 
                 if (gotSamples != 0)
                 {
-                    var decoderTimeBase = new AVRational() { num = 1, den = decodedFrame->sample_rate };
-                    var decoderChannelLayout = Helpers.ValidateChannelLayout(decodedFrame->channel_layout, decodedFrame->channels);
+                    var decoderTimeBase = new AVRational { num = 1, den = decodedFrame->sample_rate };
+                    var decoderChannelLayout = AudioParams.ValidateChannelLayout(decodedFrame->channel_layout, decodedFrame->channels);
 
-                    var reconfigure =
-                        Helpers.cmp_audio_fmts(FilterSpec.SampleFormat, FilterSpec.Channels,
-                                       (AVSampleFormat)decodedFrame->format, decodedFrame->channels) ||
+                    var reconfigure = FilterSpec.IsDifferent(decodedFrame) ||
                         FilterSpec.Layout != decoderChannelLayout ||
                         FilterSpec.Frequency != decodedFrame->sample_rate ||
                         PacketSerial != lastPacketSerial;

@@ -19,5 +19,25 @@
         public static int ChannelCountFor(ulong channelLayout) => ffmpeg.av_get_channel_layout_nb_channels(channelLayout);
 
         public static int ChannelCountFor(long channelLayout) => ChannelCountFor((ulong)channelLayout);
+
+        public static long ValidateChannelLayout(ulong channelLayout, int channelCount)
+        {
+            if (channelLayout != 0 && AudioParams.ChannelCountFor(channelLayout) == channelCount)
+                return (long)channelLayout;
+            else
+                return 0;
+        }
+
+        public static bool AreDifferent(AVSampleFormat sampleFormatA, long channelCountA, AVSampleFormat sampleFormatB, long channelCountB)
+        {
+            // If channel count == 1, planar and non-planar formats are the same.
+            if (channelCountA == 1 && channelCountB == 1)
+                return ffmpeg.av_get_packed_sample_fmt(sampleFormatA) != ffmpeg.av_get_packed_sample_fmt(sampleFormatB);
+            else
+                return channelCountA != channelCountB || sampleFormatA != sampleFormatB;
+        }
+
+        public bool IsDifferent(AVFrame* audioFrame) =>
+            AreDifferent(SampleFormat, Channels, (AVSampleFormat)audioFrame->format, audioFrame->channels);
     }
 }

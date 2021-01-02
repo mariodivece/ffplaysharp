@@ -93,7 +93,7 @@
             decodedSubtitle = null;
             decodedFrame = null;
 
-            for (; ; )
+            while (true)
             {
                 PacketHolder currentPacket = null;
 
@@ -215,7 +215,11 @@
                                 PendingPacket = new PacketHolder(ffmpeg.av_packet_clone(currentPacket.PacketPtr));
                             }
 
-                            resultCode = gotSubtitle != 0 ? 0 : (currentPacket.PacketPtr->data != null ? ffmpeg.AVERROR(ffmpeg.EAGAIN) : ffmpeg.AVERROR_EOF);
+                            resultCode = gotSubtitle != 0
+                                ? 0
+                                : currentPacket.PacketPtr->data != null
+                                ? ffmpeg.AVERROR(ffmpeg.EAGAIN)
+                                : ffmpeg.AVERROR_EOF;
                         }
                     }
                     else

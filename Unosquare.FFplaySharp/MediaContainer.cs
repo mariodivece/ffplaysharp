@@ -51,9 +51,9 @@
         public int audio_clock_serial;
         public int audio_hw_buf_size;
         public byte* audio_buf;
-        
+
         public uint audio_buf_size; /* in bytes */
-        
+
 
         public bool IsMuted { get; private set; }
         public int frame_drops_early;
@@ -71,7 +71,7 @@
         public double last_vis_time;
 
         public double frame_timer;
-        
+
 
         public double max_frame_duration;      // maximum duration of a frame - above this, we consider the jump a timestamp discontinuity
 
@@ -308,7 +308,7 @@
             ffmpeg.av_log(null, ffmpeg.AV_LOG_INFO, $"Switch {component.MediaTypeString} stream from #{component.StreamIndex} to #{nextStreamIndex}\n");
 
             component.Close();
-            stream_component_open(nextStreamIndex);
+            OpenComponent(nextStreamIndex);
         }
 
         public void StartReadThread()
@@ -389,11 +389,20 @@
             stream_seek(ffmpeg.av_rescale_q(InputContext->chapters[i]->start, InputContext->chapters[i]->time_base, Constants.AV_TIME_BASE_Q), 0, false);
         }
 
-        /* open a given stream. Return 0 if OK */
-        public int stream_component_open(int streamIndex)
-        {
-            string forcedCodecName = null;
+        public bool IsSeekMethodUnknown =>
+            InputContext != null &&
+            InputContext->iformat != null &&
+            InputContext->iformat->flags.HasFlag(Constants.SeekMethodUnknownFlags) &&
+            InputContext->iformat->read_seek.Pointer.IsNull();
 
+        /// <summary>
+        /// Open a given stream index. Returns 0 if OK.
+        /// Port of stream_component_open
+        /// </summary>
+        /// <param name="streamIndex"></param>
+        /// <returns>0 if OK</returns>
+        public int OpenComponent(int streamIndex)
+        {
             var ic = InputContext;
             var ret = 0;
             var lowResFactor = Options.lowres;
@@ -408,13 +417,26 @@
             codecContext->pkt_timebase = ic->streams[streamIndex]->time_base;
 
             var codec = ffmpeg.avcodec_find_decoder(codecContext->codec_id);
+            var targetMediaType = codecContext->codec_type;
 
-            switch (codecContext->codec_type)
+            var targetComponent = targetMediaType switch
             {
-                case AVMediaType.AVMEDIA_TYPE_AUDIO: Audio.LastStreamIndex = streamIndex; forcedCodecName = Options.AudioForcedCodecName; break;
-                case AVMediaType.AVMEDIA_TYPE_SUBTITLE: Subtitle.LastStreamIndex = streamIndex; forcedCodecName = Options.SubtitleForcedCodecName; break;
-                case AVMediaType.AVMEDIA_TYPE_VIDEO: Video.LastStreamIndex = streamIndex; forcedCodecName = Options.VideoForcedCodecName; break;
-            }
+                AVMediaType.AVMEDIA_TYPE_AUDIO => Audio as MediaComponent,
+                AVMediaType.AVMEDIA_TYPE_VIDEO => Video,
+                AVMediaType.AVMEDIA_TYPE_SUBTITLE => Subtitle,
+                _ => throw new NotSupportedException($"Opening '{targetMediaType}' is not supported.")
+            };
+
+            var forcedCodecName = targetMediaType switch
+            {
+                AVMediaType.AVMEDIA_TYPE_AUDIO => Options.AudioForcedCodecName,
+                AVMediaType.AVMEDIA_TYPE_VIDEO => Options.VideoForcedCodecName,
+                AVMediaType.AVMEDIA_TYPE_SUBTITLE => Options.SubtitleForcedCodecName,
+                _ => null
+            };
+
+            targetComponent.LastStreamIndex = streamIndex;
+
             if (!string.IsNullOrWhiteSpace(forcedCodecName))
                 codec = ffmpeg.avcodec_find_decoder_by_name(forcedCodecName);
 
@@ -450,7 +472,7 @@
             if (lowResFactor != 0)
                 ffmpeg.av_dict_set_int(&codecOptions, "lowres", lowResFactor, 0);
 
-            if (codecContext->codec_type == AVMediaType.AVMEDIA_TYPE_VIDEO || codecContext->codec_type == AVMediaType.AVMEDIA_TYPE_AUDIO)
+            if (targetMediaType == AVMediaType.AVMEDIA_TYPE_VIDEO || targetMediaType == AVMediaType.AVMEDIA_TYPE_AUDIO)
                 ffmpeg.av_dict_set(&codecOptions, "refcounted_frames", "1", 0);
 
             if ((ret = ffmpeg.avcodec_open2(codecContext, codec, &codecOptions)) < 0)
@@ -470,12 +492,12 @@
             IsAtEndOfStream = false;
             ic->streams[streamIndex]->discard = AVDiscard.AVDISCARD_DEFAULT;
 
-            switch (codecContext->codec_type)
+            switch (targetMediaType)
             {
                 case AVMediaType.AVMEDIA_TYPE_AUDIO:
                     Audio.FilterSpec.Frequency = codecContext->sample_rate;
                     Audio.FilterSpec.Channels = codecContext->channels;
-                    Audio.FilterSpec.Layout = Helpers.ValidateChannelLayout(codecContext->channel_layout, codecContext->channels);
+                    Audio.FilterSpec.Layout = AudioParams.ValidateChannelLayout(codecContext->channel_layout, codecContext->channels);
                     Audio.FilterSpec.SampleFormat = codecContext->sample_fmt;
                     if ((ret = Audio.ConfigureFilters(false)) < 0)
                         goto fail;
@@ -484,7 +506,7 @@
                     var channelCount = ffmpeg.av_buffersink_get_channels(Audio.OutputFilter);
                     var channelLayout = (long)ffmpeg.av_buffersink_get_channel_layout(Audio.OutputFilter);
 
-                    /* prepare audio output */
+                    // prepare audio output
                     if ((ret = Renderer.audio_open(channelLayout, channelCount, sampleRate, ref Audio.TargetSpec)) < 0)
                         goto fail;
 
@@ -492,20 +514,19 @@
                     Audio.SourceSpec = Audio.TargetSpec;
                     audio_buf_size = 0;
 
-                    /* init averaging filter */
+                    // init averaging filter
                     Audio.audio_diff_avg_coef = Math.Exp(Math.Log(0.01) / Constants.AUDIO_DIFF_AVG_NB);
                     Audio.audio_diff_avg_count = 0;
 
-                    /* since we do not have a precise anough audio FIFO fullness,
-                       we correct audio sync only if larger than this threshold */
+                    // since we do not have a precise anough audio FIFO fullness,
+                    // we correct audio sync only if larger than this threshold.
                     Audio.audio_diff_threshold = (double)audio_hw_buf_size / Audio.TargetSpec.BytesPerSecond;
 
                     Audio.StreamIndex = streamIndex;
                     Audio.Stream = ic->streams[streamIndex];
-
                     Audio.InitializeDecoder(codecContext);
-                    if (ic->iformat->flags.HasFlag(ffmpeg.AVFMT_NOBINSEARCH | ffmpeg.AVFMT_NOGENSEARCH | ffmpeg.AVFMT_NO_BYTE_SEEK) &&
-                        ic->iformat->read_seek.Pointer == IntPtr.Zero)
+
+                    if (IsSeekMethodUnknown)
                     {
                         Audio.StartPts = Audio.Stream->start_time;
                         Audio.StartPtsTimeBase = Audio.Stream->time_base;
@@ -515,17 +536,14 @@
                     Renderer.PauseAudio();
                     break;
                 case AVMediaType.AVMEDIA_TYPE_VIDEO:
-                    Video.StreamIndex = streamIndex;
-                    Video.Stream = ic->streams[streamIndex];
-                    Video.InitializeDecoder(codecContext);
-                    Video.Start();
-                    IsPictureAttachmentPending = true;
-                    break;
                 case AVMediaType.AVMEDIA_TYPE_SUBTITLE:
-                    Subtitle.StreamIndex = streamIndex;
-                    Subtitle.Stream = ic->streams[streamIndex];
-                    Subtitle.InitializeDecoder(codecContext);
-                    Subtitle.Start();
+                    targetComponent.StreamIndex = streamIndex;
+                    targetComponent.Stream = ic->streams[streamIndex];
+                    targetComponent.InitializeDecoder(codecContext);
+                    targetComponent.Start();
+
+                    if (targetComponent.IsVideo)
+                        IsPictureAttachmentPending = true;
                     break;
                 default:
                     break;
@@ -546,7 +564,7 @@
             IsAbortRequested = true;
             ReadingThread.Join();
 
-            // Close each stream.
+            // Close each component.
             foreach (var component in Components)
                 component.Close();
 
@@ -748,13 +766,13 @@
             /* open the streams */
             if (streamIndexes[AVMediaType.AVMEDIA_TYPE_AUDIO] >= 0)
             {
-                stream_component_open(streamIndexes[AVMediaType.AVMEDIA_TYPE_AUDIO]);
+                OpenComponent(streamIndexes[AVMediaType.AVMEDIA_TYPE_AUDIO]);
             }
 
             ret = -1;
             if (streamIndexes[AVMediaType.AVMEDIA_TYPE_VIDEO] >= 0)
             {
-                ret = stream_component_open(streamIndexes[AVMediaType.AVMEDIA_TYPE_VIDEO]);
+                ret = OpenComponent(streamIndexes[AVMediaType.AVMEDIA_TYPE_VIDEO]);
             }
 
             if (show_mode == ShowMode.None)
@@ -762,7 +780,7 @@
 
             if (streamIndexes[AVMediaType.AVMEDIA_TYPE_SUBTITLE] >= 0)
             {
-                stream_component_open(streamIndexes[AVMediaType.AVMEDIA_TYPE_SUBTITLE]);
+                OpenComponent(streamIndexes[AVMediaType.AVMEDIA_TYPE_SUBTITLE]);
             }
 
             if (Video.StreamIndex < 0 && Audio.StreamIndex < 0)
@@ -885,6 +903,7 @@
 
                         IsAtEndOfStream = true;
                     }
+
                     if (ic->pb != null && ic->pb->error != 0)
                     {
                         if (o.autoexit)
@@ -894,7 +913,6 @@
                     }
 
                     NeedsMorePacketsEvent.WaitOne(1);
-
                     continue;
                 }
                 else

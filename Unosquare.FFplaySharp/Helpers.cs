@@ -35,7 +35,7 @@
             foreach (var p in NativeLibraryPaths)
             {
                 var loadResult = NativeMethods.LoadLibrary(p);
-                if (loadResult != IntPtr.Zero)
+                if (!loadResult.IsNull())
                 {
                     AvailableLibraries.Add(p, loadResult);
                 }
@@ -53,23 +53,6 @@
         public static int AV_CEIL_RSHIFT(int a, int b) => ((a) + (1 << (b)) - 1) >> (b);
 
         public static int av_clip(int number, int min, int max) => number < min ? min : number > max ? max : number;
-
-        public static bool cmp_audio_fmts(AVSampleFormat fmt1, long channel_count1, AVSampleFormat fmt2, long channel_count2)
-        {
-            /* If channel count == 1, planar and non-planar formats are the same */
-            if (channel_count1 == 1 && channel_count2 == 1)
-                return ffmpeg.av_get_packed_sample_fmt(fmt1) != ffmpeg.av_get_packed_sample_fmt(fmt2);
-            else
-                return channel_count1 != channel_count2 || fmt1 != fmt2;
-        }
-
-        public static long ValidateChannelLayout(ulong channelLayout, int channelCount)
-        {
-            if (channelLayout != 0 && AudioParams.ChannelCountFor(channelLayout) == channelCount)
-                return (long)channelLayout;
-            else
-                return 0;
-        }
 
         public static unsafe void FFSWAP(AVFilterContext** array, int a, int b)
         {
@@ -249,5 +232,7 @@
         public static bool IsFalse(this int x) => x == 0;
 
         public static bool IsNaN(this double x) => double.IsNaN(x);
+
+        public static bool IsNull(this IntPtr ptr) => ptr == IntPtr.Zero;
     }
 }
