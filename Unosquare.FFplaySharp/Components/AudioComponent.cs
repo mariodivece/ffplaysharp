@@ -38,7 +38,7 @@
         public AudioParams SourceSpec { get; set; } = new();
 
         public AudioParams FilterSpec { get; set; } = new();
-        
+
         public AudioParams HardwareSpec { get; set; } = new();
 
         public override AVMediaType MediaType => AVMediaType.AVMEDIA_TYPE_AUDIO;
@@ -177,7 +177,7 @@
                 null, af.FramePtr->channels, af.FramePtr->nb_samples, (AVSampleFormat)af.FramePtr->format, 1);
 
             var frameChannelLayout =
-                (af.FramePtr->channel_layout != 0 && af.FramePtr->channels == AudioParams.ChannelCountFor(af.FramePtr->channel_layout))
+                af.FramePtr->channel_layout != 0 && af.FramePtr->channels == AudioParams.ChannelCountFor(af.FramePtr->channel_layout)
                 ? (long)af.FramePtr->channel_layout
                 : AudioParams.DefaultChannelLayoutFor(af.FramePtr->channels);
             var wantedSampleCount = synchronize_audio(af.FramePtr->nb_samples);
@@ -192,9 +192,9 @@
                 ConvertContext = null;
 
                 ConvertContext = ffmpeg.swr_alloc_set_opts(null,
-                                                 HardwareSpec.Layout, HardwareSpec.SampleFormat, HardwareSpec.Frequency,
-                                                 frameChannelLayout, (AVSampleFormat)af.FramePtr->format, af.FramePtr->sample_rate,
-                                                 0, null);
+                    HardwareSpec.Layout, HardwareSpec.SampleFormat, HardwareSpec.Frequency,
+                    frameChannelLayout, (AVSampleFormat)af.FramePtr->format, af.FramePtr->sample_rate,
+                    0, null);
 
                 if (ConvertContext == null || ffmpeg.swr_init(ConvertContext) < 0)
                 {

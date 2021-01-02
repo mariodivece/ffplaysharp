@@ -824,15 +824,13 @@
         /* prepare a new audio buffer */
         public void sdl_audio_callback(IntPtr opaque, IntPtr stream, int len)
         {
-            int audio_size, len1;
-
             audio_callback_time = Clock.SystemTime;
 
             while (len > 0)
             {
                 if (audio_buf_index >= Container.audio_buf_size)
                 {
-                    audio_size = Container.Audio.audio_decode_frame();
+                    var audio_size = Container.Audio.audio_decode_frame();
                     if (audio_size < 0)
                     {
                         /* if error, just output silence */
@@ -847,7 +845,7 @@
                     }
                     audio_buf_index = 0;
                 }
-                len1 = (int)(Container.audio_buf_size - audio_buf_index);
+                var len1 = (int)(Container.audio_buf_size - audio_buf_index);
                 if (len1 > len)
                     len1 = len;
 
