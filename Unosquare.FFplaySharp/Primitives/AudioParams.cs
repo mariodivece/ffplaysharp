@@ -14,6 +14,22 @@
 
         public int BytesPerSample => ffmpeg.av_get_bytes_per_sample(SampleFormat);
 
+        public void ImportFrom(AVFrame* frame)
+        {
+            SampleFormat = (AVSampleFormat)frame->format;
+            Channels = frame->channels;
+            Layout = ValidateChannelLayout(frame->channel_layout, frame->channels);
+            Frequency = frame->sample_rate;
+        }
+
+        public void ImportFrom(AVCodecContext* codecContext)
+        {
+            Frequency = codecContext->sample_rate;
+            Channels = codecContext->channels;
+            Layout = ValidateChannelLayout(codecContext->channel_layout, codecContext->channels);
+            SampleFormat = codecContext->sample_fmt;
+        }
+
         public AudioParams Clone()
         {
             var result = new AudioParams
@@ -22,6 +38,22 @@
                 Frequency = Frequency,
                 Layout = Layout,
                 SampleFormat = SampleFormat
+            };
+
+            return result;
+        }
+
+        public bool IsDifferent(AVFrame* audioFrame) =>
+            AreDifferent(SampleFormat, Channels, (AVSampleFormat)audioFrame->format, audioFrame->channels);
+
+        public static AudioParams FromFilterContext(AVFilterContext* filter)
+        {
+            var result = new AudioParams
+            {
+                Frequency = ffmpeg.av_buffersink_get_sample_rate(filter),
+                Channels = ffmpeg.av_buffersink_get_channels(filter),
+                Layout = (long)ffmpeg.av_buffersink_get_channel_layout(filter),
+                SampleFormat = (AVSampleFormat)ffmpeg.av_buffersink_get_format(filter)
             };
 
             return result;
@@ -49,8 +81,5 @@
             else
                 return channelCountA != channelCountB || sampleFormatA != sampleFormatB;
         }
-
-        public bool IsDifferent(AVFrame* audioFrame) =>
-            AreDifferent(SampleFormat, Channels, (AVSampleFormat)audioFrame->format, audioFrame->channels);
     }
 }

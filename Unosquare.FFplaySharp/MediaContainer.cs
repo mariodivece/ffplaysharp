@@ -495,19 +495,15 @@
             switch (targetMediaType)
             {
                 case AVMediaType.AVMEDIA_TYPE_AUDIO:
-                    Audio.FilterSpec.Frequency = codecContext->sample_rate;
-                    Audio.FilterSpec.Channels = codecContext->channels;
-                    Audio.FilterSpec.Layout = AudioParams.ValidateChannelLayout(codecContext->channel_layout, codecContext->channels);
-                    Audio.FilterSpec.SampleFormat = codecContext->sample_fmt;
+                    Audio.FilterSpec.ImportFrom(codecContext);
                     if ((ret = Audio.ConfigureFilters(false)) < 0)
                         goto fail;
 
-                    var sampleRate = ffmpeg.av_buffersink_get_sample_rate(Audio.OutputFilter);
-                    var channelCount = ffmpeg.av_buffersink_get_channels(Audio.OutputFilter);
-                    var channelLayout = (long)ffmpeg.av_buffersink_get_channel_layout(Audio.OutputFilter);
+                    var wantedSpec = AudioParams.FromFilterContext(Audio.OutputFilter);
+                    ret = Renderer.audio_open(wantedSpec, out var audioHardwareSpec);
 
                     // prepare audio output
-                    if ((ret = Renderer.audio_open(channelLayout, channelCount, sampleRate, out var audioHardwareSpec)) < 0)
+                    if (ret < 0)
                         goto fail;
 
                     Audio.HardwareSpec = audioHardwareSpec;

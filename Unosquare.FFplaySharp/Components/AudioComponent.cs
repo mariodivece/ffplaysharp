@@ -459,10 +459,7 @@
                            $"rate:{FilterSpec.Frequency} ch:{FilterSpec.Channels} fmt:{ffmpeg.av_get_sample_fmt_name(FilterSpec.SampleFormat)} layout:{Helpers.PtrToString(filterLayoutString)} serial:{lastPacketSerial} to " +
                            $"rate:{decodedFrame->sample_rate} ch:{decodedFrame->channels} fmt:{ffmpeg.av_get_sample_fmt_name((AVSampleFormat)decodedFrame->format)} layout:{Helpers.PtrToString(decoderLayoutString)} serial:{PacketSerial}\n");
 
-                        FilterSpec.SampleFormat = (AVSampleFormat)decodedFrame->format;
-                        FilterSpec.Channels = decodedFrame->channels;
-                        FilterSpec.Layout = decoderChannelLayout;
-                        FilterSpec.Frequency = decodedFrame->sample_rate;
+                        FilterSpec.ImportFrom(decodedFrame);
                         lastPacketSerial = PacketSerial;
 
                         if ((ret = ConfigureFilters(true)) < 0)

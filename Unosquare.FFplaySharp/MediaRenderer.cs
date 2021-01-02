@@ -307,6 +307,8 @@
             return true;
         }
 
+        public int audio_open(AudioParams wantedSpec, out AudioParams audioDeviceSpec) =>
+            audio_open(wantedSpec.Layout, wantedSpec.Channels, wantedSpec.Frequency, out audioDeviceSpec);
 
         public int audio_open(long wantedChannelLayout, int wantedChannelCount, int wantedSampleRate, out AudioParams audioDeviceSpec)
         {
