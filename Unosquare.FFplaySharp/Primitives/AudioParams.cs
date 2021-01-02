@@ -14,6 +14,19 @@
 
         public int BytesPerSample => ffmpeg.av_get_bytes_per_sample(SampleFormat);
 
+        public AudioParams Clone()
+        {
+            var result = new AudioParams
+            {
+                Channels = Channels,
+                Frequency = Frequency,
+                Layout = Layout,
+                SampleFormat = SampleFormat
+            };
+
+            return result;
+        }
+
         public static long DefaultChannelLayoutFor(int channelCount) => ffmpeg.av_get_default_channel_layout(channelCount);
 
         public static int ChannelCountFor(ulong channelLayout) => ffmpeg.av_get_channel_layout_nb_channels(channelLayout);

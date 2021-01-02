@@ -308,8 +308,9 @@
         }
 
 
-        public int audio_open(long wantedChannelLayout, int wantedChannelCount, int wantedSampleRate, ref AudioParams audio_hw_params)
+        public int audio_open(long wantedChannelLayout, int wantedChannelCount, int wantedSampleRate, out AudioParams audioDeviceSpec)
         {
+            audioDeviceSpec = new AudioParams();
             var next_nb_channels = new[] { 0, 0, 1, 6, 2, 6, 4, 6 };
             var next_sample_rates = new[] { 0, 44100, 48000, 96000, 192000 };
             int next_sample_rate_idx = next_sample_rates.Length - 1;
@@ -389,12 +390,12 @@
                 }
             }
 
-            audio_hw_params.SampleFormat = AVSampleFormat.AV_SAMPLE_FMT_S16;
-            audio_hw_params.Frequency = deviceSpec.freq;
-            audio_hw_params.Layout = wantedChannelLayout;
-            audio_hw_params.Channels = deviceSpec.channels;
+            audioDeviceSpec.SampleFormat = AVSampleFormat.AV_SAMPLE_FMT_S16;
+            audioDeviceSpec.Frequency = deviceSpec.freq;
+            audioDeviceSpec.Layout = wantedChannelLayout;
+            audioDeviceSpec.Channels = deviceSpec.channels;
 
-            if (audio_hw_params.BytesPerSecond <= 0 || audio_hw_params.FrameSize <= 0)
+            if (audioDeviceSpec.BytesPerSecond <= 0 || audioDeviceSpec.FrameSize <= 0)
             {
                 ffmpeg.av_log(null, ffmpeg.AV_LOG_ERROR, "av_samples_get_buffer_size failed\n");
                 return -1;
@@ -834,7 +835,7 @@
                     {
                         /* if error, just output silence */
                         Container.audio_buf = null;
-                        Container.audio_buf_size = (uint)(Constants.SDL_AUDIO_MIN_BUFFER_SIZE / Container.Audio.TargetSpec.FrameSize * Container.Audio.TargetSpec.FrameSize);
+                        Container.audio_buf_size = (uint)(Constants.SDL_AUDIO_MIN_BUFFER_SIZE / Container.Audio.HardwareSpec.FrameSize * Container.Audio.HardwareSpec.FrameSize);
                     }
                     else
                     {
@@ -874,7 +875,7 @@
             /* Let's assume the audio driver that is used by SDL has two periods. */
             if (!Container.Audio.FrameTime.IsNaN())
             {
-                Container.AudioClock.Set(Container.Audio.FrameTime - (double)(2 * Container.audio_hw_buf_size + audio_write_buf_size) / Container.Audio.TargetSpec.BytesPerSecond, Container.audio_clock_serial, audio_callback_time);
+                Container.AudioClock.Set(Container.Audio.FrameTime - (double)(2 * Container.audio_hw_buf_size + audio_write_buf_size) / Container.Audio.HardwareSpec.BytesPerSecond, Container.audio_clock_serial, audio_callback_time);
                 Container.ExternalClock.SyncToSlave(Container.AudioClock);
             }
         }

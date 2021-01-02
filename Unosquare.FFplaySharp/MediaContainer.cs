@@ -507,20 +507,20 @@
                     var channelLayout = (long)ffmpeg.av_buffersink_get_channel_layout(Audio.OutputFilter);
 
                     // prepare audio output
-                    if ((ret = Renderer.audio_open(channelLayout, channelCount, sampleRate, ref Audio.TargetSpec)) < 0)
+                    if ((ret = Renderer.audio_open(channelLayout, channelCount, sampleRate, out var audioHardwareSpec)) < 0)
                         goto fail;
 
+                    Audio.HardwareSpec = audioHardwareSpec;
                     audio_hw_buf_size = ret;
-                    Audio.SourceSpec = Audio.TargetSpec;
+                    Audio.SourceSpec = Audio.HardwareSpec.Clone();
                     audio_buf_size = 0;
 
                     // init averaging filter
-                    Audio.audio_diff_avg_coef = Math.Exp(Math.Log(0.01) / Constants.AUDIO_DIFF_AVG_NB);
                     Audio.audio_diff_avg_count = 0;
 
                     // since we do not have a precise anough audio FIFO fullness,
                     // we correct audio sync only if larger than this threshold.
-                    Audio.audio_diff_threshold = (double)audio_hw_buf_size / Audio.TargetSpec.BytesPerSecond;
+                    Audio.audio_diff_threshold = (double)audio_hw_buf_size / Audio.HardwareSpec.BytesPerSecond;
 
                     Audio.InitializeDecoder(codecContext, streamIndex);
                     Audio.Start();

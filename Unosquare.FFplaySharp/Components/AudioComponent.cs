@@ -24,7 +24,7 @@
 
         public double audio_diff_cum; /* used for AV difference average computation */
         public double audio_diff_threshold;
-        public double audio_diff_avg_coef;
+        private readonly double audio_diff_avg_coef = Math.Exp(Math.Log(0.01) / Constants.AUDIO_DIFF_AVG_NB);
         public int audio_diff_avg_count;
 
         public AudioComponent(MediaContainer container)
@@ -35,9 +35,11 @@
 
         public SwrContext* ConvertContext { get; private set; }
 
-        public AudioParams SourceSpec = new();
-        public AudioParams FilterSpec = new();
-        public AudioParams TargetSpec = new();
+        public AudioParams SourceSpec { get; set; } = new();
+
+        public AudioParams FilterSpec { get; set; } = new();
+        
+        public AudioParams HardwareSpec { get; set; } = new();
 
         public override AVMediaType MediaType => AVMediaType.AVMEDIA_TYPE_AUDIO;
 
@@ -108,9 +110,9 @@
 
             if (forceOutputFormat)
             {
-                var outputChannelLayout = new[] { TargetSpec.Layout };
-                var outputChannelCount = new[] { TargetSpec.Layout != 0 ? -1 : TargetSpec.Channels };
-                var outputSampleRates = new[] { TargetSpec.Frequency };
+                var outputChannelLayout = new[] { HardwareSpec.Layout };
+                var outputChannelCount = new[] { HardwareSpec.Layout != 0 ? -1 : HardwareSpec.Channels };
+                var outputSampleRates = new[] { HardwareSpec.Frequency };
 
                 if ((ret = ffmpeg.av_opt_set_int(outputFilterContext, "all_channel_counts", 0, SearhChildrenFlags)) < 0)
                     goto end;
@@ -158,7 +160,7 @@
             {
                 while (Frames.PendingCount == 0)
                 {
-                    if ((Clock.SystemTime - Container.Renderer.audio_callback_time) > Container.audio_hw_buf_size / TargetSpec.BytesPerSecond / 2)
+                    if ((Clock.SystemTime - Container.Renderer.audio_callback_time) > Container.audio_hw_buf_size / HardwareSpec.BytesPerSecond / 2)
                         return -1;
 
                     Thread.Sleep(1);
@@ -190,7 +192,7 @@
                 ConvertContext = null;
 
                 ConvertContext = ffmpeg.swr_alloc_set_opts(null,
-                                                 TargetSpec.Layout, TargetSpec.SampleFormat, TargetSpec.Frequency,
+                                                 HardwareSpec.Layout, HardwareSpec.SampleFormat, HardwareSpec.Frequency,
                                                  frameChannelLayout, (AVSampleFormat)af.FramePtr->format, af.FramePtr->sample_rate,
                                                  0, null);
 
@@ -199,7 +201,7 @@
                     ffmpeg.av_log(null, ffmpeg.AV_LOG_ERROR,
                            $"Cannot create sample rate converter for conversion of {af.FramePtr->sample_rate} Hz " +
                            $"{ffmpeg.av_get_sample_fmt_name((AVSampleFormat)af.FramePtr->format)} {af.FramePtr->channels} channels to " +
-                           $"{TargetSpec.Frequency} Hz {ffmpeg.av_get_sample_fmt_name(TargetSpec.SampleFormat)} {TargetSpec.Channels} channels!\n");
+                           $"{HardwareSpec.Frequency} Hz {ffmpeg.av_get_sample_fmt_name(HardwareSpec.SampleFormat)} {HardwareSpec.Channels} channels!\n");
 
                     convertContext = ConvertContext;
                     ffmpeg.swr_free(&convertContext);
@@ -218,8 +220,8 @@
 
             if (ConvertContext != null)
             {
-                var wantedOutputSize = wantedSampleCount * TargetSpec.Frequency / af.FramePtr->sample_rate + 256;
-                var outputBufferSize = ffmpeg.av_samples_get_buffer_size(null, TargetSpec.Channels, wantedOutputSize, TargetSpec.SampleFormat, 0);
+                var wantedOutputSize = wantedSampleCount * HardwareSpec.Frequency / af.FramePtr->sample_rate + 256;
+                var outputBufferSize = ffmpeg.av_samples_get_buffer_size(null, HardwareSpec.Channels, wantedOutputSize, HardwareSpec.SampleFormat, 0);
 
                 if (outputBufferSize < 0)
                 {
@@ -228,8 +230,8 @@
                 }
                 if (wantedSampleCount != af.FramePtr->nb_samples)
                 {
-                    if (ffmpeg.swr_set_compensation(ConvertContext, (wantedSampleCount - af.FramePtr->nb_samples) * TargetSpec.Frequency / af.FramePtr->sample_rate,
-                                                wantedSampleCount * TargetSpec.Frequency / af.FramePtr->sample_rate) < 0)
+                    if (ffmpeg.swr_set_compensation(ConvertContext, (wantedSampleCount - af.FramePtr->nb_samples) * HardwareSpec.Frequency / af.FramePtr->sample_rate,
+                                                wantedSampleCount * HardwareSpec.Frequency / af.FramePtr->sample_rate) < 0)
                     {
                         ffmpeg.av_log(null, ffmpeg.AV_LOG_ERROR, "swr_set_compensation() failed\n");
                         return -1;
@@ -272,7 +274,7 @@
                 }
 
                 Container.audio_buf = ResampledOutputBuffer;
-                resampledBufferSize = outputSampleCount * TargetSpec.Channels * TargetSpec.BytesPerSample;
+                resampledBufferSize = outputSampleCount * HardwareSpec.Channels * HardwareSpec.BytesPerSample;
             }
             else
             {
