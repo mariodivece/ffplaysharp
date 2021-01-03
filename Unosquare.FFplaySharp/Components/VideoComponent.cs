@@ -16,9 +16,13 @@
             // placeholder
         }
 
+        public int DroppedFrameCount { get; private set; }
+
         public SwsContext* ConvertContext;
 
         public override AVMediaType MediaType => AVMediaType.AVMEDIA_TYPE_VIDEO;
+
+        public override string WantedCodecName => Container.Options.AudioForcedCodecName;
 
         protected override FrameQueue CreateFrameQueue() => new(Packets, Constants.VideoFrameQueueCapacity, true);
 
@@ -184,7 +188,7 @@
                         PacketSerial == Container.VideoClock.Serial &&
                         Packets.Count != 0)
                     {
-                        Container.frame_drops_early++;
+                        DroppedFrameCount++;
                         ffmpeg.av_frame_unref(frame);
                         gotPicture = 0;
                     }

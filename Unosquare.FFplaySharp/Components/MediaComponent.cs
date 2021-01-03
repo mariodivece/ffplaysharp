@@ -43,6 +43,8 @@
 
         public bool IsSubtitle => MediaType == AVMediaType.AVMEDIA_TYPE_SUBTITLE;
 
+        public abstract string WantedCodecName { get; }
+
         public bool IsPictureAttachmentStream =>
             MediaType == AVMediaType.AVMEDIA_TYPE_VIDEO &&
             Stream != null &&
@@ -214,12 +216,13 @@
             HasFinished = 0;
         }
 
-        public virtual void InitializeDecoder(AVCodecContext* codecContext, int streamIndex)
+        public virtual int InitializeDecoder(AVCodecContext* codecContext, int streamIndex)
         {
             StreamIndex = streamIndex;
             Stream = Container.InputContext->streams[streamIndex];
             CodecContext = codecContext;
             PacketSerial = -1;
+            return 0;
         }
 
         public void DisposeDecoder()

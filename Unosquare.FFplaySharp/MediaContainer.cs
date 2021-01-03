@@ -47,17 +47,7 @@
 
         public ClockSync ClockSyncMode { get; private set; }
 
-
-
-        public int audio_hw_buf_size;
-
-        
-        
-
-
         public bool IsMuted { get; private set; }
-        public int frame_drops_early;
-        public int frame_drops_late;
 
         public ShowMode show_mode;
 
@@ -426,14 +416,7 @@
                 _ => throw new NotSupportedException($"Opening '{targetMediaType}' is not supported.")
             };
 
-            var forcedCodecName = targetMediaType switch
-            {
-                AVMediaType.AVMEDIA_TYPE_AUDIO => Options.AudioForcedCodecName,
-                AVMediaType.AVMEDIA_TYPE_VIDEO => Options.VideoForcedCodecName,
-                AVMediaType.AVMEDIA_TYPE_SUBTITLE => Options.SubtitleForcedCodecName,
-                _ => null
-            };
-
+            var forcedCodecName = targetComponent.WantedCodecName;
             targetComponent.LastStreamIndex = streamIndex;
 
             if (!string.IsNullOrWhiteSpace(forcedCodecName))
@@ -490,43 +473,16 @@
 
             IsAtEndOfStream = false;
             ic->streams[streamIndex]->discard = AVDiscard.AVDISCARD_DEFAULT;
+            ret = targetComponent.InitializeDecoder(codecContext, streamIndex);
+            if (ret < 0) goto fail;
+            targetComponent.Start();
 
-            switch (targetMediaType)
-            {
-                case AVMediaType.AVMEDIA_TYPE_AUDIO:
-                    Audio.FilterSpec.ImportFrom(codecContext);
-                    if ((ret = Audio.ConfigureFilters(false)) < 0)
-                        goto fail;
+            if (targetComponent.IsVideo)
+                IsPictureAttachmentPending = true;
 
-                    var wantedSpec = AudioParams.FromFilterContext(Audio.OutputFilter);
-                    ret = Renderer.audio_open(wantedSpec, out var audioHardwareSpec);
+            if (targetComponent.IsAudio)
+                Renderer.PauseAudio();
 
-                    // prepare audio output
-                    if (ret < 0)
-                        goto fail;
-
-                    audio_hw_buf_size = ret;
-                    
-                    Audio.HardwareSpec = audioHardwareSpec.Clone();
-                    Audio.SourceSpec = audioHardwareSpec.Clone();
-
-                    Audio.InitializeDecoder(codecContext, streamIndex);
-                    Audio.Start();
-                    Renderer.PauseAudio();
-                    break;
-                case AVMediaType.AVMEDIA_TYPE_VIDEO:
-                case AVMediaType.AVMEDIA_TYPE_SUBTITLE:
-
-                    targetComponent.InitializeDecoder(codecContext, streamIndex);
-                    targetComponent.Start();
-
-                    if (targetComponent.IsVideo)
-                        IsPictureAttachmentPending = true;
-
-                    break;
-                default:
-                    break;
-            }
             goto exit;
 
         fail:

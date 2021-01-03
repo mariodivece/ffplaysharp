@@ -15,6 +15,8 @@
 
         public override AVMediaType MediaType => AVMediaType.AVMEDIA_TYPE_SUBTITLE;
 
+        public override string WantedCodecName => Container.Options.AudioForcedCodecName;
+
         protected override FrameQueue CreateFrameQueue() => new(Packets, Constants.SubtitleFrameQueueCapacity, false);
 
         private int DecodeFrame(out AVSubtitle* frame) => DecodeFrame(out _, out frame);

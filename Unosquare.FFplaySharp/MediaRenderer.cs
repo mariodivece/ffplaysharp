@@ -12,6 +12,7 @@
         private readonly SDL.SDL_AudioCallback AudioCallback;
         private uint AudioDeviceId;
 
+        private int DroppedPictureCount;
         public double last_mouse_left_click;
 
         public double AudioCallbackTime { get; private set; }
@@ -617,10 +618,10 @@
                         var duration = vp_duration(container, vp, nextvp);
                         if (container.step == false &&
                             (container.Options.framedrop > 0 ||
-                            (container.Options.framedrop != 0 && container.MasterSyncMode != ClockSync.Video))
-                            && time > container.frame_timer + duration)
+                            (container.Options.framedrop != 0 && container.MasterSyncMode != ClockSync.Video)) &&
+                            time > container.frame_timer + duration)
                         {
-                            container.frame_drops_late++;
+                            DroppedPictureCount++;
                             container.Video.Frames.Next();
                             goto retry;
                         }
@@ -711,7 +712,7 @@
                     buf.Append($"{container.MasterTime,-8:0.####} ");
                     buf.Append((container.Audio.Stream != null && container.Video.Stream != null) ? "A-V" : (container.Video.Stream != null ? "M-V" : (container.Audio.Stream != null ? "M-A" : "   ")));
                     buf.Append($":{av_diff,-8:0.####} ");
-                    buf.Append($"fd={(container.frame_drops_early + container.frame_drops_late)} ");
+                    buf.Append($"fd={(container.Video.DroppedFrameCount + DroppedPictureCount)} ");
                     buf.Append($"aq={(aqsize / 1024)}KB ");
                     buf.Append($"vq={(vqsize / 1024)}KB ");
                     buf.Append($"sq={(sqsize)}B ");
@@ -855,7 +856,7 @@
             /* Let's assume the audio driver that is used by SDL has two periods. */
             if (!Container.Audio.FrameTime.IsNaN())
             {
-                var bufferDuration = (2d * Container.audio_hw_buf_size + audio_write_buf_size) / Container.Audio.HardwareSpec.BytesPerSecond;
+                var bufferDuration = (2d * Container.Audio.HardwareBufferSize + audio_write_buf_size) / Container.Audio.HardwareSpec.BytesPerSecond;
                 Container.AudioClock.Set(Container.Audio.FrameTime - bufferDuration, Container.Audio.FrameSerial, AudioCallbackTime);
                 Container.ExternalClock.SyncToSlave(Container.AudioClock);
             }

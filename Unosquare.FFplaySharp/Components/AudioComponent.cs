@@ -8,6 +8,8 @@
 
     public unsafe sealed class AudioComponent : FilteringMediaComponent
     {
+        private readonly double SyncDiffAverageCoffiecient = Math.Exp(Math.Log(0.01) / Constants.AUDIO_DIFF_AVG_NB);
+
         private byte* ResampledOutputBuffer;
         private uint ResampledOutputBufferSize;
         private long StartPts;
@@ -15,6 +17,15 @@
         private long NextPts;
         private AVRational NextPtsTimeBase;
         private double LastFrameTime = 0;
+        private double SyncDiffTotalDelay; /* used for AV difference average computation */
+        private double SyncDiffDelayThreshold;
+        private int SyncDiffAverageCount;
+
+        public AudioComponent(MediaContainer container)
+            : base(container)
+        {
+            // placeholder
+        }
 
         /// <summary>
         /// Gets or sets the Frame Time (ported from audio_clock)
@@ -23,21 +34,11 @@
 
         public int FrameSerial { get; private set; } = -1;
 
-        private readonly double audio_diff_avg_coef = Math.Exp(Math.Log(0.01) / Constants.AUDIO_DIFF_AVG_NB);
-
-        private double audio_diff_cum; /* used for AV difference average computation */
-
-        private double audio_diff_threshold;
-
-        private int audio_diff_avg_count;
-
-        public AudioComponent(MediaContainer container)
-            : base(container)
-        {
-            // placeholder
-        }
-
         public byte* OutputBuffer { get; set; }
+
+        public int HardwareBufferSize { get; private set; }
+
+        public override string WantedCodecName => Container.Options.AudioForcedCodecName;
 
         public SwrContext* ConvertContext { get; private set; }
 
@@ -48,6 +49,12 @@
         public AudioParams HardwareSpec { get; set; } = new();
 
         public override AVMediaType MediaType => AVMediaType.AVMEDIA_TYPE_AUDIO;
+
+        public int ConfigureFilters(AVCodecContext* codecContext)
+        {
+            FilterSpec.ImportFrom(codecContext);
+            return ConfigureFilters(false);
+        }
 
         public int ConfigureFilters(bool forceOutputFormat)
         {
@@ -131,8 +138,9 @@
             }
 
             var filterGraphLiteral = o.afilters;
-            if ((ret = MaterializeFilterGraph(FilterGraph, filterGraphLiteral, inputFilterContext, outputFilterContext)) < 0)
-                goto end;
+            ret = MaterializeFilterGraph(FilterGraph, filterGraphLiteral, inputFilterContext, outputFilterContext);
+
+            if (ret < 0) goto end;
 
             InputFilter = inputFilterContext;
             OutputFilter = outputFilterContext;
@@ -166,7 +174,7 @@
             {
                 while (Frames.PendingCount == 0)
                 {
-                    if ((Clock.SystemTime - Container.Renderer.AudioCallbackTime) > Container.audio_hw_buf_size / HardwareSpec.BytesPerSecond / 2)
+                    if ((Clock.SystemTime - Container.Renderer.AudioCallbackTime) > HardwareBufferSize / HardwareSpec.BytesPerSecond / 2)
                         return -1;
 
                     Thread.Sleep(1);
@@ -317,18 +325,18 @@
 
             if (!clockDelay.IsNaN() && Math.Abs(clockDelay) < Constants.AV_NOSYNC_THRESHOLD)
             {
-                audio_diff_cum = clockDelay + audio_diff_avg_coef * audio_diff_cum;
-                if (audio_diff_avg_count < Constants.AUDIO_DIFF_AVG_NB)
+                SyncDiffTotalDelay = clockDelay + (SyncDiffAverageCoffiecient * SyncDiffTotalDelay);
+                if (SyncDiffAverageCount < Constants.AUDIO_DIFF_AVG_NB)
                 {
                     /* not enough measures to have a correct estimate */
-                    audio_diff_avg_count++;
+                    SyncDiffAverageCount++;
                 }
                 else
                 {
                     /* estimate the A-V difference */
-                    var avg_diff = audio_diff_cum * (1.0 - audio_diff_avg_coef);
+                    var syncDiffDelay = SyncDiffTotalDelay * (1.0 - SyncDiffAverageCoffiecient);
 
-                    if (Math.Abs(avg_diff) >= audio_diff_threshold)
+                    if (Math.Abs(syncDiffDelay) >= SyncDiffDelayThreshold)
                     {
                         wantedSampleCount = sampleCount + (int)(clockDelay * SourceSpec.Frequency);
                         var minSampleCount = (int)(sampleCount * (100 - Constants.SAMPLE_CORRECTION_PERCENT_MAX) / 100);
@@ -337,15 +345,15 @@
                     }
 
                     ffmpeg.av_log(
-                        null, ffmpeg.AV_LOG_TRACE, $"diff={clockDelay} adiff={avg_diff} sample_diff={(wantedSampleCount - sampleCount)} apts={FrameTime} {audio_diff_threshold}\n");
+                        null, ffmpeg.AV_LOG_TRACE, $"diff={clockDelay} adiff={syncDiffDelay} sample_diff={(wantedSampleCount - sampleCount)} apts={FrameTime} {SyncDiffDelayThreshold}\n");
                 }
             }
             else
             {
                 /* too big difference : may be initial PTS errors, so
                    reset A-V filter */
-                audio_diff_avg_count = 0;
-                audio_diff_cum = 0;
+                SyncDiffAverageCount = 0;
+                SyncDiffTotalDelay = 0;
             }
 
             return wantedSampleCount;
@@ -378,14 +386,32 @@
 
         protected override FrameQueue CreateFrameQueue() => new(Packets, Constants.AudioFrameQueueCapacity, true);
 
-        public override unsafe void InitializeDecoder(AVCodecContext* codecContext, int streamIndex)
+        public override unsafe int InitializeDecoder(AVCodecContext* codecContext, int streamIndex)
         {
+            FilterSpec.ImportFrom(codecContext);
+            if (ConfigureFilters(false) < 0)
+                return -1;
+
+            var wantedSpec = AudioParams.FromFilterContext(OutputFilter);
+            var hardwareBufferSize = Container.Renderer.audio_open(wantedSpec, out var audioHardwareSpec);
+            if (hardwareBufferSize < 0)
+                return -1;
+
+            HardwareBufferSize = hardwareBufferSize;
+            HardwareSpec = audioHardwareSpec.Clone();
+
+            // Start off with the source spec to be the same as the hardware
+            // spec as no frames have been decoded yet. This spec will change
+            // as audio frames become available.
+            SourceSpec = HardwareSpec.Clone();
+
             // init averaging filter
-            audio_diff_avg_count = 0;
+            SyncDiffAverageCount = 0;
+            SyncDiffTotalDelay = 0;
 
             // since we do not have a precise anough audio FIFO fullness,
             // we correct audio sync only if larger than this threshold.
-            audio_diff_threshold = (double)Container.audio_hw_buf_size / HardwareSpec.BytesPerSecond;
+            SyncDiffDelayThreshold = (double)HardwareBufferSize / HardwareSpec.BytesPerSecond;
 
             base.InitializeDecoder(codecContext, streamIndex);
 
@@ -399,6 +425,8 @@
                 StartPts = ffmpeg.AV_NOPTS_VALUE;
                 StartPtsTimeBase = new();
             }
+
+            return 0;
         }
 
         private int DecodeFrame(out AVFrame* frame)
