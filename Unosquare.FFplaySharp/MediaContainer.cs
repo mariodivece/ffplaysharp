@@ -48,7 +48,7 @@
         public ClockSync ClockSyncMode { get; private set; }
 
 
-        public int audio_clock_serial;
+
         public int audio_hw_buf_size;
 
         
@@ -166,7 +166,6 @@
             container.AudioClock = new Clock(container.Audio.Packets);
             container.ExternalClock = new Clock(container.ExternalClock);
 
-            container.audio_clock_serial = -1;
             if (container.Options.startup_volume < 0)
                 ffmpeg.av_log(null, ffmpeg.AV_LOG_WARNING, $"-volume={container.Options.startup_volume} < 0, setting to 0\n");
 
@@ -510,14 +509,6 @@
                     
                     Audio.HardwareSpec = audioHardwareSpec.Clone();
                     Audio.SourceSpec = audioHardwareSpec.Clone();
-                    
-
-                    // init averaging filter
-                    Audio.audio_diff_avg_count = 0;
-
-                    // since we do not have a precise anough audio FIFO fullness,
-                    // we correct audio sync only if larger than this threshold.
-                    Audio.audio_diff_threshold = (double)audio_hw_buf_size / Audio.HardwareSpec.BytesPerSecond;
 
                     Audio.InitializeDecoder(codecContext, streamIndex);
                     Audio.Start();

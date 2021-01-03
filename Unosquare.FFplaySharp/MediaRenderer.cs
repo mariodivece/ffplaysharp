@@ -16,7 +16,7 @@
 
         public double AudioCallbackTime { get; private set; }
 
-        private uint ReadBufferSize; /* in bytes */
+        private int ReadBufferSize; /* in bytes */
         private int ReadBufferIndex; /* in bytes */
         private int audio_write_buf_size;
 
@@ -801,12 +801,12 @@
         }
 
         /* prepare a new audio buffer */
-        public void sdl_audio_callback(IntPtr opaque, IntPtr audioStream, int requestedByteCount)
+        public void sdl_audio_callback(IntPtr opaque, IntPtr audioStream, int pendingByteCount)
         {
 
             AudioCallbackTime = Clock.SystemTime;
 
-            while (requestedByteCount > 0)
+            while (pendingByteCount > 0)
             {
                 if (ReadBufferIndex >= ReadBufferSize)
                 {
@@ -815,17 +815,19 @@
                     {
                         /* if error, just output silence */
                         Container.Audio.OutputBuffer = null;
-                        ReadBufferSize = (uint)(Constants.SDL_AUDIO_MIN_BUFFER_SIZE / Container.Audio.HardwareSpec.FrameSize * Container.Audio.HardwareSpec.FrameSize);
+                        ReadBufferSize = Constants.SDL_AUDIO_MIN_BUFFER_SIZE / Container.Audio.HardwareSpec.FrameSize * Container.Audio.HardwareSpec.FrameSize;
                     }
                     else
                     {
-                        ReadBufferSize = (uint)audio_size;
+                        ReadBufferSize = audio_size;
                     }
+
                     ReadBufferIndex = 0;
                 }
-                var readByteCount = (int)(ReadBufferSize - ReadBufferIndex);
-                if (readByteCount > requestedByteCount)
-                    readByteCount = requestedByteCount;
+
+                var readByteCount = ReadBufferSize - ReadBufferIndex;
+                if (readByteCount > pendingByteCount)
+                    readByteCount = pendingByteCount;
 
                 var outputStream = (byte*)audioStream;
                 var inputStream = Container.Audio.OutputBuffer + ReadBufferIndex;
@@ -844,16 +846,17 @@
                         SDL.SDL_MixAudioFormat(outputStream, inputStream, SDL.AUDIO_S16SYS, (uint)readByteCount, audio_volume);
                 }
 
-                requestedByteCount -= readByteCount;
+                pendingByteCount -= readByteCount;
                 audioStream += readByteCount;
                 ReadBufferIndex += readByteCount;
             }
 
-            audio_write_buf_size = (int)(ReadBufferSize - ReadBufferIndex);
+            audio_write_buf_size = ReadBufferSize - ReadBufferIndex;
             /* Let's assume the audio driver that is used by SDL has two periods. */
             if (!Container.Audio.FrameTime.IsNaN())
             {
-                Container.AudioClock.Set(Container.Audio.FrameTime - (double)(2 * Container.audio_hw_buf_size + audio_write_buf_size) / Container.Audio.HardwareSpec.BytesPerSecond, Container.audio_clock_serial, AudioCallbackTime);
+                var bufferDuration = (2d * Container.audio_hw_buf_size + audio_write_buf_size) / Container.Audio.HardwareSpec.BytesPerSecond;
+                Container.AudioClock.Set(Container.Audio.FrameTime - bufferDuration, Container.Audio.FrameSerial, AudioCallbackTime);
                 Container.ExternalClock.SyncToSlave(Container.AudioClock);
             }
         }

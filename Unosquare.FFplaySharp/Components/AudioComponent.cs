@@ -14,18 +14,22 @@
         private AVRational StartPtsTimeBase;
         private long NextPts;
         private AVRational NextPtsTimeBase;
+        private double LastFrameTime = 0;
 
         /// <summary>
         /// Gets or sets the Frame Time (ported from audio_clock)
         /// </summary>
         public double FrameTime { get; private set; }
 
-        private double LastFrameTime = 0;
+        public int FrameSerial { get; private set; } = -1;
 
-        public double audio_diff_cum; /* used for AV difference average computation */
-        public double audio_diff_threshold;
         private readonly double audio_diff_avg_coef = Math.Exp(Math.Log(0.01) / Constants.AUDIO_DIFF_AVG_NB);
-        public int audio_diff_avg_count;
+
+        private double audio_diff_cum; /* used for AV difference average computation */
+
+        private double audio_diff_threshold;
+
+        private int audio_diff_avg_count;
 
         public AudioComponent(MediaContainer container)
             : base(container)
@@ -289,7 +293,7 @@
                 ? af.Time + (double)af.FramePtr->nb_samples / af.FramePtr->sample_rate
                 : double.NaN;
 
-            Container.audio_clock_serial = af.Serial;
+            FrameSerial = af.Serial;
             if (Debugger.IsAttached)
             {
                 Console.WriteLine($"audio: delay={(FrameTime - LastFrameTime),-8:0.####} clock={FrameTime,-8:0.####} clock0={currentFrameTime,-8:0.####}");
@@ -376,6 +380,13 @@
 
         public override unsafe void InitializeDecoder(AVCodecContext* codecContext, int streamIndex)
         {
+            // init averaging filter
+            audio_diff_avg_count = 0;
+
+            // since we do not have a precise anough audio FIFO fullness,
+            // we correct audio sync only if larger than this threshold.
+            audio_diff_threshold = (double)Container.audio_hw_buf_size / HardwareSpec.BytesPerSecond;
+
             base.InitializeDecoder(codecContext, streamIndex);
 
             if (Container.IsSeekMethodUnknown)
