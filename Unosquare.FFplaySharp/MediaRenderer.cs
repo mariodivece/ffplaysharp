@@ -36,7 +36,6 @@
         private int screen_left = SDL.SDL_WINDOWPOS_CENTERED;
         private int screen_top = SDL.SDL_WINDOWPOS_CENTERED;
         private bool is_full_screen;
-        private double rdftspeed = 0.02;
 
         public int screen_width = 0;
         public int screen_height = 0;
@@ -557,17 +556,6 @@
 
             if (!container.IsPaused && container.MasterSyncMode == ClockSync.External && container.IsRealtime)
                 container.check_external_clock_speed();
-
-            if (!container.Options.display_disable && container.show_mode != ShowMode.Video && container.Audio.Stream != null)
-            {
-                time = Clock.SystemTime;
-                if (force_refresh || container.last_vis_time + rdftspeed < time)
-                {
-                    video_display(container);
-                    container.last_vis_time = time;
-                }
-                remaining_time = Math.Min(remaining_time, container.last_vis_time + rdftspeed - time);
-            }
 
             if (container.Video.Stream != null)
             {

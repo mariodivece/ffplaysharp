@@ -14,8 +14,6 @@
         private readonly AVIOInterruptCB_callback InputInterruptCallback;
         private bool WasPaused;
         private bool IsPictureAttachmentPending;
-        public bool IsSeekRequested { get; private set; }
-
         private int SeekFlags;
         private Thread ReadingThread;
         private AVInputFormat* InputFormat = null;
@@ -30,6 +28,8 @@
         private int read_pause_return;
 
         public AVFormatContext* InputContext { get; private set; }
+
+        public bool IsSeekRequested { get; private set; }
 
         public bool IsRealtime { get; private set; }
 
@@ -61,7 +61,6 @@
         public double last_vis_time;
 
         public double frame_timer;
-
 
         public double max_frame_duration;      // maximum duration of a frame - above this, we consider the jump a timestamp discontinuity
 
