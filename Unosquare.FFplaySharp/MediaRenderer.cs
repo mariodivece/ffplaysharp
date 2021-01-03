@@ -14,9 +14,10 @@
 
         public double last_mouse_left_click;
 
-        public double audio_callback_time { get; private set; }
+        public double AudioCallbackTime { get; private set; }
 
-        private int audio_buf_index; /* in bytes */
+        private uint ReadBufferSize; /* in bytes */
+        private int ReadBufferIndex; /* in bytes */
         private int audio_write_buf_size;
 
         public int default_width = 640;
@@ -149,10 +150,10 @@
                                     h = sp.SubtitlePtr->rects[i]->h
                                 };
 
-                                sub_rect.x = Helpers.av_clip(sub_rect.x, 0, sp.Width);
-                                sub_rect.y = Helpers.av_clip(sub_rect.y, 0, sp.Height);
-                                sub_rect.w = Helpers.av_clip(sub_rect.w, 0, sp.Width - sub_rect.x);
-                                sub_rect.h = Helpers.av_clip(sub_rect.h, 0, sp.Height - sub_rect.y);
+                                sub_rect.x = sub_rect.x.Clamp(0, sp.Width);
+                                sub_rect.y = sub_rect.y.Clamp(0, sp.Height);
+                                sub_rect.w = sub_rect.w.Clamp(0, sp.Width - sub_rect.x);
+                                sub_rect.h = sub_rect.h.Clamp(0, sp.Height - sub_rect.y);
 
                                 container.Subtitle.ConvertContext = ffmpeg.sws_getCachedContext(container.Subtitle.ConvertContext,
                                     sub_rect.w, sub_rect.h, AVPixelFormat.AV_PIX_FMT_PAL8,
@@ -403,7 +404,8 @@
                 return -1;
             }
 
-            audio_buf_index = 0;
+            ReadBufferIndex = 0;
+            ReadBufferSize = 0;
 
             return (int)deviceSpec.size;
         }
@@ -798,93 +800,69 @@
             default_height = rect.h;
         }
 
-        /* copy samples for viewing in editor window */
-        static void update_sample_display(MediaContainer container, short* samples, int samples_size)
-        {
-            int size, len;
-
-            size = samples_size / sizeof(short);
-            while (size > 0)
-            {
-                len = Constants.SAMPLE_ARRAY_SIZE - container.sample_array_index;
-                if (len > size)
-                    len = size;
-
-                var targetAddress = &container.sample_array[container.sample_array_index];
-                Buffer.MemoryCopy(samples, targetAddress, len * sizeof(short), len * sizeof(short));
-
-                samples += len;
-                container.sample_array_index += len;
-                if (container.sample_array_index >= Constants.SAMPLE_ARRAY_SIZE)
-                    container.sample_array_index = 0;
-                size -= len;
-            }
-        }
-
         /* prepare a new audio buffer */
-        public void sdl_audio_callback(IntPtr opaque, IntPtr stream, int len)
+        public void sdl_audio_callback(IntPtr opaque, IntPtr audioStream, int requestedByteCount)
         {
-            audio_callback_time = Clock.SystemTime;
 
-            while (len > 0)
+            AudioCallbackTime = Clock.SystemTime;
+
+            while (requestedByteCount > 0)
             {
-                if (audio_buf_index >= Container.audio_buf_size)
+                if (ReadBufferIndex >= ReadBufferSize)
                 {
-                    var audio_size = Container.Audio.audio_decode_frame();
+                    var audio_size = Container.Audio.RefillOutputBuffer();
                     if (audio_size < 0)
                     {
                         /* if error, just output silence */
-                        Container.audio_buf = null;
-                        Container.audio_buf_size = (uint)(Constants.SDL_AUDIO_MIN_BUFFER_SIZE / Container.Audio.HardwareSpec.FrameSize * Container.Audio.HardwareSpec.FrameSize);
+                        Container.Audio.OutputBuffer = null;
+                        ReadBufferSize = (uint)(Constants.SDL_AUDIO_MIN_BUFFER_SIZE / Container.Audio.HardwareSpec.FrameSize * Container.Audio.HardwareSpec.FrameSize);
                     }
                     else
                     {
-                        if (Container.show_mode != ShowMode.Video)
-                            update_sample_display(Container, (short*)Container.audio_buf, audio_size);
-                        Container.audio_buf_size = (uint)audio_size;
+                        ReadBufferSize = (uint)audio_size;
                     }
-                    audio_buf_index = 0;
+                    ReadBufferIndex = 0;
                 }
-                var len1 = (int)(Container.audio_buf_size - audio_buf_index);
-                if (len1 > len)
-                    len1 = len;
+                var readByteCount = (int)(ReadBufferSize - ReadBufferIndex);
+                if (readByteCount > requestedByteCount)
+                    readByteCount = requestedByteCount;
 
-                if (!Container.IsMuted && Container.audio_buf != null && audio_volume == SDL.SDL_MIX_MAXVOLUME)
+                var outputStream = (byte*)audioStream;
+                var inputStream = Container.Audio.OutputBuffer + ReadBufferIndex;
+
+                if (!Container.IsMuted && Container.Audio.OutputBuffer != null && audio_volume == SDL.SDL_MIX_MAXVOLUME)
                 {
-                    var dest = (byte*)stream;
-                    var source = (Container.audio_buf + audio_buf_index);
-                    for (var b = 0; b < len1; b++)
-                        dest[b] = source[b];
+                    for (var b = 0; b < readByteCount; b++)
+                        outputStream[b] = inputStream[b];
                 }
                 else
                 {
-                    var target = (byte*)stream;
-                    for (var b = 0; b < len1; b++)
-                        target[b] = 0;
+                    for (var b = 0; b < readByteCount; b++)
+                        outputStream[b] = 0;
 
-                    if (!Container.IsMuted && Container.audio_buf != null)
-                        SDL.SDL_MixAudioFormat((byte*)stream, Container.audio_buf + audio_buf_index, SDL.AUDIO_S16SYS, (uint)len1, audio_volume);
+                    if (!Container.IsMuted && Container.Audio.OutputBuffer != null)
+                        SDL.SDL_MixAudioFormat(outputStream, inputStream, SDL.AUDIO_S16SYS, (uint)readByteCount, audio_volume);
                 }
 
-                len -= len1;
-                stream += len1;
-                audio_buf_index += len1;
+                requestedByteCount -= readByteCount;
+                audioStream += readByteCount;
+                ReadBufferIndex += readByteCount;
             }
 
-            audio_write_buf_size = (int)(Container.audio_buf_size - audio_buf_index);
+            audio_write_buf_size = (int)(ReadBufferSize - ReadBufferIndex);
             /* Let's assume the audio driver that is used by SDL has two periods. */
             if (!Container.Audio.FrameTime.IsNaN())
             {
-                Container.AudioClock.Set(Container.Audio.FrameTime - (double)(2 * Container.audio_hw_buf_size + audio_write_buf_size) / Container.Audio.HardwareSpec.BytesPerSecond, Container.audio_clock_serial, audio_callback_time);
+                Container.AudioClock.Set(Container.Audio.FrameTime - (double)(2 * Container.audio_hw_buf_size + audio_write_buf_size) / Container.Audio.HardwareSpec.BytesPerSecond, Container.audio_clock_serial, AudioCallbackTime);
                 Container.ExternalClock.SyncToSlave(Container.AudioClock);
             }
         }
 
-        public void update_volume(MediaContainer container, int sign, double step)
+        public void update_volume(int sign, double step)
         {
             var volume_level = audio_volume > 0 ? (20 * Math.Log(audio_volume / (double)SDL.SDL_MIX_MAXVOLUME) / Math.Log(10)) : -1000.0;
             var new_volume = (int)Math.Round(SDL.SDL_MIX_MAXVOLUME * Math.Pow(10.0, (volume_level + sign * step) / 20.0), 0);
-            audio_volume = Helpers.av_clip(audio_volume == new_volume ? (audio_volume + sign) : new_volume, 0, SDL.SDL_MIX_MAXVOLUME);
+            audio_volume = (audio_volume == new_volume ? (audio_volume + sign) : new_volume).Clamp(0, SDL.SDL_MIX_MAXVOLUME);
         }
 
         static double compute_target_delay(double delay, MediaContainer container)

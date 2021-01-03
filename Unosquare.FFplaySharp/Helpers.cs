@@ -52,7 +52,7 @@
 
         public static int AV_CEIL_RSHIFT(int a, int b) => ((a) + (1 << (b)) - 1) >> (b);
 
-        public static int av_clip(int number, int min, int max) => number < min ? min : number > max ? max : number;
+        public static int Clamp(this int number, int min, int max) => number < min ? min : number > max ? max : number;
 
         public static unsafe void FFSWAP(AVFilterContext** array, int a, int b)
         {

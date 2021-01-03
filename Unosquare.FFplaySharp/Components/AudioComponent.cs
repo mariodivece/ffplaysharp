@@ -33,6 +33,8 @@
             // placeholder
         }
 
+        public byte* OutputBuffer { get; set; }
+
         public SwrContext* ConvertContext { get; private set; }
 
         public AudioParams SourceSpec { get; set; } = new();
@@ -149,7 +151,7 @@
 * stored in is->audio_buf, with size in bytes given by the return
 * value.
 */
-        public int audio_decode_frame()
+        public int RefillOutputBuffer()
         {
             FrameHolder af;
 
@@ -160,7 +162,7 @@
             {
                 while (Frames.PendingCount == 0)
                 {
-                    if ((Clock.SystemTime - Container.Renderer.audio_callback_time) > Container.audio_hw_buf_size / HardwareSpec.BytesPerSecond / 2)
+                    if ((Clock.SystemTime - Container.Renderer.AudioCallbackTime) > Container.audio_hw_buf_size / HardwareSpec.BytesPerSecond / 2)
                         return -1;
 
                     Thread.Sleep(1);
@@ -210,10 +212,8 @@
                     return -1;
                 }
 
+                SourceSpec.ImportFrom(af.FramePtr);
                 SourceSpec.Layout = frameChannelLayout;
-                SourceSpec.Channels = af.FramePtr->channels;
-                SourceSpec.Frequency = af.FramePtr->sample_rate;
-                SourceSpec.SampleFormat = (AVSampleFormat)af.FramePtr->format;
             }
 
             var resampledBufferSize = 0;
@@ -273,12 +273,12 @@
                     }
                 }
 
-                Container.audio_buf = ResampledOutputBuffer;
+                OutputBuffer = ResampledOutputBuffer;
                 resampledBufferSize = outputSampleCount * HardwareSpec.Channels * HardwareSpec.BytesPerSample;
             }
             else
             {
-                Container.audio_buf = af.FramePtr->data[0];
+                OutputBuffer = af.FramePtr->data[0];
                 resampledBufferSize = frameBufferSize;
             }
 
@@ -306,42 +306,42 @@
             var wantedSampleCount = sampleCount;
 
             /* if not master, then we try to remove or add samples to correct the clock */
-            if (Container.MasterSyncMode != ClockSync.Audio)
+            if (Container.MasterSyncMode == ClockSync.Audio)
+                return wantedSampleCount;
+
+            var clockDelay = Container.AudioClock.Time - Container.MasterTime;
+
+            if (!clockDelay.IsNaN() && Math.Abs(clockDelay) < Constants.AV_NOSYNC_THRESHOLD)
             {
-                var clockDelay = Container.AudioClock.Time - Container.MasterTime;
-
-                if (!clockDelay.IsNaN() && Math.Abs(clockDelay) < Constants.AV_NOSYNC_THRESHOLD)
+                audio_diff_cum = clockDelay + audio_diff_avg_coef * audio_diff_cum;
+                if (audio_diff_avg_count < Constants.AUDIO_DIFF_AVG_NB)
                 {
-                    audio_diff_cum = clockDelay + audio_diff_avg_coef * audio_diff_cum;
-                    if (audio_diff_avg_count < Constants.AUDIO_DIFF_AVG_NB)
-                    {
-                        /* not enough measures to have a correct estimate */
-                        audio_diff_avg_count++;
-                    }
-                    else
-                    {
-                        /* estimate the A-V difference */
-                        var avg_diff = audio_diff_cum * (1.0 - audio_diff_avg_coef);
-
-                        if (Math.Abs(avg_diff) >= audio_diff_threshold)
-                        {
-                            wantedSampleCount = sampleCount + (int)(clockDelay * SourceSpec.Frequency);
-                            var minSampleCount = (int)((sampleCount * (100 - Constants.SAMPLE_CORRECTION_PERCENT_MAX) / 100));
-                            var maxSampleCount = (int)((sampleCount * (100 + Constants.SAMPLE_CORRECTION_PERCENT_MAX) / 100));
-                            wantedSampleCount = Helpers.av_clip(wantedSampleCount, minSampleCount, maxSampleCount);
-                        }
-
-                        ffmpeg.av_log(
-                            null, ffmpeg.AV_LOG_TRACE, $"diff={clockDelay} adiff={avg_diff} sample_diff={(wantedSampleCount - sampleCount)} apts={FrameTime} {audio_diff_threshold}\n");
-                    }
+                    /* not enough measures to have a correct estimate */
+                    audio_diff_avg_count++;
                 }
                 else
                 {
-                    /* too big difference : may be initial PTS errors, so
-                       reset A-V filter */
-                    audio_diff_avg_count = 0;
-                    audio_diff_cum = 0;
+                    /* estimate the A-V difference */
+                    var avg_diff = audio_diff_cum * (1.0 - audio_diff_avg_coef);
+
+                    if (Math.Abs(avg_diff) >= audio_diff_threshold)
+                    {
+                        wantedSampleCount = sampleCount + (int)(clockDelay * SourceSpec.Frequency);
+                        var minSampleCount = (int)(sampleCount * (100 - Constants.SAMPLE_CORRECTION_PERCENT_MAX) / 100);
+                        var maxSampleCount = (int)(sampleCount * (100 + Constants.SAMPLE_CORRECTION_PERCENT_MAX) / 100);
+                        wantedSampleCount = wantedSampleCount.Clamp(minSampleCount, maxSampleCount);
+                    }
+
+                    ffmpeg.av_log(
+                        null, ffmpeg.AV_LOG_TRACE, $"diff={clockDelay} adiff={avg_diff} sample_diff={(wantedSampleCount - sampleCount)} apts={FrameTime} {audio_diff_threshold}\n");
                 }
+            }
+            else
+            {
+                /* too big difference : may be initial PTS errors, so
+                   reset A-V filter */
+                audio_diff_avg_count = 0;
+                audio_diff_cum = 0;
             }
 
             return wantedSampleCount;
@@ -365,7 +365,7 @@
 
             ResampledOutputBuffer = null;
             ResampledOutputBufferSize = 0;
-            Container.audio_buf = null;
+            OutputBuffer = null;
 
             Container.InputContext->streams[StreamIndex]->discard = AVDiscard.AVDISCARD_ALL;
             Stream = null;

@@ -120,11 +120,11 @@
                                 break;
                             case SDL.SDL_Keycode.SDLK_KP_MULTIPLY:
                             case SDL.SDL_Keycode.SDLK_0:
-                                SdlRenderer.update_volume(container, 1, Constants.SDL_VOLUME_STEP);
+                                SdlRenderer.update_volume(1, Constants.SDL_VOLUME_STEP);
                                 break;
                             case SDL.SDL_Keycode.SDLK_KP_DIVIDE:
                             case SDL.SDL_Keycode.SDLK_9:
-                                SdlRenderer.update_volume(container, -1, Constants.SDL_VOLUME_STEP);
+                                SdlRenderer.update_volume(-1, Constants.SDL_VOLUME_STEP);
                                 break;
                             case SDL.SDL_Keycode.SDLK_s: // S: Step to next frame
                                 container.step_to_next_frame();

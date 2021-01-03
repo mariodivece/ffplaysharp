@@ -5,9 +5,13 @@
     public unsafe class AudioParams
     {
         public int Frequency { get; set; }
+        
         public int Channels { get; set; }
+        
         public long Layout { get; set; }
+        
         public AVSampleFormat SampleFormat { get; set; }
+
         public int FrameSize => ffmpeg.av_samples_get_buffer_size(null, Channels, 1, SampleFormat, 1);
 
         public int BytesPerSecond => ffmpeg.av_samples_get_buffer_size(null, Channels, Frequency, SampleFormat, 1);

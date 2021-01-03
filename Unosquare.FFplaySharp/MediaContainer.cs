@@ -50,9 +50,9 @@
 
         public int audio_clock_serial;
         public int audio_hw_buf_size;
-        public byte* audio_buf;
 
-        public uint audio_buf_size; /* in bytes */
+        
+        
 
 
         public bool IsMuted { get; private set; }
@@ -173,8 +173,8 @@
             if (container.Options.startup_volume > 100)
                 ffmpeg.av_log(null, ffmpeg.AV_LOG_WARNING, $"-volume={container.Options.startup_volume} > 100, setting to 100\n");
 
-            container.Options.startup_volume = Helpers.av_clip(container.Options.startup_volume, 0, 100);
-            container.Options.startup_volume = Helpers.av_clip(SDL.SDL_MIX_MAXVOLUME * container.Options.startup_volume / 100, 0, SDL.SDL_MIX_MAXVOLUME);
+            container.Options.startup_volume = container.Options.startup_volume.Clamp(0, 100);
+            container.Options.startup_volume = (SDL.SDL_MIX_MAXVOLUME * container.Options.startup_volume / 100).Clamp(0, SDL.SDL_MIX_MAXVOLUME);
             renderer.audio_volume = container.Options.startup_volume;
             container.IsMuted = false;
             container.ClockSyncMode = container.Options.av_sync_type;
@@ -506,10 +506,11 @@
                     if (ret < 0)
                         goto fail;
 
-                    Audio.HardwareSpec = audioHardwareSpec;
                     audio_hw_buf_size = ret;
-                    Audio.SourceSpec = Audio.HardwareSpec.Clone();
-                    audio_buf_size = 0;
+                    
+                    Audio.HardwareSpec = audioHardwareSpec.Clone();
+                    Audio.SourceSpec = audioHardwareSpec.Clone();
+                    
 
                     // init averaging filter
                     Audio.audio_diff_avg_count = 0;
