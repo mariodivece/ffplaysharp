@@ -807,9 +807,8 @@
                     NeedsMorePacketsEvent.WaitOne(1);
                     continue;
                 }
-                if (!IsPaused &&
-                    (Audio.Stream == null || (Audio.HasFinished == Audio.Packets.Serial && Audio.Frames.PendingCount == 0)) &&
-                    (Video.Stream == null || (Video.HasFinished == Video.Packets.Serial && Video.Frames.PendingCount == 0)))
+
+                if (!IsPaused && Audio.HasFinishedDecoding && Video.HasFinishedDecoding)
                 {
                     if (o.loop != 1 && (o.loop == 0 || (--o.loop) > 0))
                     {

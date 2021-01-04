@@ -28,7 +28,7 @@
 
         protected override void DecodingThreadMethod()
         {
-            int ret;
+            int resultCode;
             var frameRate = ffmpeg.av_guess_frame_rate(Container.InputContext, Stream, null);
 
             AVFrame* decodedFrame;
@@ -44,12 +44,12 @@
 
             while (true)
             {
-                ret = DecodeFrame(out decodedFrame);
+                resultCode = DecodeFrame(out decodedFrame);
 
-                if (ret < 0)
+                if (resultCode < 0)
                     goto the_end;
 
-                if (ret == 0)
+                if (resultCode == 0)
                     continue;
 
                 var isReconfigNeeded = lastWidth != decodedFrame->width || lastHeight != decodedFrame->height || lastFormat != decodedFrame->format ||
@@ -72,7 +72,7 @@
                         ? Container.Options.vfilters_list[Container.vfilter_idx]
                         : null;
 
-                    if ((ret = ConfigureFilters(filterGraph, filterLiteral, decodedFrame)) < 0)
+                    if ((resultCode = ConfigureFilters(filterGraph, filterLiteral, decodedFrame)) < 0)
                     {
                         var evt = new SDL.SDL_Event() { type = (SDL.SDL_EventType)Constants.FF_QUIT_EVENT, };
                         // evt.user.data1 = GCHandle.ToIntPtr(VideoStateHandle);
@@ -90,20 +90,21 @@
                     frameRate = ffmpeg.av_buffersink_get_frame_rate(outputFilter);
                 }
 
-                ret = ffmpeg.av_buffersrc_add_frame(inputFilter, decodedFrame);
-                if (ret < 0)
+                resultCode = ffmpeg.av_buffersrc_add_frame(inputFilter, decodedFrame);
+                if (resultCode < 0)
                     goto the_end;
 
-                while (ret >= 0)
+                while (resultCode >= 0)
                 {
                     var preFilteringTime = Clock.SystemTime;
 
-                    ret = ffmpeg.av_buffersink_get_frame_flags(outputFilter, decodedFrame, 0);
-                    if (ret < 0)
+                    resultCode = ffmpeg.av_buffersink_get_frame_flags(outputFilter, decodedFrame, 0);
+                    if (resultCode < 0)
                     {
-                        if (ret == ffmpeg.AVERROR_EOF)
-                            HasFinished = PacketSerial;
-                        ret = 0;
+                        if (resultCode == ffmpeg.AVERROR_EOF)
+                            EndOfFileSerial = PacketSerial;
+
+                        resultCode = 0;
                         break;
                     }
 
@@ -120,14 +121,14 @@
                         ? decodedFrame->pts * ffmpeg.av_q2d(tb)
                         : double.NaN;
 
-                    ret = EnqueueFrame(decodedFrame, pts, duration, PacketSerial);
+                    resultCode = EnqueueFrame(decodedFrame, pts, duration, PacketSerial);
                     ffmpeg.av_frame_unref(decodedFrame);
 
                     if (Packets.Serial != PacketSerial)
                         break;
                 }
 
-                if (ret < 0)
+                if (resultCode < 0)
                     goto the_end;
             }
         the_end:

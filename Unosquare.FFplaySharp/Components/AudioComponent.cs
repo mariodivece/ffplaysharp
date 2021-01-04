@@ -466,7 +466,7 @@
         {
             var lastPacketSerial = -1;
             var gotSamples = 0;
-            var ret = 0;
+            var resultCode = 0;
 
             AVFrame* decodedFrame;
 
@@ -501,14 +501,14 @@
                         FilterSpec.ImportFrom(decodedFrame);
                         lastPacketSerial = PacketSerial;
 
-                        if ((ret = ConfigureFilters(true)) < 0)
+                        if ((resultCode = ConfigureFilters(true)) < 0)
                             goto the_end;
                     }
 
-                    if ((ret = ffmpeg.av_buffersrc_add_frame(InputFilter, decodedFrame)) < 0)
+                    if ((resultCode = ffmpeg.av_buffersrc_add_frame(InputFilter, decodedFrame)) < 0)
                         goto the_end;
 
-                    while ((ret = ffmpeg.av_buffersink_get_frame_flags(OutputFilter, decodedFrame, 0)) >= 0)
+                    while ((resultCode = ffmpeg.av_buffersink_get_frame_flags(OutputFilter, decodedFrame, 0)) >= 0)
                     {
                         decoderTimeBase = ffmpeg.av_buffersink_get_time_base(OutputFilter);
                         var queuedFrame = Frames.PeekWriteable();
@@ -531,10 +531,10 @@
                             break;
                     }
 
-                    if (ret == ffmpeg.AVERROR_EOF)
-                        HasFinished = PacketSerial;
+                    if (resultCode == ffmpeg.AVERROR_EOF)
+                        EndOfFileSerial = PacketSerial;
                 }
-            } while (ret >= 0 || ret == ffmpeg.AVERROR(ffmpeg.EAGAIN) || ret == ffmpeg.AVERROR_EOF);
+            } while (resultCode >= 0 || resultCode == ffmpeg.AVERROR(ffmpeg.EAGAIN) || resultCode == ffmpeg.AVERROR_EOF);
 
         the_end:
             var filterGraph = FilterGraph;

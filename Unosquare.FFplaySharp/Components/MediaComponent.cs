@@ -68,7 +68,9 @@
 
         public int PacketSerial { get; private set; }
 
-        public int HasFinished { get; set; }
+        public int EndOfFileSerial { get; protected set; }
+
+        public bool HasFinishedDecoding => Stream == null || (EndOfFileSerial == Packets.Serial && Frames.PendingCount == 0);
 
         public virtual void Close()
         {
@@ -113,6 +115,7 @@
                                     else if (ReorderPts == 0)
                                         decodedFrame->pts = decodedFrame->pkt_dts;
                                 }
+
                                 break;
                             case AVMediaType.AVMEDIA_TYPE_AUDIO:
                                 if (decodedFrame == null) decodedFrame = ffmpeg.av_frame_alloc();
@@ -120,9 +123,10 @@
                                 resultCode = ffmpeg.avcodec_receive_frame(CodecContext, decodedFrame);
                                 break;
                         }
+
                         if (resultCode == ffmpeg.AVERROR_EOF)
                         {
-                            HasFinished = PacketSerial;
+                            EndOfFileSerial = PacketSerial;
                             ffmpeg.avcodec_flush_buffers(CodecContext);
                             return 0;
                         }
@@ -213,7 +217,7 @@
         protected virtual void FlushCodecBuffers()
         {
             ffmpeg.avcodec_flush_buffers(CodecContext);
-            HasFinished = 0;
+            EndOfFileSerial = 0;
         }
 
         public virtual int InitializeDecoder(AVCodecContext* codecContext, int streamIndex)
