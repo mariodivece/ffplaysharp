@@ -186,29 +186,25 @@
                             do_seek:
                                 if (container.Options.seek_by_bytes != 0)
                                 {
-                                    pos = -1;
-                                    if (pos < 0 && container.Video.StreamIndex >= 0)
-                                        pos = container.Video.Frames.LastPosition;
-                                    if (pos < 0 && container.Audio.StreamIndex >= 0)
-                                        pos = container.Audio.Frames.LastPosition;
-                                    if (pos < 0)
-                                        pos = ffmpeg.avio_tell(container.InputContext->pb);
+                                    pos = container.CurrentPosition;
+
                                     if (container.InputContext->bit_rate != 0)
                                         incr *= container.InputContext->bit_rate / 8.0;
                                     else
                                         incr *= 180000.0;
+
                                     pos += incr;
-                                    container.stream_seek((long)pos, (long)incr, true);
+                                    container.SeekByPosition((long)pos, (long)incr);
                                 }
                                 else
                                 {
                                     pos = container.MasterTime;
                                     if (pos.IsNaN())
-                                        pos = container.SeekPosition / Clock.TimeBaseMicros;
+                                        pos = container.SeekAbsoluteTarget / Clock.TimeBaseMicros;
                                     pos += incr;
                                     if (container.InputContext->start_time.IsValidPts() && pos < container.InputContext->start_time / Clock.TimeBaseMicros)
                                         pos = container.InputContext->start_time / Clock.TimeBaseMicros;
-                                    container.stream_seek(Convert.ToInt64(pos * Clock.TimeBaseMicros), Convert.ToInt64(incr * Clock.TimeBaseMicros), false);
+                                    container.SeekByTimestamp(Convert.ToInt64(pos * Clock.TimeBaseMicros), Convert.ToInt64(incr * Clock.TimeBaseMicros));
                                 }
                                 break;
                             default:
@@ -259,8 +255,8 @@
                         }
                         if (container.Options.seek_by_bytes != 0 || container.InputContext->duration <= 0)
                         {
-                            long size = ffmpeg.avio_size(container.InputContext->pb);
-                            container.stream_seek((long)(size * x / container.width), 0, true);
+                            var fileSize = ffmpeg.avio_size(container.InputContext->pb);
+                            container.SeekByPosition(Convert.ToInt64(fileSize * x / container.width));
                         }
                         else
                         {
@@ -275,7 +271,7 @@
                             if (container.InputContext->start_time.IsValidPts())
                                 targetPosition += container.InputContext->start_time;
 
-                            container.stream_seek(targetPosition, 0, false);
+                            container.SeekByTimestamp(targetPosition);
                         }
                         break;
                     case (int)SDL.SDL_EventType.SDL_WINDOWEVENT:

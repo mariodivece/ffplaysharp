@@ -22,9 +22,9 @@
 
         public bool IsPaused { get; private set; }
 
-        public long SeekPosition { get; private set; }
+        public long SeekAbsoluteTarget { get; private set; }
 
-        private long seek_rel;
+        private long SeekRelativeTarget;
         private int read_pause_return;
 
         public AVFormatContext* InputContext { get; private set; }
@@ -51,18 +51,12 @@
 
         public ShowMode show_mode;
 
-        public short* sample_array;
-        public int sample_array_index;
-        public int last_i_start;
-        // RDFTContext* rdft;
-        // int rdft_bits;
-        // FFTSample* rdft_data;
-        // public int xpos;
-        public double last_vis_time;
+        public double PictureDisplayTimer { get; set; }
 
-        public double frame_timer;
-
-        public double max_frame_duration;      // maximum duration of a frame - above this, we consider the jump a timestamp discontinuity
+        /// <summary>
+        /// Maximum duration of a video frame - above this, we consider the jump a timestamp discontinuity
+        /// </summary>
+        public double MaxPictureDuration { get; private set; }
 
         public bool IsAtEndOfStream { get; private set; }
 
@@ -87,8 +81,6 @@
             Subtitle = new(this);
             Renderer = renderer;
             Components = new List<MediaComponent>() { Audio, Video, Subtitle };
-
-            sample_array = (short*)ffmpeg.av_mallocz(Constants.SAMPLE_ARRAY_SIZE * sizeof(short));
         }
 
         public ProgramOptions Options { get; }
@@ -125,15 +117,50 @@
             {
                 return MasterSyncMode switch
                 {
-                    ClockSync.Video => VideoClock.Time,
-                    ClockSync.Audio => AudioClock.Time,
-                    _ => ExternalClock.Time,
+                    ClockSync.Video => VideoClock.Value,
+                    ClockSync.Audio => AudioClock.Value,
+                    _ => ExternalClock.Value,
                 };
+            }
+        }
+
+        public double ComponentSyncDelay
+        {
+            get
+            {
+                var syncDelay = 0d;
+
+                if (Audio.Stream != null && Video.Stream != null)
+                    syncDelay = AudioClock.Value - VideoClock.Value;
+                else if (Video.Stream != null)
+                    syncDelay = MasterTime - VideoClock.Value;
+                else if (Audio.Stream != null)
+                    syncDelay = MasterTime - AudioClock.Value;
+
+                return syncDelay;
             }
         }
 
         public IReadOnlyList<MediaComponent> Components { get; }
 
+        public long CurrentPosition
+        {
+            get
+            {
+                var bytePosition = -1L;
+
+                if (bytePosition < 0 && Video.StreamIndex >= 0)
+                    bytePosition = Video.Frames.LastPosition;
+
+                if (bytePosition < 0 && Audio.StreamIndex >= 0)
+                    bytePosition = Audio.Frames.LastPosition;
+
+                if (bytePosition < 0)
+                    bytePosition = ffmpeg.avio_tell(InputContext->pb);
+
+                return bytePosition;
+            }
+        }
 
         public static MediaContainer stream_open(ProgramOptions options, MediaRenderer renderer)
         {
@@ -209,16 +236,15 @@
         {
             if (IsPaused)
             {
-                frame_timer += Clock.SystemTime - VideoClock.LastUpdated;
+                PictureDisplayTimer += Clock.SystemTime - VideoClock.LastUpdated;
                 if (read_pause_return != ffmpeg.AVERROR(38))
-                {
                     VideoClock.IsPaused = false;
-                }
-                VideoClock.Set(VideoClock.Time, VideoClock.Serial);
+
+                VideoClock.Set(VideoClock.Value, VideoClock.Serial);
             }
 
-            ExternalClock.Set(ExternalClock.Time, ExternalClock.Serial);
             IsPaused = AudioClock.IsPaused = VideoClock.IsPaused = ExternalClock.IsPaused = !IsPaused;
+            ExternalClock.Set(ExternalClock.Value, ExternalClock.Serial);
         }
 
         public void stream_cycle_channel(AVMediaType codecType)
@@ -333,14 +359,26 @@
             step = true;
         }
 
+        public void SeekByTimestamp(long targetTimestamp)
+            => stream_seek(targetTimestamp, 0, false);
+
+        public void SeekByTimestamp(long currentTimestamp, long offsetTimestamp)
+            => stream_seek(currentTimestamp, offsetTimestamp, false);
+
+        public void SeekByPosition(long bytePosition)
+            => stream_seek(bytePosition, 0, true);
+
+        public void SeekByPosition(long bytePosition, long byteOffset)
+            => stream_seek(bytePosition, byteOffset, true);
+
         /* seek in the stream */
-        public void stream_seek(long pos, long rel, bool seekByBytes)
+        private void stream_seek(long absoluteTarget, long relativeTarget, bool seekByBytes)
         {
             if (IsSeekRequested)
                 return;
 
-            SeekPosition = pos;
-            seek_rel = rel;
+            SeekAbsoluteTarget = absoluteTarget;
+            SeekRelativeTarget = relativeTarget;
             SeekFlags &= ~ffmpeg.AVSEEK_FLAG_BYTE;
             if (seekByBytes)
                 SeekFlags |= ffmpeg.AVSEEK_FLAG_BYTE;
@@ -374,7 +412,7 @@
                 return;
 
             ffmpeg.av_log(null, ffmpeg.AV_LOG_VERBOSE, $"Seeking to chapter {i}.\n");
-            stream_seek(ffmpeg.av_rescale_q(InputContext->chapters[i]->start, InputContext->chapters[i]->time_base, Constants.AV_TIME_BASE_Q), 0, false);
+            SeekByTimestamp(ffmpeg.av_rescale_q(InputContext->chapters[i]->start, InputContext->chapters[i]->time_base, Constants.AV_TIME_BASE_Q));
         }
 
         public bool IsSeekMethodUnknown =>
@@ -517,9 +555,6 @@
             NeedsMorePacketsEvent.Dispose();
             ffmpeg.sws_freeContext(Video.ConvertContext);
             ffmpeg.sws_freeContext(Subtitle.ConvertContext);
-
-            ffmpeg.av_free(sample_array);
-            sample_array = null;
         }
 
         private bool HasEnoughPacketCount => Components.All(c => c.HasEnoughPackets);
@@ -626,7 +661,7 @@
             if (o.seek_by_bytes.IsAuto())
                 o.seek_by_bytes = ic->iformat->flags.HasFlag(ffmpeg.AVFMT_TS_DISCONT) && Helpers.PtrToString(ic->iformat->name) != "ogg" ? 1 : 0;
 
-            max_frame_duration = ic->iformat->flags.HasFlag(ffmpeg.AVFMT_TS_DISCONT) ? 10.0 : 3600.0;
+            MaxPictureDuration = ic->iformat->flags.HasFlag(ffmpeg.AVFMT_TS_DISCONT) ? 10.0 : 3600.0;
 
             if (string.IsNullOrWhiteSpace(Renderer.window_title) && (formatOption = ffmpeg.av_dict_get(ic->metadata, "title", null, 0)) != null)
                 Renderer.window_title = $"{Helpers.PtrToString(formatOption->value)} - {o.input_filename}";
@@ -753,13 +788,13 @@
 
                 if (IsSeekRequested)
                 {
-                    var seek_target = SeekPosition;
-                    var seek_min = seek_rel > 0 ? seek_target - seek_rel + 2 : long.MinValue;
-                    var seek_max = seek_rel < 0 ? seek_target - seek_rel - 2 : long.MaxValue;
+                    var seekTarget = SeekAbsoluteTarget;
+                    var seekTargetMin = SeekRelativeTarget > 0 ? seekTarget - SeekRelativeTarget + 2 : long.MinValue;
+                    var seekTargetMax = SeekRelativeTarget < 0 ? seekTarget - SeekRelativeTarget - 2 : long.MaxValue;
                     // FIXME the +-2 is due to rounding being not done in the correct direction in generation
                     //      of the seek_pos/seek_rel variables
 
-                    ret = ffmpeg.avformat_seek_file(InputContext, -1, seek_min, seek_target, seek_max, SeekFlags);
+                    ret = ffmpeg.avformat_seek_file(InputContext, -1, seekTargetMin, seekTarget, seekTargetMax, SeekFlags);
                     if (ret < 0)
                     {
                         ffmpeg.av_log(null, ffmpeg.AV_LOG_ERROR, $"{Helpers.PtrToString(InputContext->url)}: error while seeking\n");
@@ -777,7 +812,7 @@
 
                         ExternalClock.Set(SeekFlags.HasFlag(ffmpeg.AVSEEK_FLAG_BYTE)
                             ? double.NaN
-                            : seek_target / Clock.TimeBaseMicros, 0);
+                            : seekTarget / Clock.TimeBaseMicros, 0);
                     }
 
                     IsSeekRequested = false;
@@ -812,7 +847,7 @@
                 {
                     if (o.loop != 1 && (o.loop == 0 || (--o.loop) > 0))
                     {
-                        stream_seek(o.start_time.IsValidPts() ? o.start_time : 0, 0, false);
+                        SeekByTimestamp(o.start_time.IsValidPts() ? o.start_time : 0);
                     }
                     else if (o.autoexit)
                     {
@@ -879,10 +914,9 @@
 
             if (ret != 0)
             {
-                SDL.SDL_Event evt = new();
-                evt.type = (SDL.SDL_EventType)Constants.FF_QUIT_EVENT;
-                // evt.user.data1 = GCHandle.ToIntPtr(VideoStateHandle);
-                SDL.SDL_PushEvent(ref evt);
+                SDL.SDL_Event sdlEvent = new();
+                sdlEvent.type = (SDL.SDL_EventType)Constants.FF_QUIT_EVENT;
+                _ = SDL.SDL_PushEvent(ref sdlEvent);
             }
 
             return; // 0;

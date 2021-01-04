@@ -11,9 +11,9 @@
 
         public static double SystemTime => Convert.ToDouble(ffmpeg.av_gettime_relative()) / TimeBaseMicros;
 
-        public double Pts { get; private set; }           /* clock base */
+        public double BaseTime { get; private set; }           /* clock base */
         
-        public double PtsDrift { get; private set; }     /* clock base minus time at which we updated the clock */
+        public double Offset { get; private set; }     /* clock base minus time at which we updated the clock */
         
         public double LastUpdated { get; private set; }
         
@@ -33,27 +33,23 @@
             Set(double.NaN, -1);
         }
 
-        public void Set(double pts, int serial, double time)
+        public void Set(double baseTime, int serial, double systemTime)
         {
-            Pts = pts;
-            LastUpdated = time;
-            PtsDrift = Pts - time;
+            BaseTime = baseTime;
+            LastUpdated = systemTime;
+            Offset = BaseTime - systemTime;
             Serial = serial;
         }
 
-        public void Set(double pts, int serial)
-        {
-            var time = SystemTime;
-            Set(pts, serial, time);
-        }
+        public void Set(double baseTime, int serial) => Set(baseTime, serial, SystemTime);
 
         public void SetSpeed(double speed)
         {
-            Set(Time, Serial);
+            Set(Value, Serial);
             SpeedRatio = speed;
         }
 
-        public double Time
+        public double Value
         {
             get
             {
@@ -62,20 +58,20 @@
 
                 if (IsPaused)
                 {
-                    return Pts;
+                    return BaseTime;
                 }
                 else
                 {
-                    var time = SystemTime;
-                    return PtsDrift + time - (time - LastUpdated) * (1.0 - SpeedRatio);
+                    var systemTime = SystemTime;
+                    return Offset + systemTime - (systemTime - LastUpdated) * (1.0 - SpeedRatio);
                 }
             }
         }
 
         public void SyncToSlave(Clock slaveClock)
         {
-            var currentTime = Time;
-            var slaveTime = slaveClock.Time;
+            var currentTime = Value;
+            var slaveTime = slaveClock.Value;
             if (!slaveTime.IsNaN() && (currentTime.IsNaN() || Math.Abs(currentTime - slaveTime) > Constants.AV_NOSYNC_THRESHOLD))
                 Set(slaveTime, slaveClock.Serial);
         }

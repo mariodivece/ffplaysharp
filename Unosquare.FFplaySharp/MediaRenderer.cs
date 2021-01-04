@@ -443,10 +443,10 @@
 
             _ = SDL.SDL_SetRenderDrawColor(SdlRenderer, 0, 0, 0, 255);
             _ = SDL.SDL_RenderClear(SdlRenderer);
-            if (container.Audio.Stream != null && container.show_mode != ShowMode.Video)
-                video_audio_display(container);
-            else if (container.Video.Stream != null)
+
+            if (container.Video.Stream != null)
                 video_image_display(container);
+            
             SDL.SDL_RenderPresent(SdlRenderer);
         }
 
@@ -552,8 +552,6 @@
         /* called to display each frame */
         public void video_refresh(MediaContainer container, ref double remaining_time)
         {
-            double time;
-
             if (!container.IsPaused && container.MasterSyncMode == ClockSync.External && container.IsRealtime)
                 container.check_external_clock_speed();
 
@@ -567,47 +565,47 @@
                 else
                 {
                     /* dequeue the picture */
-                    var lastvp = container.Video.Frames.PeekLast();
-                    var vp = container.Video.Frames.Peek();
+                    var previousPicture = container.Video.Frames.PeekLast();
+                    var currentPicture = container.Video.Frames.Peek();
 
-                    if (vp.Serial != container.Video.Packets.Serial)
+                    if (currentPicture.Serial != container.Video.Packets.Serial)
                     {
                         container.Video.Frames.Next();
                         goto retry;
                     }
 
-                    if (lastvp.Serial != vp.Serial)
-                        container.frame_timer = Clock.SystemTime;
+                    if (previousPicture.Serial != currentPicture.Serial)
+                        container.PictureDisplayTimer = Clock.SystemTime;
 
                     if (container.IsPaused)
                         goto display;
 
                     /* compute nominal last_duration */
-                    var last_duration = vp_duration(container, lastvp, vp);
-                    var delay = compute_target_delay(last_duration, container);
+                    var pictureDuration = ComputePictureDuration(container, previousPicture, currentPicture);
+                    var pictureDisplayDuration = ComputePictureDisplayDuration(pictureDuration, container);
 
-                    time = Clock.SystemTime;
-                    if (time < container.frame_timer + delay)
+                    var currentTime = Clock.SystemTime;
+                    if (currentTime < container.PictureDisplayTimer + pictureDisplayDuration)
                     {
-                        remaining_time = Math.Min(container.frame_timer + delay - time, remaining_time);
+                        remaining_time = Math.Min(container.PictureDisplayTimer + pictureDisplayDuration - currentTime, remaining_time);
                         goto display;
                     }
 
-                    container.frame_timer += delay;
-                    if (delay > 0 && time - container.frame_timer > Constants.AV_SYNC_THRESHOLD_MAX)
-                        container.frame_timer = time;
+                    container.PictureDisplayTimer += pictureDisplayDuration;
+                    if (pictureDisplayDuration > 0 && currentTime - container.PictureDisplayTimer > Constants.AV_SYNC_THRESHOLD_MAX)
+                        container.PictureDisplayTimer = currentTime;
 
-                    if (vp.HasValidTime)
-                        update_video_pts(container, vp.Time, vp.Position, vp.Serial);
+                    if (currentPicture.HasValidTime)
+                        update_video_pts(container, currentPicture.Time, currentPicture.Serial);
 
                     if (container.Video.Frames.PendingCount > 1)
                     {
                         var nextvp = container.Video.Frames.PeekNext();
-                        var duration = vp_duration(container, vp, nextvp);
+                        var duration = ComputePictureDuration(container, currentPicture, nextvp);
                         if (container.step == false &&
                             (container.Options.framedrop > 0 ||
                             (container.Options.framedrop != 0 && container.MasterSyncMode != ClockSync.Video)) &&
-                            time > container.frame_timer + duration)
+                            currentTime > container.PictureDisplayTimer + duration)
                         {
                             DroppedPictureCount++;
                             container.Video.Frames.Next();
@@ -625,8 +623,8 @@
                                 : null;
 
                             if (sp.Serial != container.Subtitle.Packets.Serial
-                                    || (container.VideoClock.Pts > (sp.Time + ((float)sp.SubtitlePtr->end_display_time / 1000)))
-                                    || (sp2 != null && container.VideoClock.Pts > (sp2.Time + ((float)sp2.SubtitlePtr->start_display_time / 1000))))
+                                    || (container.VideoClock.BaseTime > (sp.Time + ((float)sp.SubtitlePtr->end_display_time / 1000)))
+                                    || (sp2 != null && container.VideoClock.BaseTime > (sp2.Time + ((float)sp2.SubtitlePtr->start_display_time / 1000))))
                             {
                                 if (sp.uploaded)
                                 {
@@ -679,31 +677,23 @@
             force_refresh = false;
             if (container.Options.show_status != 0)
             {
-                int aqsize, vqsize, sqsize;
-
                 var currentTime = Clock.SystemTime;
                 if (last_time_status == 0 || (currentTime - last_time_status) >= 0.03)
                 {
-                    aqsize = container.Audio.Stream != null ? container.Audio.Packets.Size : 0;
-                    vqsize = container.Video.Stream != null ? container.Video.Packets.Size : 0;
-                    sqsize = container.Subtitle.Stream != null ? container.Subtitle.Packets.Size : 0;
+                    var audioQueueSize = container.Audio.Stream != null ? container.Audio.Packets.Size : 0;
+                    var videoQueueSize = container.Video.Stream != null ? container.Video.Packets.Size : 0;
+                    var subtitleQueueSize = container.Subtitle.Stream != null ? container.Subtitle.Packets.Size : 0;
 
-                    var av_diff = 0d;
-                    if (container.Audio.Stream != null && container.Video.Stream != null)
-                        av_diff = container.AudioClock.Time - container.VideoClock.Time;
-                    else if (container.Video.Stream != null)
-                        av_diff = container.MasterTime - container.VideoClock.Time;
-                    else if (container.Audio.Stream != null)
-                        av_diff = container.MasterTime - container.AudioClock.Time;
+                    var audioVideoDelay = container.ComponentSyncDelay;
 
                     var buf = new StringBuilder();
                     buf.Append($"{container.MasterTime,-8:0.####} ");
                     buf.Append((container.Audio.Stream != null && container.Video.Stream != null) ? "A-V" : (container.Video.Stream != null ? "M-V" : (container.Audio.Stream != null ? "M-A" : "   ")));
-                    buf.Append($":{av_diff,-8:0.####} ");
+                    buf.Append($":{audioVideoDelay,-8:0.####} ");
                     buf.Append($"fd={(container.Video.DroppedFrameCount + DroppedPictureCount)} ");
-                    buf.Append($"aq={(aqsize / 1024)}KB ");
-                    buf.Append($"vq={(vqsize / 1024)}KB ");
-                    buf.Append($"sq={(sqsize)}B ");
+                    buf.Append($"aq={(audioQueueSize / 1024)}KB ");
+                    buf.Append($"vq={(videoQueueSize / 1024)}KB ");
+                    buf.Append($"sq={(subtitleQueueSize)}B ");
                     buf.Append($" f={(container.Video.Stream != null ? container.Video.CodecContext->pts_correction_num_faulty_dts : 0)} / ");
                     buf.Append($"{(container.Video.Stream != null ? container.Video.CodecContext->pts_correction_num_faulty_pts : 0)}");
 
@@ -754,10 +744,6 @@
         }
 
         public void set_sdl_yuv_conversion_mode(AVFrame* frame)
-        {
-        }
-
-        public void video_audio_display(MediaContainer s)
         {
         }
 
@@ -857,46 +843,46 @@
             audio_volume = (audio_volume == new_volume ? (audio_volume + sign) : new_volume).Clamp(0, SDL.SDL_MIX_MAXVOLUME);
         }
 
-        static double compute_target_delay(double delay, MediaContainer container)
+        static double ComputePictureDisplayDuration(double pictureDuration, MediaContainer container)
         {
-            var diff = 0d;
+            var clockDifference = 0d;
 
             /* update delay to follow master synchronisation source */
             if (container.MasterSyncMode != ClockSync.Video)
             {
                 /* if video is slave, we try to correct big delays by
                    duplicating or deleting a frame */
-                diff = container.VideoClock.Time - container.MasterTime;
+                clockDifference = container.VideoClock.Value - container.MasterTime;
 
                 /* skip or repeat frame. We take into account the
                    delay to compute the threshold. I still don't know
                    if it is the best guess */
-                var syncThreshold = Math.Max(Constants.AV_SYNC_THRESHOLD_MIN, Math.Min(Constants.AV_SYNC_THRESHOLD_MAX, delay));
-                if (!diff.IsNaN() && Math.Abs(diff) < container.max_frame_duration)
+                var syncThreshold = Math.Max(Constants.AV_SYNC_THRESHOLD_MIN, Math.Min(Constants.AV_SYNC_THRESHOLD_MAX, pictureDuration));
+                if (!clockDifference.IsNaN() && Math.Abs(clockDifference) < container.MaxPictureDuration)
                 {
-                    if (diff <= -syncThreshold)
-                        delay = Math.Max(0, delay + diff);
-                    else if (diff >= syncThreshold && delay > Constants.AV_SYNC_FRAMEDUP_THRESHOLD)
-                        delay += diff;
-                    else if (diff >= syncThreshold)
-                        delay = 2 * delay;
+                    if (clockDifference <= -syncThreshold)
+                        pictureDuration = Math.Max(0, pictureDuration + clockDifference);
+                    else if (clockDifference >= syncThreshold && pictureDuration > Constants.AV_SYNC_FRAMEDUP_THRESHOLD)
+                        pictureDuration += clockDifference;
+                    else if (clockDifference >= syncThreshold)
+                        pictureDuration = 2 * pictureDuration;
                 }
             }
 
-            ffmpeg.av_log(null, ffmpeg.AV_LOG_TRACE, $"video: delay={delay,-8:0.####} A-V={-diff,-8:0.####}\n");
+            ffmpeg.av_log(null, ffmpeg.AV_LOG_TRACE, $"video: delay={pictureDuration,-8:0.####} A-V={-clockDifference,-8:0.####}\n");
 
-            return delay;
+            return pictureDuration;
         }
 
-        static double vp_duration(MediaContainer container, FrameHolder currentFrame, FrameHolder nextFrame)
+        static double ComputePictureDuration(MediaContainer container, FrameHolder currentFrame, FrameHolder nextFrame)
         {
             if (currentFrame.Serial == nextFrame.Serial)
             {
-                var duration = nextFrame.Time - currentFrame.Time;
-                if (duration.IsNaN() || duration <= 0 || duration > container.max_frame_duration)
+                var pictureDuration = nextFrame.Time - currentFrame.Time;
+                if (pictureDuration.IsNaN() || pictureDuration <= 0 || pictureDuration > container.MaxPictureDuration)
                     return currentFrame.Duration;
                 else
-                    return duration;
+                    return pictureDuration;
             }
             else
             {
@@ -904,7 +890,7 @@
             }
         }
 
-        static void update_video_pts(MediaContainer container, double pts, long pos, int serial)
+        static void update_video_pts(MediaContainer container, double pts, int serial)
         {
             /* update current video pts */
             container.VideoClock.Set(pts, serial);

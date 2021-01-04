@@ -321,7 +321,7 @@
             if (Container.MasterSyncMode == ClockSync.Audio)
                 return wantedSampleCount;
 
-            var clockDelay = Container.AudioClock.Time - Container.MasterTime;
+            var clockDelay = Container.AudioClock.Value - Container.MasterTime;
 
             if (!clockDelay.IsNaN() && Math.Abs(clockDelay) < Constants.AV_NOSYNC_THRESHOLD)
             {
