@@ -19,7 +19,6 @@
 
         private int ReadBufferSize; /* in bytes */
         private int ReadBufferIndex; /* in bytes */
-        private int audio_write_buf_size;
 
         public int default_width = 640;
         public int default_height = 480;
@@ -776,9 +775,8 @@
         }
 
         /* prepare a new audio buffer */
-        public void sdl_audio_callback(IntPtr opaque, IntPtr audioStream, int pendingByteCount)
+        private void sdl_audio_callback(IntPtr opaque, IntPtr audioStream, int pendingByteCount)
         {
-
             AudioCallbackTime = Clock.SystemTime;
 
             while (pendingByteCount > 0)
@@ -788,7 +786,7 @@
                     var audio_size = Container.Audio.RefillOutputBuffer();
                     if (audio_size < 0)
                     {
-                        /* if error, just output silence */
+                        // if error, just output silence.
                         Container.Audio.OutputBuffer = null;
                         ReadBufferSize = Constants.SDL_AUDIO_MIN_BUFFER_SIZE / Container.Audio.HardwareSpec.FrameSize * Container.Audio.HardwareSpec.FrameSize;
                     }
@@ -826,11 +824,11 @@
                 ReadBufferIndex += readByteCount;
             }
 
-            audio_write_buf_size = ReadBufferSize - ReadBufferIndex;
-            /* Let's assume the audio driver that is used by SDL has two periods. */
+            // Let's assume the audio driver that is used by SDL has two periods.
             if (!Container.Audio.FrameTime.IsNaN())
             {
-                var bufferDuration = (2d * Container.Audio.HardwareBufferSize + audio_write_buf_size) / Container.Audio.HardwareSpec.BytesPerSecond;
+                var readBufferAvailable = ReadBufferSize - ReadBufferIndex;
+                var bufferDuration = (2d * Container.Audio.HardwareBufferSize + readBufferAvailable) / Container.Audio.HardwareSpec.BytesPerSecond;
                 Container.AudioClock.Set(Container.Audio.FrameTime - bufferDuration, Container.Audio.FrameSerial, AudioCallbackTime);
                 Container.ExternalClock.SyncToSlave(Container.AudioClock);
             }
