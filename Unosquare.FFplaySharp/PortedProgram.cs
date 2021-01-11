@@ -261,7 +261,7 @@
                         else
                         {
                             var seekPercent = (x / container.width);
-                            var durationSecs = (double)container.InputContext->duration / Clock.TimeBaseMicros;
+                            var durationSecs = container.InputContext->duration / Clock.TimeBaseMicros;
                             var totalDuration = TimeSpan.FromSeconds(durationSecs);
                             var targetTime = TimeSpan.FromSeconds(seekPercent * durationSecs);
                             var targetPosition = Convert.ToInt64(seekPercent * container.InputContext->duration);

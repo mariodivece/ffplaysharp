@@ -686,14 +686,14 @@
             /* if seeking requested, we execute it */
             if (o.start_time.IsValidPts())
             {
-                var timestamp = o.start_time;
+                var startTimestamp = o.start_time;
                 /* add the stream start time */
                 if (ic->start_time.IsValidPts())
-                    timestamp += ic->start_time;
+                    startTimestamp += ic->start_time;
 
-                ret = ffmpeg.avformat_seek_file(ic, -1, long.MinValue, timestamp, long.MaxValue, 0);
+                ret = ffmpeg.avformat_seek_file(ic, -1, long.MinValue, startTimestamp, long.MaxValue, 0);
                 if (ret < 0)
-                    ffmpeg.av_log(null, ffmpeg.AV_LOG_WARNING, $"{FileName}: could not seek to position {(timestamp / Clock.TimeBaseMicros)}\n");
+                    ffmpeg.av_log(null, ffmpeg.AV_LOG_WARNING, $"{FileName}: could not seek to position {(startTimestamp / Clock.TimeBaseMicros)}\n");
             }
 
             IsRealtime = IsInputFormatRealtime(ic);

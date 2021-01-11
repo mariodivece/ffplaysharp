@@ -5,25 +5,35 @@
 
     public class Clock : ISerialProvider
     {
-        public static double TimeBaseMicros { get; } = Convert.ToDouble(ffmpeg.AV_TIME_BASE);
-
         private readonly ISerialProvider SerialProvider;
+
+        // clock base minus time at which we updated the clock
+        private double Offset;
+
+        public static double TimeBaseMicros { get; } = Convert.ToDouble(ffmpeg.AV_TIME_BASE);
 
         public static double SystemTime => Convert.ToDouble(ffmpeg.av_gettime_relative()) / TimeBaseMicros;
 
-        public double BaseTime { get; private set; }           /* clock base */
-        
-        public double Offset { get; private set; }     /* clock base minus time at which we updated the clock */
+        /// <summary>
+        /// Clock base.
+        /// </summary>
+        public double BaseTime { get; private set; }
         
         public double LastUpdated { get; private set; }
         
         public double SpeedRatio { get; private set; }
-        
-        public int Serial { get; private set; }           /* clock is based on a packet with this serial */
+
+        /// <summary>
+        /// Clock is based on a packet with this serial.
+        /// </summary>
+        public int Serial { get; private set; }
         
         public bool IsPaused { get; set; }
-        
-        public int RelatedSerial { get => SerialProvider != null ? SerialProvider.Serial : 0; }    /* pointer to the current packet queue serial, used for obsolete clock detection */
+
+        /// <summary>
+        /// Pointer to the current packet queue serial, used for obsolete clock detection.
+        /// </summary>
+        public int RelatedSerial { get => SerialProvider != null ? SerialProvider.Serial : 0; }
         
         public Clock(ISerialProvider serialProvider)
         {
@@ -63,7 +73,8 @@
                 else
                 {
                     var systemTime = SystemTime;
-                    return Offset + systemTime - (systemTime - LastUpdated) * (1.0 - SpeedRatio);
+                    var elapsedTime = systemTime - LastUpdated;
+                    return Offset + systemTime - elapsedTime * (1.0 - SpeedRatio);
                 }
             }
         }
