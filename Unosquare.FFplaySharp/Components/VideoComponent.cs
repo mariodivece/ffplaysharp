@@ -16,6 +16,8 @@
             // placeholder
         }
 
+        public int CurrentFilterIndex { get; set; }
+
         public int DroppedFrameCount { get; private set; }
 
         public SwsContext* ConvertContext;
@@ -53,7 +55,7 @@
                     continue;
 
                 var isReconfigNeeded = lastWidth != decodedFrame->width || lastHeight != decodedFrame->height || lastFormat != decodedFrame->format ||
-                    lastSerial != PacketSerial || lastFilterIndex != Container.vfilter_idx;
+                    lastSerial != PacketSerial || lastFilterIndex != CurrentFilterIndex;
 
                 if (isReconfigNeeded)
                 {
@@ -69,7 +71,7 @@
                     filterGraph->nb_threads = Container.Options.filter_nbthreads;
 
                     var filterLiteral = Container.Options.vfilters_list.Count > 0
-                        ? Container.Options.vfilters_list[Container.vfilter_idx]
+                        ? Container.Options.vfilters_list[CurrentFilterIndex]
                         : null;
 
                     if ((resultCode = ConfigureFilters(filterGraph, filterLiteral, decodedFrame)) < 0)
@@ -86,7 +88,7 @@
                     lastHeight = decodedFrame->height;
                     lastFormat = decodedFrame->format;
                     lastSerial = PacketSerial;
-                    lastFilterIndex = Container.vfilter_idx;
+                    lastFilterIndex = CurrentFilterIndex;
                     frameRate = ffmpeg.av_buffersink_get_frame_rate(outputFilter);
                 }
 

@@ -552,7 +552,7 @@
         public void video_refresh(MediaContainer container, ref double remaining_time)
         {
             if (!container.IsPaused && container.MasterSyncMode == ClockSync.External && container.IsRealtime)
-                container.check_external_clock_speed();
+                container.SyncExternalClockSpeed();
 
             if (container.Video.Stream != null)
             {
@@ -601,7 +601,7 @@
                     {
                         var nextvp = container.Video.Frames.PeekNext();
                         var duration = ComputePictureDuration(container, currentPicture, nextvp);
-                        if (container.step == false &&
+                        if (container.IsInStepMode == false &&
                             (container.Options.framedrop > 0 ||
                             (container.Options.framedrop != 0 && container.MasterSyncMode != ClockSync.Video)) &&
                             currentTime > container.PictureDisplayTimer + duration)
@@ -664,12 +664,12 @@
                     container.Video.Frames.Next();
                     force_refresh = true;
 
-                    if (container.step && !container.IsPaused)
-                        container.stream_toggle_pause();
+                    if (container.IsInStepMode && !container.IsPaused)
+                        container.StreamTogglePause();
                 }
             display:
                 /* display picture */
-                if (!container.Options.display_disable && force_refresh && container.show_mode == ShowMode.Video && container.Video.Frames.IsReadIndexShown)
+                if (!container.Options.display_disable && force_refresh && container.ShowMode == ShowMode.Video && container.Video.Frames.IsReadIndexShown)
                     video_display(container);
             }
 

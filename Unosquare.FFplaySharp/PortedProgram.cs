@@ -20,7 +20,7 @@
         {
             if (container != null)
             {
-                container.stream_close();
+                container.Close();
             }
 
             SdlRenderer.CloseVideo();
@@ -44,15 +44,15 @@
 
         static void toggle_audio_display(MediaContainer container)
         {
-            int next = (int)container.show_mode;
+            int next = (int)container.ShowMode;
             do
             {
                 next = (next + 1) % (int)ShowMode.Last;
-            } while (next != (int)container.show_mode && (next == (int)ShowMode.Video && container.Video.Stream == null || next != (int)ShowMode.Video && container.Audio.Stream == null));
-            if ((int)container.show_mode != next)
+            } while (next != (int)container.ShowMode && (next == (int)ShowMode.Video && container.Video.Stream == null || next != (int)ShowMode.Video && container.Audio.Stream == null));
+            if ((int)container.ShowMode != next)
             {
                 SdlRenderer.force_refresh = true;
-                container.show_mode = (ShowMode)next;
+                container.ShowMode = (ShowMode)next;
             }
         }
 
@@ -75,7 +75,7 @@
 
                 remainingTime = Constants.REFRESH_RATE;
 
-                if (container.show_mode != ShowMode.None && (!container.IsPaused || SdlRenderer.force_refresh))
+                if (container.ShowMode != ShowMode.None && (!container.IsPaused || SdlRenderer.force_refresh))
                     SdlRenderer.video_refresh(container, ref remainingTime);
 
                 SDL.SDL_PumpEvents();
@@ -113,10 +113,10 @@
                                 break;
                             case SDL.SDL_Keycode.SDLK_p:
                             case SDL.SDL_Keycode.SDLK_SPACE:
-                                container.toggle_pause();
+                                container.TogglePause();
                                 break;
                             case SDL.SDL_Keycode.SDLK_m:
-                                container.toggle_mute();
+                                container.ToggleMute();
                                 break;
                             case SDL.SDL_Keycode.SDLK_KP_MULTIPLY:
                             case SDL.SDL_Keycode.SDLK_0:
@@ -127,32 +127,32 @@
                                 SdlRenderer.update_volume(-1, Constants.SDL_VOLUME_STEP);
                                 break;
                             case SDL.SDL_Keycode.SDLK_s: // S: Step to next frame
-                                container.step_to_next_frame();
+                                container.StepToNextFrame();
                                 break;
                             case SDL.SDL_Keycode.SDLK_a:
-                                container.stream_cycle_channel(AVMediaType.AVMEDIA_TYPE_AUDIO);
+                                container.StreamCycleChannel(AVMediaType.AVMEDIA_TYPE_AUDIO);
                                 break;
                             case SDL.SDL_Keycode.SDLK_v:
-                                container.stream_cycle_channel(AVMediaType.AVMEDIA_TYPE_VIDEO);
+                                container.StreamCycleChannel(AVMediaType.AVMEDIA_TYPE_VIDEO);
                                 break;
                             case SDL.SDL_Keycode.SDLK_c:
-                                container.stream_cycle_channel(AVMediaType.AVMEDIA_TYPE_VIDEO);
-                                container.stream_cycle_channel(AVMediaType.AVMEDIA_TYPE_AUDIO);
-                                container.stream_cycle_channel(AVMediaType.AVMEDIA_TYPE_SUBTITLE);
+                                container.StreamCycleChannel(AVMediaType.AVMEDIA_TYPE_VIDEO);
+                                container.StreamCycleChannel(AVMediaType.AVMEDIA_TYPE_AUDIO);
+                                container.StreamCycleChannel(AVMediaType.AVMEDIA_TYPE_SUBTITLE);
                                 break;
                             case SDL.SDL_Keycode.SDLK_t:
-                                container.stream_cycle_channel(AVMediaType.AVMEDIA_TYPE_SUBTITLE);
+                                container.StreamCycleChannel(AVMediaType.AVMEDIA_TYPE_SUBTITLE);
                                 break;
                             case SDL.SDL_Keycode.SDLK_w:
 
-                                if (container.show_mode == ShowMode.Video && container.vfilter_idx < container.Options.nb_vfilters - 1)
+                                if (container.ShowMode == ShowMode.Video && container.Video.CurrentFilterIndex < container.Options.nb_vfilters - 1)
                                 {
-                                    if (++container.vfilter_idx >= container.Options.nb_vfilters)
-                                        container.vfilter_idx = 0;
+                                    if (++container.Video.CurrentFilterIndex >= container.Options.nb_vfilters)
+                                        container.Video.CurrentFilterIndex = 0;
                                 }
                                 else
                                 {
-                                    container.vfilter_idx = 0;
+                                    container.Video.CurrentFilterIndex = 0;
                                     toggle_audio_display(container);
                                 }
                                 break;
@@ -162,7 +162,7 @@
                                     incr = 600.0;
                                     goto do_seek;
                                 }
-                                container.seek_chapter(1);
+                                container.ChapterSeek(1);
                                 break;
                             case SDL.SDL_Keycode.SDLK_PAGEDOWN:
                                 if (container.InputContext->nb_chapters <= 1)
@@ -170,7 +170,7 @@
                                     incr = -600.0;
                                     goto do_seek;
                                 }
-                                container.seek_chapter(-1);
+                                container.ChapterSeek(-1);
                                 break;
                             case SDL.SDL_Keycode.SDLK_LEFT:
                                 incr = container.Options.seek_interval != 0 ? -container.Options.seek_interval : -10.0;
@@ -186,7 +186,7 @@
                             do_seek:
                                 if (container.Options.seek_by_bytes != 0)
                                 {
-                                    pos = container.CurrentPosition;
+                                    pos = container.StreamBytePosition;
 
                                     if (container.InputContext->bit_rate != 0)
                                         incr *= container.InputContext->bit_rate / 8.0;
@@ -327,7 +327,7 @@
             if (!SdlRenderer.Initialize(o))
                 do_exit(null);
 
-            GlobalVideoState = MediaContainer.stream_open(o, SdlRenderer);
+            GlobalVideoState = MediaContainer.Open(o, SdlRenderer);
             SdlRenderer.Link(GlobalVideoState);
 
             if (GlobalVideoState == null)

@@ -12,65 +12,22 @@
     public unsafe class MediaContainer
     {
         private readonly AVIOInterruptCB_callback InputInterruptCallback;
+
+        private AVInputFormat* InputFormat = null;
+        private Thread ReadingThread;
+
         private bool WasPaused;
         private bool IsPictureAttachmentPending;
         private int SeekFlags;
-        private Thread ReadingThread;
-        private AVInputFormat* InputFormat = null;
-
-        public bool IsAbortRequested { get; private set; }
-
-        public bool IsPaused { get; private set; }
-
-        public long SeekAbsoluteTarget { get; private set; }
-
         private long SeekRelativeTarget;
-        private int read_pause_return;
 
-        public AVFormatContext* InputContext { get; private set; }
+        private int ReadPauseResultCode;
 
-        public bool IsSeekRequested { get; private set; }
-
-        public bool IsRealtime { get; private set; }
-
-        public Clock AudioClock { get; private set; }
-
-        public Clock VideoClock { get; private set; }
-
-        public Clock ExternalClock { get; private set; }
-
-        public AudioComponent Audio { get; }
-
-        public VideoComponent Video { get; }
-
-        public SubtitleComponent Subtitle { get; }
-
-        public ClockSync ClockSyncMode { get; private set; }
-
-        public bool IsMuted { get; private set; }
-
-        public ShowMode show_mode;
-
-        public double PictureDisplayTimer { get; set; }
-
-        /// <summary>
-        /// Maximum duration of a video frame - above this, we consider the jump a timestamp discontinuity
-        /// </summary>
-        public double MaxPictureDuration { get; private set; }
-
-        public bool IsAtEndOfStream { get; private set; }
-
-        public string filename;
+        public ShowMode ShowMode { get; set; }
         public int width = 1;
         public int height = 1;
         public int xleft;
         public int ytop;
-        public bool step;
-
-        public int vfilter_idx;
-        public MediaRenderer Renderer { get; }
-
-        public AutoResetEvent NeedsMorePacketsEvent = new(true);
 
         private MediaContainer(ProgramOptions options, MediaRenderer renderer)
         {
@@ -83,7 +40,63 @@
             Components = new List<MediaComponent>() { Audio, Video, Subtitle };
         }
 
+        public AVFormatContext* InputContext { get; private set; }
+
+        public MediaRenderer Renderer { get; }
+
         public ProgramOptions Options { get; }
+
+        public AutoResetEvent NeedsMorePacketsEvent { get; } = new(true);
+
+        public string FileName { get; private set; }
+
+        public bool IsAbortRequested { get; private set; }
+
+        public bool IsSeekRequested { get; private set; }
+
+        public bool IsSeekMethodUnknown =>
+            InputContext != null &&
+            InputContext->iformat != null &&
+            InputContext->iformat->flags.HasFlag(Constants.SeekMethodUnknownFlags) &&
+            InputContext->iformat->read_seek.Pointer.IsNull();
+
+        public long SeekAbsoluteTarget { get; private set; }
+
+        public bool IsInStepMode { get; private set; }
+
+        public bool IsPaused { get; private set; }
+
+        public bool IsMuted { get; private set; }
+
+        public bool IsRealtime { get; private set; }
+
+        public long StreamBytePosition
+        {
+            get
+            {
+                var bytePosition = -1L;
+
+                if (bytePosition < 0 && Video.StreamIndex >= 0)
+                    bytePosition = Video.Frames.LastPosition;
+
+                if (bytePosition < 0 && Audio.StreamIndex >= 0)
+                    bytePosition = Audio.Frames.LastPosition;
+
+                if (bytePosition < 0)
+                    bytePosition = ffmpeg.avio_tell(InputContext->pb);
+
+                return bytePosition;
+            }
+        }
+
+        public double PictureDisplayTimer { get; set; }
+
+        /// <summary>
+        /// Maximum duration of a video frame - above this, we consider the jump a timestamp discontinuity
+        /// </summary>
+        public double MaxPictureDuration { get; private set; }
+
+        public bool IsAtEndOfStream { get; private set; }
 
         public ClockSync MasterSyncMode
         {
@@ -110,7 +123,9 @@
             }
         }
 
-        /* get the current master clock value */
+        /// <summary>
+        /// Gets the current master clock value.
+        /// </summary>
         public double MasterTime
         {
             get
@@ -141,28 +156,27 @@
             }
         }
 
+        public ClockSync ClockSyncMode { get; private set; }
+
+        public Clock AudioClock { get; private set; }
+
+        public Clock VideoClock { get; private set; }
+
+        public Clock ExternalClock { get; private set; }
+
+        public AudioComponent Audio { get; }
+
+        public VideoComponent Video { get; }
+
+        public SubtitleComponent Subtitle { get; }
+
         public IReadOnlyList<MediaComponent> Components { get; }
 
-        public long CurrentPosition
-        {
-            get
-            {
-                var bytePosition = -1L;
+        private bool HasEnoughPacketCount => Components.All(c => c.HasEnoughPackets);
 
-                if (bytePosition < 0 && Video.StreamIndex >= 0)
-                    bytePosition = Video.Frames.LastPosition;
+        private bool HasEnoughPacketSize => Components.Sum(c => c.Packets.Size) > Constants.MAX_QUEUE_SIZE;
 
-                if (bytePosition < 0 && Audio.StreamIndex >= 0)
-                    bytePosition = Audio.Frames.LastPosition;
-
-                if (bytePosition < 0)
-                    bytePosition = ffmpeg.avio_tell(InputContext->pb);
-
-                return bytePosition;
-            }
-        }
-
-        public static MediaContainer stream_open(ProgramOptions options, MediaRenderer renderer)
+        public static MediaContainer Open(ProgramOptions options, MediaRenderer renderer)
         {
             var container = new MediaContainer(options, renderer);
 
@@ -170,8 +184,8 @@
             container.Video.LastStreamIndex = container.Video.StreamIndex = -1;
             container.Audio.LastStreamIndex = container.Audio.StreamIndex = -1;
             container.Subtitle.LastStreamIndex = container.Subtitle.StreamIndex = -1;
-            container.filename = o.input_filename;
-            if (string.IsNullOrWhiteSpace(container.filename))
+            container.FileName = o.input_filename;
+            if (string.IsNullOrWhiteSpace(container.FileName))
                 goto fail;
 
             container.InputFormat = o.file_iformat;
@@ -197,11 +211,14 @@
             return container;
 
         fail:
-            container.stream_close();
+            container.Close();
             return null;
         }
 
-        public void check_external_clock_speed()
+        /// <summary>
+        /// Port of check_external_clock_speed.
+        /// </summary>
+        public void SyncExternalClockSpeed()
         {
             if (Video.StreamIndex >= 0 && Video.Packets.Count <= Constants.EXTERNAL_CLOCK_MIN_FRAMES ||
                 Audio.StreamIndex >= 0 && Audio.Packets.Count <= Constants.EXTERNAL_CLOCK_MIN_FRAMES)
@@ -221,23 +238,20 @@
             }
         }
 
-        public void toggle_mute()
+        public void ToggleMute() => IsMuted = !IsMuted;
+
+        public void TogglePause()
         {
-            IsMuted = !IsMuted;
+            StreamTogglePause();
+            IsInStepMode = false;
         }
 
-        public void toggle_pause()
-        {
-            stream_toggle_pause();
-            step = false;
-        }
-
-        public void stream_toggle_pause()
+        public void StreamTogglePause()
         {
             if (IsPaused)
             {
                 PictureDisplayTimer += Clock.SystemTime - VideoClock.LastUpdated;
-                if (read_pause_return != ffmpeg.AVERROR(38))
+                if (ReadPauseResultCode != ffmpeg.AVERROR(38))
                     VideoClock.IsPaused = false;
 
                 VideoClock.Set(VideoClock.Value, VideoClock.Serial);
@@ -247,7 +261,7 @@
             ExternalClock.Set(ExternalClock.Value, ExternalClock.Serial);
         }
 
-        public void stream_cycle_channel(AVMediaType codecType)
+        public void StreamCycleChannel(AVMediaType codecType)
         {
             AVFormatContext* ic = InputContext;
             var streamCount = (int)ic->nb_streams;
@@ -300,7 +314,7 @@
                 var st = InputContext->streams[program != null ? program->stream_index[nextStreamIndex] : nextStreamIndex];
                 if (st->codecpar->codec_type == component.MediaType)
                 {
-                    /* check that parameters are OK */
+                    // check that parameters are OK
                     switch (component.MediaType)
                     {
                         case AVMediaType.AVMEDIA_TYPE_AUDIO:
@@ -325,69 +339,35 @@
             OpenComponent(nextStreamIndex);
         }
 
-        public void StartReadThread()
+        /// <summary>
+        /// Port of step_to_next_frame.
+        /// </summary>
+        public void StepToNextFrame()
         {
-            ReadingThread = new Thread(ReadingThreadMethod) { IsBackground = true, Name = nameof(ReadingThreadMethod) };
-            ReadingThread.Start();
-        }
-
-        private int InputInterrupt(void* opaque)
-        {
-            return IsAbortRequested ? 1 : 0;
-        }
-
-        private static bool IsInputFormatRealtime(AVFormatContext* ic)
-        {
-            var inputFormatName = Helpers.PtrToString(ic->iformat->name);
-            if (inputFormatName == "rtp" || inputFormatName == "rtsp" || inputFormatName == "sdp")
-                return true;
-
-            var url = Helpers.PtrToString(ic->url)?.ToLowerInvariant();
-            url = string.IsNullOrEmpty(url) ? string.Empty : url;
-
-            if (ic->pb != null && (url.StartsWith("rtp:") || url.StartsWith("udp:")))
-                return true;
-
-            return false;
-        }
-
-        public void step_to_next_frame()
-        {
-            /* if the stream is paused unpause it, then step */
+            // if the stream is paused unpause it, then step
             if (IsPaused)
-                stream_toggle_pause();
-            step = true;
+                StreamTogglePause();
+            
+            IsInStepMode = true;
         }
 
         public void SeekByTimestamp(long targetTimestamp)
-            => stream_seek(targetTimestamp, 0, false);
+            => StreamSeek(targetTimestamp, 0, false);
 
         public void SeekByTimestamp(long currentTimestamp, long offsetTimestamp)
-            => stream_seek(currentTimestamp, offsetTimestamp, false);
+            => StreamSeek(currentTimestamp, offsetTimestamp, false);
 
         public void SeekByPosition(long bytePosition)
-            => stream_seek(bytePosition, 0, true);
+            => StreamSeek(bytePosition, 0, true);
 
         public void SeekByPosition(long bytePosition, long byteOffset)
-            => stream_seek(bytePosition, byteOffset, true);
+            => StreamSeek(bytePosition, byteOffset, true);
 
-        /* seek in the stream */
-        private void stream_seek(long absoluteTarget, long relativeTarget, bool seekByBytes)
-        {
-            if (IsSeekRequested)
-                return;
-
-            SeekAbsoluteTarget = absoluteTarget;
-            SeekRelativeTarget = relativeTarget;
-            SeekFlags &= ~ffmpeg.AVSEEK_FLAG_BYTE;
-            if (seekByBytes)
-                SeekFlags |= ffmpeg.AVSEEK_FLAG_BYTE;
-
-            IsSeekRequested = true;
-            NeedsMorePacketsEvent.Set();
-        }
-
-        public void seek_chapter(int incrementCount)
+        /// <summary>
+        /// Port of seek_chapter.
+        /// </summary>
+        /// <param name="incrementCount"></param>
+        public void ChapterSeek(int incrementCount)
         {
             var i = 0;
             var pos = (long)(MasterTime * Clock.TimeBaseMicros);
@@ -414,12 +394,6 @@
             ffmpeg.av_log(null, ffmpeg.AV_LOG_VERBOSE, $"Seeking to chapter {i}.\n");
             SeekByTimestamp(ffmpeg.av_rescale_q(InputContext->chapters[i]->start, InputContext->chapters[i]->time_base, Constants.AV_TIME_BASE_Q));
         }
-
-        public bool IsSeekMethodUnknown =>
-            InputContext != null &&
-            InputContext->iformat != null &&
-            InputContext->iformat->flags.HasFlag(Constants.SeekMethodUnknownFlags) &&
-            InputContext->iformat->read_seek.Pointer.IsNull();
 
         /// <summary>
         /// Open a given stream index. Returns 0 if OK.
@@ -530,7 +504,10 @@
             return ret;
         }
 
-        public void stream_close()
+        /// <summary>
+        /// Port of stream_close.
+        /// </summary>
+        public void Close()
         {
             // TODO: Use a special url_shutdown call to abort parse cleanly.
             IsAbortRequested = true;
@@ -557,13 +534,51 @@
             ffmpeg.sws_freeContext(Subtitle.ConvertContext);
         }
 
-        private bool HasEnoughPacketCount => Components.All(c => c.HasEnoughPackets);
+        private static bool IsInputFormatRealtime(AVFormatContext* ic)
+        {
+            var inputFormatName = Helpers.PtrToString(ic->iformat->name);
+            if (inputFormatName == "rtp" || inputFormatName == "rtsp" || inputFormatName == "sdp")
+                return true;
 
-        private long PacketQueueSize => Components.Sum(c => c.Packets.Size);
+            var url = Helpers.PtrToString(ic->url)?.ToLowerInvariant();
+            url = string.IsNullOrEmpty(url) ? string.Empty : url;
 
-        private bool HasEnoughPacketSize => PacketQueueSize > Constants.MAX_QUEUE_SIZE;
+            if (ic->pb != null && (url.StartsWith("rtp:") || url.StartsWith("udp:")))
+                return true;
 
-        private MediaComponent ComponentFromStreamIndex(int streamIndex)
+            return false;
+        }
+
+        private void StartReadThread()
+        {
+            ReadingThread = new Thread(ReadingThreadMethod) { IsBackground = true, Name = nameof(ReadingThreadMethod) };
+            ReadingThread.Start();
+        }
+
+        private int InputInterrupt(void* opaque) => IsAbortRequested ? 1 : 0;
+
+        /// <summary>
+        /// Port of stream_seek. Not exposed to improve on code readability.
+        /// </summary>
+        /// <param name="absoluteTarget">The target byte offset or timestamp.</param>
+        /// <param name="relativeTarget">The offset (from target) byte offset or timestamp.</param>
+        /// <param name="seekByBytes">Determines if the target is a byte offset or a timestamp.</param>
+        private void StreamSeek(long absoluteTarget, long relativeTarget, bool seekByBytes)
+        {
+            if (IsSeekRequested)
+                return;
+
+            SeekAbsoluteTarget = absoluteTarget;
+            SeekRelativeTarget = relativeTarget;
+            SeekFlags &= ~ffmpeg.AVSEEK_FLAG_BYTE;
+            if (seekByBytes)
+                SeekFlags |= ffmpeg.AVSEEK_FLAG_BYTE;
+
+            IsSeekRequested = true;
+            NeedsMorePacketsEvent.Set();
+        }
+
+        private MediaComponent FindComponentByStreamIndex(int streamIndex)
         {
             foreach (var c in Components)
             {
@@ -574,7 +589,9 @@
             return null;
         }
 
-        /* this thread gets the stream from the disk or the network */
+        /// <summary>
+        /// This thread gets the stream from the disk or the network
+        /// </summary>
         private void ReadingThreadMethod()
         {
             const int MediaTypeCount = (int)AVMediaType.AVMEDIA_TYPE_NB;
@@ -602,13 +619,13 @@
 
             {
                 var formatOptions = o.format_opts;
-                err = ffmpeg.avformat_open_input(&ic, filename, InputFormat, &formatOptions);
+                err = ffmpeg.avformat_open_input(&ic, FileName, InputFormat, &formatOptions);
                 o.format_opts = formatOptions;
             }
 
             if (err < 0)
             {
-                ffmpeg.av_log(null, ffmpeg.AV_LOG_ERROR, $"{filename}: {Helpers.print_error(err)}\n");
+                ffmpeg.av_log(null, ffmpeg.AV_LOG_ERROR, $"{FileName}: {Helpers.print_error(err)}\n");
                 ret = -1;
                 goto fail;
             }
@@ -649,7 +666,7 @@
 
                 if (err < 0)
                 {
-                    ffmpeg.av_log(null, ffmpeg.AV_LOG_WARNING, $"{filename}: could not find codec parameters\n");
+                    ffmpeg.av_log(null, ffmpeg.AV_LOG_WARNING, $"{FileName}: could not find codec parameters\n");
                     ret = -1;
                     goto fail;
                 }
@@ -676,13 +693,13 @@
 
                 ret = ffmpeg.avformat_seek_file(ic, -1, long.MinValue, timestamp, long.MaxValue, 0);
                 if (ret < 0)
-                    ffmpeg.av_log(null, ffmpeg.AV_LOG_WARNING, $"{filename}: could not seek to position {(timestamp / Clock.TimeBaseMicros)}\n");
+                    ffmpeg.av_log(null, ffmpeg.AV_LOG_WARNING, $"{FileName}: could not seek to position {(timestamp / Clock.TimeBaseMicros)}\n");
             }
 
             IsRealtime = IsInputFormatRealtime(ic);
 
             if (o.show_status != 0)
-                ffmpeg.av_dump_format(ic, 0, filename, 0);
+                ffmpeg.av_dump_format(ic, 0, FileName, 0);
 
             for (i = 0; i < ic->nb_streams; i++)
             {
@@ -722,7 +739,7 @@
                                          streamIndexes[AVMediaType.AVMEDIA_TYPE_VIDEO]),
                                         null, 0);
 
-            show_mode = o.show_mode;
+            ShowMode = o.show_mode;
             if (streamIndexes[AVMediaType.AVMEDIA_TYPE_VIDEO] >= 0)
             {
                 AVStream* st = ic->streams[streamIndexes[AVMediaType.AVMEDIA_TYPE_VIDEO]];
@@ -744,8 +761,8 @@
                 ret = OpenComponent(streamIndexes[AVMediaType.AVMEDIA_TYPE_VIDEO]);
             }
 
-            if (show_mode == ShowMode.None)
-                show_mode = ret >= 0 ? ShowMode.Video : ShowMode.None;
+            if (ShowMode == ShowMode.None)
+                ShowMode = ret >= 0 ? ShowMode.Video : ShowMode.None;
 
             if (streamIndexes[AVMediaType.AVMEDIA_TYPE_SUBTITLE] >= 0)
             {
@@ -754,7 +771,7 @@
 
             if (Video.StreamIndex < 0 && Audio.StreamIndex < 0)
             {
-                ffmpeg.av_log(null, ffmpeg.AV_LOG_FATAL, $"Failed to open file '{filename}' or configure filtergraph\n");
+                ffmpeg.av_log(null, ffmpeg.AV_LOG_FATAL, $"Failed to open file '{FileName}' or configure filtergraph\n");
                 ret = -1;
                 goto fail;
             }
@@ -771,7 +788,7 @@
                 {
                     WasPaused = IsPaused;
                     if (IsPaused)
-                        read_pause_return = ffmpeg.av_read_pause(ic);
+                        ReadPauseResultCode = ffmpeg.av_read_pause(ic);
                     else
                         ffmpeg.av_read_play(ic);
                 }
@@ -820,7 +837,7 @@
                     IsAtEndOfStream = false;
 
                     if (IsPaused)
-                        step_to_next_frame();
+                        StepToNextFrame();
                 }
 
                 if (IsPictureAttachmentPending)
@@ -900,7 +917,7 @@
                         (o.start_time.IsValidPts() ? o.start_time : 0) / Clock.TimeBaseMicros
                         <= (o.duration / Clock.TimeBaseMicros);
 
-                var component = ComponentFromStreamIndex(readPacket->stream_index);
+                var component = FindComponentByStreamIndex(readPacket->stream_index);
                 if (component != null && !component.IsPictureAttachmentStream && isPacketInPlayRange)
                     component.Packets.Put(readPacket);
                 else
