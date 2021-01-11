@@ -22,7 +22,7 @@
         
         /// <summary>
         /// Gets or sets the Presentation time in seconds.
-        /// This is not a timestamp.
+        /// This is NOT a timestamp in stream units.
         /// </summary>
         public double Time { get; set; }
 
@@ -34,6 +34,16 @@
         public AVRational Sar;
         public bool uploaded;
         public bool FlipVertical;
+
+        public AVSampleFormat SampleFormat => (AVSampleFormat)FramePtr->format;
+
+        public AVPixelFormat PixelFormat => (AVPixelFormat)FramePtr->format;
+
+        public int Channels => FramePtr->channels;
+
+        public int Frequency => FramePtr->sample_rate;
+
+        public int SampleCount => FramePtr->nb_samples;
 
         public bool HasValidTime => !Time.IsNaN();
 

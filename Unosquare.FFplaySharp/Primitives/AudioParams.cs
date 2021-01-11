@@ -65,6 +65,13 @@
 
         public static long DefaultChannelLayoutFor(int channelCount) => ffmpeg.av_get_default_channel_layout(channelCount);
 
+        public static long ComputeChannelLayout(AVFrame* frame)
+        {
+            return frame->channel_layout != 0 && frame->channels == AudioParams.ChannelCountFor(frame->channel_layout)
+                ? (long)frame->channel_layout
+                : AudioParams.DefaultChannelLayoutFor(frame->channels);
+        }
+
         public static int ChannelCountFor(ulong channelLayout) => ffmpeg.av_get_channel_layout_nb_channels(channelLayout);
 
         public static int ChannelCountFor(long channelLayout) => ChannelCountFor((ulong)channelLayout);

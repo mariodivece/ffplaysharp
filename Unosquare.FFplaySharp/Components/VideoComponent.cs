@@ -118,12 +118,12 @@
                         ? ffmpeg.av_q2d(ffmpeg.av_make_q(frameRate.den, frameRate.num))
                         : 0);
 
-                    var tb = ffmpeg.av_buffersink_get_time_base(outputFilter);
-                    var pts = decodedFrame->pts.IsValidPts()
-                        ? decodedFrame->pts * ffmpeg.av_q2d(tb)
+                    var filteredTimeBase = ffmpeg.av_buffersink_get_time_base(outputFilter);
+                    var frameTime = decodedFrame->pts.IsValidPts()
+                        ? decodedFrame->pts * ffmpeg.av_q2d(filteredTimeBase)
                         : double.NaN;
 
-                    resultCode = EnqueueFrame(decodedFrame, pts, duration, PacketSerial);
+                    resultCode = EnqueueFrame(decodedFrame, frameTime, duration, PacketSerial);
                     ffmpeg.av_frame_unref(decodedFrame);
 
                     if (Packets.Serial != PacketSerial)
@@ -140,7 +140,7 @@
             return; // 0;
         }
 
-        private int EnqueueFrame(AVFrame* sourceFrame, double pts, double duration, int serial)
+        private int EnqueueFrame(AVFrame* sourceFrame, double frameTime, double duration, int serial)
         {
             var frameSlot = Frames.PeekWriteable();
 
@@ -154,7 +154,7 @@
             frameSlot.Height = sourceFrame->height;
             frameSlot.Format = sourceFrame->format;
 
-            frameSlot.Time = pts;
+            frameSlot.Time = frameTime;
             frameSlot.Duration = duration;
             frameSlot.Position = sourceFrame->pkt_pos;
             frameSlot.Serial = serial;
