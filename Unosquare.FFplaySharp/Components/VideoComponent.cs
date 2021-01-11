@@ -115,7 +115,7 @@
                         FilterDelay = 0;
 
                     var duration = (frameRate.num != 0 && frameRate.den != 0
-                        ? ffmpeg.av_q2d(new AVRational() { num = frameRate.den, den = frameRate.num })
+                        ? ffmpeg.av_q2d(ffmpeg.av_make_q(frameRate.den, frameRate.num))
                         : 0);
 
                     var tb = ffmpeg.av_buffersink_get_time_base(outputFilter);

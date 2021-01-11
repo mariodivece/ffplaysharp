@@ -185,7 +185,7 @@
                 }
             }
 
-            rect = calculate_display_rect(container.xleft, container.ytop, container.width, container.height, vp.Width, vp.Height, vp.Sar);
+            rect = CalculateDisplayRect(container.xleft, container.ytop, container.width, container.height, vp.Width, vp.Height, vp.Sar);
 
             if (!vp.uploaded)
             {
@@ -712,7 +712,7 @@
             SDL.SDL_SetWindowFullscreen(RenderingWindow, (uint)(is_full_screen ? SDL.SDL_WindowFlags.SDL_WINDOW_FULLSCREEN_DESKTOP : 0));
         }
 
-        static SDL.SDL_Rect calculate_display_rect(
+        private static SDL.SDL_Rect CalculateDisplayRect(
             int screenX, int screenY, int screenWidth, int screenHeight, int pictureWidth, int pictureHeight, AVRational pictureAspectRatio)
         {
             var aspectRatio = pictureAspectRatio;
@@ -722,8 +722,8 @@
             aspectRatio = ffmpeg.av_mul_q(aspectRatio, ffmpeg.av_make_q(pictureWidth, pictureHeight));
 
             // TODO: we suppose the screen has a 1.0 pixel ratio
-            long height = screenHeight;
-            long width = ffmpeg.av_rescale(height, aspectRatio.num, aspectRatio.den) & ~1;
+            var height = (long)screenHeight;
+            var width = ffmpeg.av_rescale(height, aspectRatio.num, aspectRatio.den) & ~1;
             if (width > screenWidth)
             {
                 width = screenWidth;
@@ -769,7 +769,7 @@
             if (maxWidth == int.MaxValue && maxHeight == int.MaxValue)
                 maxHeight = height;
 
-            var rect = calculate_display_rect(0, 0, maxWidth, maxHeight, width, height, sar);
+            var rect = CalculateDisplayRect(0, 0, maxWidth, maxHeight, width, height, sar);
             default_width = rect.w;
             default_height = rect.h;
         }

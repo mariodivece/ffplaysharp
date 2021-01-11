@@ -423,7 +423,7 @@
             else
             {
                 StartPts = ffmpeg.AV_NOPTS_VALUE;
-                StartPtsTimeBase = new();
+                StartPtsTimeBase = ffmpeg.av_make_q(0, 0);
             }
 
             return 0;
@@ -434,11 +434,7 @@
             var resultCode = DecodeFrame(out frame, out _);
             if (resultCode >= 0)
             {
-                var decoderTimeBase = new AVRational
-                {
-                    num = 1,
-                    den = frame->sample_rate
-                };
+                var decoderTimeBase = ffmpeg.av_make_q(1, frame->sample_rate);
 
                 if (frame->pts.IsValidPts())
                     frame->pts = ffmpeg.av_rescale_q(frame->pts, CodecContext->pkt_timebase, decoderTimeBase);
@@ -481,7 +477,7 @@
 
                 if (gotSamples != 0)
                 {
-                    var decoderTimeBase = new AVRational { num = 1, den = decodedFrame->sample_rate };
+                    var decoderTimeBase = ffmpeg.av_make_q(1, decodedFrame->sample_rate);
                     var decoderChannelLayout = AudioParams.ValidateChannelLayout(decodedFrame->channel_layout, decodedFrame->channels);
 
                     var reconfigure = FilterSpec.IsDifferent(decodedFrame) ||
@@ -522,7 +518,7 @@
 
                         queuedFrame.Position = decodedFrame->pkt_pos;
                         queuedFrame.Serial = PacketSerial;
-                        queuedFrame.Duration = ffmpeg.av_q2d(new AVRational { num = decodedFrame->nb_samples, den = decodedFrame->sample_rate });
+                        queuedFrame.Duration = ffmpeg.av_q2d(ffmpeg.av_make_q(decodedFrame->nb_samples, decodedFrame->sample_rate));
 
                         ffmpeg.av_frame_move_ref(queuedFrame.FramePtr, decodedFrame);
                         Frames.Push();

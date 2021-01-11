@@ -59,7 +59,7 @@
         public const int SubtitleFrameQueueCapacity = 16;
         public const int AudioFrameQueueCapacity = 9;
 
-        public static readonly AVRational AV_TIME_BASE_Q = new() { num = 1, den = ffmpeg.AV_TIME_BASE };
+        public static readonly AVRational AV_TIME_BASE_Q = ffmpeg.av_make_q(1, ffmpeg.AV_TIME_BASE);
 
         public const int FF_QUIT_EVENT = (int)SDL.SDL_EventType.SDL_USEREVENT + 2;
 
