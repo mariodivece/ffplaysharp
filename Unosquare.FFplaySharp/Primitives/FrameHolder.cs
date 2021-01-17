@@ -41,6 +41,14 @@
 
         public AVPixelFormat PixelFormat => (AVPixelFormat)FramePtr->format;
 
+        public int PixelWidth => FramePtr->width;
+
+        public int PixelHeight => FramePtr->height;
+
+        public byte_ptrArray8 PixelData => FramePtr->data;
+
+        public int_array8 PixelStride => FramePtr->linesize;
+
         public int Channels => FramePtr->channels;
 
         public int Frequency => FramePtr->sample_rate;

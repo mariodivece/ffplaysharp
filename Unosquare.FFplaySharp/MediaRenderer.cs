@@ -29,8 +29,8 @@
 
         public string window_title;
 
-        public IntPtr sub_texture;
-        public IntPtr vid_texture;
+        private IntPtr sub_texture;
+        private IntPtr vid_texture;
 
         private int screen_left = SDL.SDL_WINDOWPOS_CENTERED;
         private int screen_top = SDL.SDL_WINDOWPOS_CENTERED;
@@ -189,17 +189,14 @@
 
             if (!vp.uploaded)
             {
-                if (upload_texture(ref vid_texture, vp.FramePtr, ref container.Video.ConvertContext) < 0)
+                if (upload_texture(ref vid_texture, vp, ref container.Video.ConvertContext) < 0)
                     return;
                 vp.uploaded = true;
                 vp.FlipVertical = vp.FramePtr->linesize[0] < 0;
             }
 
             var point = new SDL.SDL_Point();
-
-            set_sdl_yuv_conversion_mode(vp.FramePtr);
             SDL.SDL_RenderCopyEx(SdlRenderer, vid_texture, ref rect, ref rect, 0, ref point, vp.FlipVertical ? SDL.SDL_RendererFlip.SDL_FLIP_VERTICAL : SDL.SDL_RendererFlip.SDL_FLIP_NONE);
-            set_sdl_yuv_conversion_mode(null);
 
             if (sp != null)
             {
@@ -447,28 +444,28 @@
             SDL.SDL_RenderPresent(SdlRenderer);
         }
 
-        private int upload_texture(ref IntPtr texture, AVFrame* frame, ref SwsContext* convertContext)
+        private int upload_texture(ref IntPtr texture, FrameHolder frame, ref SwsContext* convertContext)
         {
             int ret = 0;
-            (var sdlPixelFormat, var sdlBlendMode) = TranslateToSdlFormat((AVPixelFormat)frame->format);
+            (var sdlPixelFormat, var sdlBlendMode) = TranslateToSdlFormat(frame.PixelFormat);
             if (realloc_texture(
                 ref texture,
                 sdlPixelFormat == SDL.SDL_PIXELFORMAT_UNKNOWN ? SDL.SDL_PIXELFORMAT_ARGB8888 : sdlPixelFormat,
-                frame->width,
-                frame->height,
+                frame.PixelWidth,
+                frame.PixelHeight,
                 sdlBlendMode,
                 false) < 0)
             {
                 return -1;
             }
 
-            var textureRect = new SDL.SDL_Rect { w = frame->width, h = frame->height, x = 0, y = 0 };
+            var textureRect = new SDL.SDL_Rect { w = frame.PixelWidth, h = frame.PixelHeight, x = 0, y = 0 };
 
             if (sdlPixelFormat == SDL.SDL_PIXELFORMAT_UNKNOWN)
             {
                 /* This should only happen if we are not using avfilter... */
                 convertContext = ffmpeg.sws_getCachedContext(convertContext,
-                    frame->width, frame->height, (AVPixelFormat)frame->format, frame->width, frame->height,
+                    frame.PixelWidth, frame.PixelHeight, frame.PixelFormat, frame.PixelWidth, frame.PixelHeight,
                     AVPixelFormat.AV_PIX_FMT_BGRA, Constants.sws_flags, null, null, null);
 
                 if (convertContext != null)
@@ -479,7 +476,7 @@
                         var targetScan = default(byte_ptrArray8);
                         targetScan[0] = (byte*)textureAddress;
 
-                        ffmpeg.sws_scale(convertContext, frame->data, frame->linesize, 0, frame->height, targetScan, targetStride);
+                        ffmpeg.sws_scale(convertContext, frame.PixelData, frame.PixelStride, 0, frame.PixelHeight, targetScan, targetStride);
                         SDL.SDL_UnlockTexture(texture);
                     }
                 }
@@ -491,17 +488,17 @@
             }
             else if (sdlPixelFormat == SDL.SDL_PIXELFORMAT_IYUV)
             {
-                if (frame->linesize[0] > 0 && frame->linesize[1] > 0 && frame->linesize[2] > 0)
+                if (frame.PixelStride[0] > 0 && frame.PixelStride[1] > 0 && frame.PixelStride[2] > 0)
                 {
-                    ret = SDL.SDL_UpdateYUVTexture(texture, ref textureRect, (IntPtr)frame->data[0], frame->linesize[0],
-                                                           (IntPtr)frame->data[1], frame->linesize[1],
-                                                           (IntPtr)frame->data[2], frame->linesize[2]);
+                    ret = SDL.SDL_UpdateYUVTexture(texture, ref textureRect, (IntPtr)frame.PixelData[0], frame.PixelStride[0],
+                                                           (IntPtr)frame.PixelData[1], frame.PixelStride[1],
+                                                           (IntPtr)frame.PixelData[2], frame.PixelStride[2]);
                 }
-                else if (frame->linesize[0] < 0 && frame->linesize[1] < 0 && frame->linesize[2] < 0)
+                else if (frame.PixelStride[0] < 0 && frame.PixelStride[1] < 0 && frame.PixelStride[2] < 0)
                 {
-                    ret = SDL.SDL_UpdateYUVTexture(texture, ref textureRect, (IntPtr)frame->data[0] + frame->linesize[0] * (frame->height - 1), -frame->linesize[0],
-                                                           (IntPtr)frame->data[1] + frame->linesize[1] * (Helpers.AV_CEIL_RSHIFT(frame->height, 1) - 1), -frame->linesize[1],
-                                                           (IntPtr)frame->data[2] + frame->linesize[2] * (Helpers.AV_CEIL_RSHIFT(frame->height, 1) - 1), -frame->linesize[2]);
+                    ret = SDL.SDL_UpdateYUVTexture(texture, ref textureRect, (IntPtr)frame.PixelData[0] + frame.PixelStride[0] * (frame.PixelHeight - 1), -frame.PixelStride[0],
+                                                           (IntPtr)frame.PixelData[1] + frame.PixelStride[1] * (Helpers.AV_CEIL_RSHIFT(frame.PixelHeight, 1) - 1), -frame.PixelStride[1],
+                                                           (IntPtr)frame.PixelData[2] + frame.PixelStride[2] * (Helpers.AV_CEIL_RSHIFT(frame.PixelHeight, 1) - 1), -frame.PixelStride[2]);
                 }
                 else
                 {
@@ -511,13 +508,13 @@
             }
             else
             {
-                if (frame->linesize[0] < 0)
+                if (frame.PixelStride[0] < 0)
                 {
-                    ret = SDL.SDL_UpdateTexture(texture, ref textureRect, (IntPtr)frame->data[0] + frame->linesize[0] * (frame->height - 1), -frame->linesize[0]);
+                    ret = SDL.SDL_UpdateTexture(texture, ref textureRect, (IntPtr)frame.PixelData[0] + frame.PixelStride[0] * (frame.PixelHeight - 1), -frame.PixelStride[0]);
                 }
                 else
                 {
-                    ret = SDL.SDL_UpdateTexture(texture, ref textureRect, (IntPtr)frame->data[0], frame->linesize[0]);
+                    ret = SDL.SDL_UpdateTexture(texture, ref textureRect, (IntPtr)frame.PixelData[0], frame.PixelStride[0]);
                 }
             }
 
@@ -686,7 +683,7 @@
                     var buf = new StringBuilder();
                     buf.Append($"{container.MasterTime,-8:0.####} | ");
                     buf.Append((container.Audio.Stream != null && container.Video.Stream != null) ? "A-V" : (container.Video.Stream != null ? "M-V" : (container.Audio.Stream != null ? "M-A" : "   ")));
-                    buf.Append($":{audioVideoDelay,-8:0.####} | ");
+                    buf.Append($":{audioVideoDelay,9:0.####} | ");
                     buf.Append($"fd={(container.Video.DroppedFrameCount + DroppedPictureCount)} | ");
                     buf.Append($"aq={(audioQueueSize / 1024)}KB | ");
                     buf.Append($"vq={(videoQueueSize / 1024)}KB | ");
@@ -698,9 +695,9 @@
                         buf.Append(' ');
 
                     if (container.Options.show_status == 1 && ffmpeg.av_log_get_level() < ffmpeg.AV_LOG_INFO)
-                        Console.WriteLine(buf.ToString());
+                        Console.Write($"{buf}\r");
                     else
-                        Helpers.LogInfo($"\r{buf}");
+                        Helpers.LogInfo($"{buf}\r");
 
                     last_time_status = currentTime;
                 }
@@ -741,10 +738,6 @@
                 w = Math.Max((int)width, 1),
                 h = Math.Max((int)height, 1),
             };
-        }
-
-        public void set_sdl_yuv_conversion_mode(AVFrame* frame)
-        {
         }
 
         private static (uint sdlPixelFormat, SDL.SDL_BlendMode sdlBlendMode) TranslateToSdlFormat(AVPixelFormat pixelFormat)
