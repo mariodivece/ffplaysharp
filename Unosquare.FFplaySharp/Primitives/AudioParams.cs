@@ -1,6 +1,7 @@
 ﻿namespace Unosquare.FFplaySharp.Primitives
 {
     using FFmpeg.AutoGen;
+    using System;
 
     public unsafe class AudioParams
     {
@@ -9,7 +10,9 @@
         public int Channels { get; set; }
         
         public long Layout { get; set; }
-        
+
+        public string LayoutString => GetChannelLayoutString(Layout);
+
         public AVSampleFormat SampleFormat { get; set; }
 
         public int FrameSize => ffmpeg.av_samples_get_buffer_size(null, Channels, 1, SampleFormat, 1);
@@ -17,6 +20,8 @@
         public int BytesPerSecond => ffmpeg.av_samples_get_buffer_size(null, Channels, Frequency, SampleFormat, 1);
 
         public int BytesPerSample => ffmpeg.av_get_bytes_per_sample(SampleFormat);
+
+        public string SampleFormatName => GetSampleFormatName(SampleFormat);
 
         public void ImportFrom(AVFrame* frame)
         {
@@ -62,6 +67,21 @@
 
             return result;
         }
+
+        public static unsafe string GetChannelLayoutString(long channelLayout)
+            => GetChannelLayoutString(Convert.ToUInt64(channelLayout));
+
+        public static unsafe string GetChannelLayoutString(ulong channelLayout)
+        {
+            const int StringBufferLength = 1024;
+            var filterLayoutString = stackalloc byte[StringBufferLength];
+            ffmpeg.av_get_channel_layout_string(filterLayoutString, StringBufferLength, -1, channelLayout);
+            return Helpers.PtrToString(filterLayoutString);
+        }
+
+        public static string GetSampleFormatName(AVSampleFormat format) => ffmpeg.av_get_sample_fmt_name(format);
+
+        public static string GetSampleFormatName(int format) => GetSampleFormatName((AVSampleFormat)format);
 
         public static long DefaultChannelLayoutFor(int channelCount) => ffmpeg.av_get_default_channel_layout(channelCount);
 

@@ -197,10 +197,10 @@
             container.ExternalClock = new Clock(container.ExternalClock);
 
             if (container.Options.startup_volume < 0)
-                ffmpeg.av_log(null, ffmpeg.AV_LOG_WARNING, $"-volume={container.Options.startup_volume} < 0, setting to 0\n");
+                Helpers.LogWarning($"-volume={container.Options.startup_volume} < 0, setting to 0\n");
 
             if (container.Options.startup_volume > 100)
-                ffmpeg.av_log(null, ffmpeg.AV_LOG_WARNING, $"-volume={container.Options.startup_volume} > 100, setting to 100\n");
+                Helpers.LogWarning($"-volume={container.Options.startup_volume} > 100, setting to 100\n");
 
             container.Options.startup_volume = container.Options.startup_volume.Clamp(0, 100);
             container.Options.startup_volume = (SDL.SDL_MIX_MAXVOLUME * container.Options.startup_volume / 100).Clamp(0, SDL.SDL_MIX_MAXVOLUME);
@@ -333,8 +333,8 @@
         the_end:
             if (program != null && nextStreamIndex != -1)
                 nextStreamIndex = (int)program->stream_index[nextStreamIndex];
-            ffmpeg.av_log(null, ffmpeg.AV_LOG_INFO, $"Switch {component.MediaTypeString} stream from #{component.StreamIndex} to #{nextStreamIndex}\n");
 
+            Helpers.LogInfo($"Switch {component.MediaTypeString} stream from #{component.StreamIndex} to #{nextStreamIndex}\n");
             component.Close();
             OpenComponent(nextStreamIndex);
         }
@@ -391,7 +391,7 @@
             if (i >= InputContext->nb_chapters)
                 return;
 
-            ffmpeg.av_log(null, ffmpeg.AV_LOG_VERBOSE, $"Seeking to chapter {i}.\n");
+            Helpers.LogVerbose($"Seeking to chapter {i}.\n");
             SeekByTimestamp(ffmpeg.av_rescale_q(InputContext->chapters[i]->start, InputContext->chapters[i]->time_base, Constants.AV_TIME_BASE_Q));
         }
 
@@ -436,9 +436,9 @@
             if (codec == null)
             {
                 if (!string.IsNullOrWhiteSpace(forcedCodecName))
-                    ffmpeg.av_log(null, ffmpeg.AV_LOG_WARNING, $"No codec could be found with name '{forcedCodecName}'\n");
+                    Helpers.LogWarning($"No codec could be found with name '{forcedCodecName}'\n");
                 else
-                    ffmpeg.av_log(null, ffmpeg.AV_LOG_WARNING, $"No decoder could be found for codec {ffmpeg.avcodec_get_name(codecContext->codec_id)}\n");
+                    Helpers.LogWarning($"No decoder could be found for codec {ffmpeg.avcodec_get_name(codecContext->codec_id)}\n");
                 ret = ffmpeg.AVERROR(ffmpeg.EINVAL);
                 goto fail;
             }
@@ -446,7 +446,7 @@
             codecContext->codec_id = codec->id;
             if (lowResFactor > codec->max_lowres)
             {
-                ffmpeg.av_log(codecContext, ffmpeg.AV_LOG_WARNING, $"The maximum value for lowres supported by the decoder is {codec->max_lowres}\n");
+                Helpers.LogWarning($"The maximum value for lowres supported by the decoder is {codec->max_lowres}\n");
                 lowResFactor = codec->max_lowres;
             }
 
@@ -477,7 +477,7 @@
             if (t != null)
             {
                 var key = Helpers.PtrToString(t->key);
-                ffmpeg.av_log(null, ffmpeg.AV_LOG_ERROR, $"Option {key} not found.\n");
+                Helpers.LogError($"Option {key} not found.\n");
                 ret = ffmpeg.AVERROR_OPTION_NOT_FOUND;
                 goto fail;
             }
@@ -541,7 +541,7 @@
                 return true;
 
             var url = Helpers.PtrToString(ic->url)?.ToLowerInvariant();
-            url = string.IsNullOrEmpty(url) ? string.Empty : url;
+            url = string.IsNullOrWhiteSpace(url) ? string.Empty : url;
 
             if (ic->pb != null && (url.StartsWith("rtp:") || url.StartsWith("udp:")))
                 return true;
@@ -625,7 +625,7 @@
 
             if (err < 0)
             {
-                ffmpeg.av_log(null, ffmpeg.AV_LOG_ERROR, $"{FileName}: {Helpers.print_error(err)}\n");
+                Helpers.LogError($"{FileName}: {Helpers.print_error(err)}\n");
                 ret = -1;
                 goto fail;
             }
@@ -640,7 +640,7 @@
             AVDictionaryEntry* formatOption;
             if ((formatOption = ffmpeg.av_dict_get(o.format_opts, string.Empty, null, ffmpeg.AV_DICT_IGNORE_SUFFIX)) != null)
             {
-                ffmpeg.av_log(null, ffmpeg.AV_LOG_ERROR, $"Option {Helpers.PtrToString(formatOption->key)} not found.\n");
+                Helpers.LogError($"Option {Helpers.PtrToString(formatOption->key)} not found.\n");
                 ret = ffmpeg.AVERROR_OPTION_NOT_FOUND;
                 goto fail;
             }
@@ -666,7 +666,7 @@
 
                 if (err < 0)
                 {
-                    ffmpeg.av_log(null, ffmpeg.AV_LOG_WARNING, $"{FileName}: could not find codec parameters\n");
+                    Helpers.LogWarning($"{FileName}: could not find codec parameters\n");
                     ret = -1;
                     goto fail;
                 }
@@ -693,7 +693,7 @@
 
                 ret = ffmpeg.avformat_seek_file(ic, -1, long.MinValue, startTimestamp, long.MaxValue, 0);
                 if (ret < 0)
-                    ffmpeg.av_log(null, ffmpeg.AV_LOG_WARNING, $"{FileName}: could not seek to position {(startTimestamp / Clock.TimeBaseMicros)}\n");
+                    Helpers.LogWarning($"{FileName}: could not seek to position {(startTimestamp / Clock.TimeBaseMicros)}\n");
             }
 
             IsRealtime = IsInputFormatRealtime(ic);
@@ -715,7 +715,7 @@
             {
                 if (o.wanted_stream_spec[i] != null && streamIndexes[(AVMediaType)i] == -1)
                 {
-                    ffmpeg.av_log(null, ffmpeg.AV_LOG_ERROR, $"Stream specifier {Options.wanted_stream_spec[i]} does not match any {ffmpeg.av_get_media_type_string((AVMediaType)i)} stream\n");
+                    Helpers.LogError($"Stream specifier {Options.wanted_stream_spec[i]} does not match any {ffmpeg.av_get_media_type_string((AVMediaType)i)} stream\n");
                     streamIndexes[(AVMediaType)i] = int.MaxValue;
                 }
             }
@@ -771,7 +771,7 @@
 
             if (Video.StreamIndex < 0 && Audio.StreamIndex < 0)
             {
-                ffmpeg.av_log(null, ffmpeg.AV_LOG_FATAL, $"Failed to open file '{FileName}' or configure filtergraph\n");
+                Helpers.LogFatal($"Failed to open file '{FileName}' or configure filtergraph\n");
                 ret = -1;
                 goto fail;
             }
@@ -814,7 +814,7 @@
                     ret = ffmpeg.avformat_seek_file(InputContext, -1, seekTargetMin, seekTarget, seekTargetMax, SeekFlags);
                     if (ret < 0)
                     {
-                        ffmpeg.av_log(null, ffmpeg.AV_LOG_ERROR, $"{Helpers.PtrToString(InputContext->url)}: error while seeking\n");
+                        Helpers.LogError($"{Helpers.PtrToString(InputContext->url)}: error while seeking\n");
                     }
                     else
                     {
@@ -913,7 +913,7 @@
 
                 var isPacketInPlayRange = !o.duration.IsValidPts() ||
                         (packetPts - (streamStartPts.IsValidPts() ? streamStartPts : 0)) *
-                        ffmpeg.av_q2d(ic->streams[readPacket->stream_index]->time_base) -
+                        ic->streams[readPacket->stream_index]->time_base.ToFactor() -
                         (o.start_time.IsValidPts() ? o.start_time : 0) / Clock.TimeBaseMicros
                         <= (o.duration / Clock.TimeBaseMicros);
 

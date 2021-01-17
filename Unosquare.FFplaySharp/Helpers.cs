@@ -13,8 +13,6 @@
         private const string FFmpegDirectory = @"c:\ffmpeg\x64";
         private const string SdlDirectory = @"c:\ffmpeg\x64";
 
-        
-
         private static readonly IList<string> NativeLibraryPaths = new List<string>()
         {
             Path.Combine(SdlDirectory, "SDL2.dll"),
@@ -54,12 +52,7 @@
 
         public static int Clamp(this int number, int min, int max) => number < min ? min : number > max ? max : number;
 
-        public static unsafe void FFSWAP(AVFilterContext** array, int a, int b)
-        {
-            var temp = array[b];
-            array[b] = array[a];
-            array[a] = temp;
-        }
+        public static double ToFactor(this AVRational r) => ffmpeg.av_q2d(r);
 
         public static double CONV_FP(int m) => Convert.ToDouble(m);
 
@@ -90,7 +83,7 @@
             theta -= 360 * Math.Floor(theta / 360 + 0.9 / 360);
 
             if (Math.Abs(theta - 90 * Math.Round(theta / 90, 0)) > 2)
-                ffmpeg.av_log(null, ffmpeg.AV_LOG_WARNING, "Odd rotation angle.\n" +
+                Helpers.LogWarning("Odd rotation angle.\n" +
                        "If you want to help, upload a sample " +
                        "of this file to https://streams.videolan.org/upload/ " +
                        "and contact the ffmpeg-devel mailing list. (ffmpeg-devel@ffmpeg.org)");
@@ -134,7 +127,8 @@
         {
             int ret = ffmpeg.avformat_match_stream_specifier(s, st, spec);
             if (ret < 0)
-                ffmpeg.av_log(s, ffmpeg.AV_LOG_ERROR, $"Invalid stream specifier: {spec}.\n");
+                Log(s, ffmpeg.AV_LOG_ERROR, $"Invalid stream specifier: {spec}.\n");
+
             return ret;
         }
 
@@ -198,6 +192,29 @@
             return ret;
         }
 
+        public static unsafe void Log(void* opaque, int logLevel, string message)
+            => ffmpeg.av_log(opaque, logLevel, message);
+
+        public static unsafe void LogError(string message) => Log(null, ffmpeg.AV_LOG_ERROR, message);
+
+        public static unsafe void LogError(AVCodecContext* context, string message) => Log(context, ffmpeg.AV_LOG_ERROR, message);
+
+        public static unsafe void LogWarning(string message) => Log(null, ffmpeg.AV_LOG_WARNING, message);
+
+        public static unsafe void LogWarning(AVCodecContext* context, string message) => Log(context, ffmpeg.AV_LOG_WARNING, message);
+
+        public static unsafe void LogFatal(string message) => Log(null, ffmpeg.AV_LOG_FATAL, message);
+
+        public static unsafe void LogDebug(string message) => Log(null, ffmpeg.AV_LOG_DEBUG, message);
+
+        public static unsafe void LogInfo(string message) => Log(null, ffmpeg.AV_LOG_INFO, message);
+
+        public static unsafe void LogVerbose(string message) => Log(null, ffmpeg.AV_LOG_VERBOSE, message);
+
+        public static unsafe void LogTrace(string message) => Log(null, ffmpeg.AV_LOG_TRACE, message);
+
+        public static unsafe void LogQuiet(string message) => Log(null, ffmpeg.AV_LOG_QUIET, message);
+
         public static unsafe string print_error(int errorCode)
         {
             var bufferSize = 1024;
@@ -215,7 +232,7 @@
             var opts = (AVDictionary**)ffmpeg.av_mallocz_array(s->nb_streams, (ulong)sizeof(IntPtr));
             if (opts == null)
             {
-                ffmpeg.av_log(null, ffmpeg.AV_LOG_ERROR, "Could not alloc memory for stream options.\n");
+                LogError("Could not alloc memory for stream options.\n");
                 return null;
             }
 

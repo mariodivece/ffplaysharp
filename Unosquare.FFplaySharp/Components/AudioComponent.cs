@@ -62,23 +62,17 @@
         public int ConfigureFilters(bool forceOutputFormat)
         {
             const int SearhChildrenFlags = ffmpeg.AV_OPT_SEARCH_CHILDREN;
+            var outputSampleFormats = new[] { (int)AVSampleFormat.AV_SAMPLE_FMT_S16 };
 
             var o = Container.Options;
-
-            var sample_fmts = new[] { (int)AVSampleFormat.AV_SAMPLE_FMT_S16 };
 
             AVFilterContext* inputFilterContext = null;
             AVFilterContext* outputFilterContext = null;
             AVDictionaryEntry* entry = null;
 
-            int ret;
+            int resultCode;
 
-            {
-                var audioFilterGraph = FilterGraph;
-                ffmpeg.avfilter_graph_free(&audioFilterGraph);
-                FilterGraph = null;
-            }
-
+            ReleaseFilterGraph();
             FilterGraph = ffmpeg.avfilter_graph_alloc();
             FilterGraph->nb_threads = o.filter_nbthreads;
 
@@ -94,7 +88,7 @@
                 resamplerOptions = null;
 
             ffmpeg.av_opt_set(FilterGraph, "aresample_swr_opts", resamplerOptions, 0);
-            var sourceBufferOptions = $"sample_rate={FilterSpec.Frequency}:sample_fmt={ffmpeg.av_get_sample_fmt_name(FilterSpec.SampleFormat)}:" +
+            var sourceBufferOptions = $"sample_rate={FilterSpec.Frequency}:sample_fmt={FilterSpec.SampleFormatName}:" +
                 $"channels={FilterSpec.Channels}:time_base={1}/{FilterSpec.Frequency}";
 
             if (FilterSpec.Layout != 0)
@@ -106,22 +100,22 @@
             var sourceBuffer = ffmpeg.avfilter_get_by_name("abuffer");
             var sinkBuffer = ffmpeg.avfilter_get_by_name("abuffersink");
 
-            ret = ffmpeg.avfilter_graph_create_filter(
+            resultCode = ffmpeg.avfilter_graph_create_filter(
                 &inputFilterContext, sourceBuffer, SourceBufferName, sourceBufferOptions, null, FilterGraph);
 
-            if (ret < 0)
+            if (resultCode < 0)
                 goto end;
 
-            ret = ffmpeg.avfilter_graph_create_filter(
+            resultCode = ffmpeg.avfilter_graph_create_filter(
                 &outputFilterContext, sinkBuffer, SinkBufferName, null, null, FilterGraph);
 
-            if (ret < 0)
+            if (resultCode < 0)
                 goto end;
 
-            if ((ret = Helpers.av_opt_set_int_list(outputFilterContext, "sample_fmts", sample_fmts, SearhChildrenFlags)) < 0)
+            if ((resultCode = Helpers.av_opt_set_int_list(outputFilterContext, "sample_fmts", outputSampleFormats, SearhChildrenFlags)) < 0)
                 goto end;
 
-            if ((ret = ffmpeg.av_opt_set_int(outputFilterContext, "all_channel_counts", 1, SearhChildrenFlags)) < 0)
+            if ((resultCode = ffmpeg.av_opt_set_int(outputFilterContext, "all_channel_counts", 1, SearhChildrenFlags)) < 0)
                 goto end;
 
             if (forceOutputFormat)
@@ -130,42 +124,38 @@
                 var outputChannelCount = new[] { HardwareSpec.Layout != 0 ? -1 : HardwareSpec.Channels };
                 var outputSampleRates = new[] { HardwareSpec.Frequency };
 
-                if ((ret = ffmpeg.av_opt_set_int(outputFilterContext, "all_channel_counts", 0, SearhChildrenFlags)) < 0)
+                if ((resultCode = ffmpeg.av_opt_set_int(outputFilterContext, "all_channel_counts", 0, SearhChildrenFlags)) < 0)
                     goto end;
-                if ((ret = Helpers.av_opt_set_int_list(outputFilterContext, "channel_layouts", outputChannelLayout, SearhChildrenFlags)) < 0)
+                if ((resultCode = Helpers.av_opt_set_int_list(outputFilterContext, "channel_layouts", outputChannelLayout, SearhChildrenFlags)) < 0)
                     goto end;
-                if ((ret = Helpers.av_opt_set_int_list(outputFilterContext, "channel_counts", outputChannelCount, SearhChildrenFlags)) < 0)
+                if ((resultCode = Helpers.av_opt_set_int_list(outputFilterContext, "channel_counts", outputChannelCount, SearhChildrenFlags)) < 0)
                     goto end;
-                if ((ret = Helpers.av_opt_set_int_list(outputFilterContext, "sample_rates", outputSampleRates, SearhChildrenFlags)) < 0)
+                if ((resultCode = Helpers.av_opt_set_int_list(outputFilterContext, "sample_rates", outputSampleRates, SearhChildrenFlags)) < 0)
                     goto end;
             }
 
             var filterGraphLiteral = o.afilters;
-            ret = MaterializeFilterGraph(FilterGraph, filterGraphLiteral, inputFilterContext, outputFilterContext);
+            resultCode = MaterializeFilterGraph(filterGraphLiteral, inputFilterContext, outputFilterContext);
 
-            if (ret < 0) goto end;
+            if (resultCode < 0) goto end;
 
             InputFilter = inputFilterContext;
             OutputFilter = outputFilterContext;
 
-        end:
-            if (ret < 0)
-            {
-                var filterGraph = FilterGraph;
-                ffmpeg.avfilter_graph_free(&filterGraph);
-                FilterGraph = null;
-            }
+            end:
+            if (resultCode < 0)
+                ReleaseFilterGraph();
 
-            return ret;
+            return resultCode;
         }
 
-        /**
-* Decode one audio frame and return its uncompressed size.
-*
-* The processed audio frame is decoded, converted if required, and
-* stored in is->audio_buf, with size in bytes given by the return
-* value.
-*/
+
+        /// <summary>
+        /// Decode one audio frame and return its uncompressed size.
+        /// The processed audio frame is decoded, converted if required, and
+        /// stored in is->audio_buf, with size in bytes given by the return value.
+        /// </summary>
+        /// <returns>The size in bytes of the output buffer.</returns>
         public int RefillOutputBuffer()
         {
             FrameHolder af;
@@ -192,17 +182,14 @@
 
             var frameBufferSize = ffmpeg.av_samples_get_buffer_size(null, af.Channels, af.SampleCount, af.SampleFormat, 1);
             var frameChannelLayout = AudioParams.ComputeChannelLayout(af.FramePtr);
-            var wantedSampleCount = synchronize_audio(af.SampleCount);
+            var wantedSampleCount = SyncWantedSamples(af.SampleCount);
 
             if (af.SampleFormat != StreamSpec.SampleFormat ||
                 frameChannelLayout != StreamSpec.Layout ||
                 af.Frequency != StreamSpec.Frequency ||
                 (wantedSampleCount != af.SampleCount && ConvertContext == null))
             {
-                var convertContext = ConvertContext;
-                ffmpeg.swr_free(&convertContext);
-                ConvertContext = null;
-
+                ReleaseConvertContext();
                 ConvertContext = ffmpeg.swr_alloc_set_opts(null,
                     HardwareSpec.Layout, HardwareSpec.SampleFormat, HardwareSpec.Frequency,
                     frameChannelLayout, af.SampleFormat, af.Frequency,
@@ -210,15 +197,12 @@
 
                 if (ConvertContext == null || ffmpeg.swr_init(ConvertContext) < 0)
                 {
-                    ffmpeg.av_log(null, ffmpeg.AV_LOG_ERROR,
+                    Helpers.LogError(
                            $"Cannot create sample rate converter for conversion of {af.Frequency} Hz " +
-                           $"{ffmpeg.av_get_sample_fmt_name(af.SampleFormat)} {af.Channels} channels to " +
-                           $"{HardwareSpec.Frequency} Hz {ffmpeg.av_get_sample_fmt_name(HardwareSpec.SampleFormat)} {HardwareSpec.Channels} channels!\n");
+                           $"{af.SampleFormatName} {af.Channels} channels to " +
+                           $"{HardwareSpec.Frequency} Hz {HardwareSpec.SampleFormatName} {HardwareSpec.Channels} channels!\n");
 
-                    convertContext = ConvertContext;
-                    ffmpeg.swr_free(&convertContext);
-                    ConvertContext = null;
-
+                    ReleaseConvertContext();
                     return -1;
                 }
 
@@ -235,7 +219,7 @@
 
                 if (outputBufferSize < 0)
                 {
-                    ffmpeg.av_log(null, ffmpeg.AV_LOG_ERROR, "av_samples_get_buffer_size() failed\n");
+                    Helpers.LogError("av_samples_get_buffer_size() failed\n");
                     return -1;
                 }
                 if (wantedSampleCount != af.SampleCount)
@@ -243,7 +227,7 @@
                     if (ffmpeg.swr_set_compensation(ConvertContext, (wantedSampleCount - af.SampleCount) * HardwareSpec.Frequency / af.Frequency,
                                                 wantedSampleCount * HardwareSpec.Frequency / af.Frequency) < 0)
                     {
-                        ffmpeg.av_log(null, ffmpeg.AV_LOG_ERROR, "swr_set_compensation() failed\n");
+                        Helpers.LogError("swr_set_compensation() failed\n");
                         return -1;
                     }
                 }
@@ -269,17 +253,15 @@
 
                 if (outputSampleCount < 0)
                 {
-                    ffmpeg.av_log(null, ffmpeg.AV_LOG_ERROR, "swr_convert() failed\n");
+                    Helpers.LogError("swr_convert() failed\n");
                     return -1;
                 }
                 if (outputSampleCount == wantedOutputSize)
                 {
-                    ffmpeg.av_log(null, ffmpeg.AV_LOG_WARNING, "audio buffer is probably too small\n");
+                    Helpers.LogWarning("audio buffer is probably too small\n");
                     if (ffmpeg.swr_init(ConvertContext) < 0)
                     {
-                        var convertContext = ConvertContext;
-                        ffmpeg.swr_free(&convertContext);
-                        ConvertContext = convertContext;
+                        ReleaseConvertContext();
                     }
                 }
 
@@ -300,20 +282,25 @@
             FrameSerial = af.Serial;
             if (Debugger.IsAttached)
             {
-                Console.WriteLine($"audio: delay={(FrameTime - LastFrameTime),-8:0.####} clock={FrameTime,-8:0.####} clock0={currentFrameTime,-8:0.####}");
-                LastFrameTime = FrameTime;
+                // Console.WriteLine($"audio: delay={(FrameTime - LastFrameTime),-8:0.####} clock={FrameTime,-8:0.####} clock0={currentFrameTime,-8:0.####}");
             }
 
+            LastFrameTime = FrameTime;
             return resampledBufferSize;
         }
 
-        /* return the wanted number of samples to get better sync if sync_type is video
-* or external master clock */
-        public int synchronize_audio(int sampleCount)
+        /// <summary>
+        /// Port of synchronize_audio
+        /// Return the wanted number of samples to get better sync if sync_type
+        /// is video or external master clock.
+        /// </summary>
+        /// <param name="sampleCount">The number of samples contained in the frame.</param>
+        /// <returns>The wanted sample count for synchronized output.</returns>
+        public int SyncWantedSamples(int sampleCount)
         {
             var wantedSampleCount = sampleCount;
 
-            /* if not master, then we try to remove or add samples to correct the clock */
+            // if not master, then we try to remove or add samples to correct the clock.
             if (Container.MasterSyncMode == ClockSync.Audio)
                 return wantedSampleCount;
 
@@ -324,12 +311,12 @@
                 SyncDiffTotalDelay = clockDelay + (SyncDiffAverageCoffiecient * SyncDiffTotalDelay);
                 if (SyncDiffAverageCount < Constants.AUDIO_DIFF_AVG_NB)
                 {
-                    /* not enough measures to have a correct estimate */
+                    // not enough measures to have a correct estimate.
                     SyncDiffAverageCount++;
                 }
                 else
                 {
-                    /* estimate the A-V difference */
+                    // estimate the A-V difference.
                     var syncDiffDelay = SyncDiffTotalDelay * (1.0 - SyncDiffAverageCoffiecient);
 
                     if (Math.Abs(syncDiffDelay) >= SyncDiffDelayThreshold)
@@ -340,14 +327,12 @@
                         wantedSampleCount = wantedSampleCount.Clamp(minSampleCount, maxSampleCount);
                     }
 
-                    ffmpeg.av_log(
-                        null, ffmpeg.AV_LOG_TRACE, $"diff={clockDelay} adiff={syncDiffDelay} sample_diff={(wantedSampleCount - sampleCount)} apts={FrameTime} {SyncDiffDelayThreshold}\n");
+                    Helpers.LogTrace($"diff={clockDelay} adiff={syncDiffDelay} sample_diff={(wantedSampleCount - sampleCount)} apts={FrameTime} {SyncDiffDelayThreshold}\n");
                 }
             }
             else
             {
-                /* too big difference : may be initial PTS errors, so
-                   reset A-V filter */
+                // too big difference: may be initial PTS errors, so reset A-V filter.
                 SyncDiffAverageCount = 0;
                 SyncDiffTotalDelay = 0;
             }
@@ -364,9 +349,7 @@
             Container.Renderer.CloseAudio();
             DisposeDecoder();
 
-            var contextPointer = ConvertContext;
-            ffmpeg.swr_free(&contextPointer);
-            ConvertContext = null;
+            ReleaseConvertContext();
 
             if (ResampledOutputBuffer != null)
                 ffmpeg.av_free(ResampledOutputBuffer);
@@ -384,8 +367,7 @@
 
         public override unsafe int InitializeDecoder(AVCodecContext* codecContext, int streamIndex)
         {
-            FilterSpec.ImportFrom(codecContext);
-            if (ConfigureFilters(false) < 0)
+            if (ConfigureFilters(codecContext) < 0)
                 return -1;
 
             var wantedSpec = AudioParams.FromFilterContext(OutputFilter);
@@ -425,6 +407,13 @@
             return 0;
         }
 
+        private void ReleaseConvertContext()
+        {
+            var convertContext = ConvertContext;
+            ffmpeg.swr_free(&convertContext);
+            ConvertContext = null;
+        }
+
         private int DecodeFrame(out AVFrame* frame)
         {
             var resultCode = DecodeFrame(out frame, out _);
@@ -462,76 +451,81 @@
 
             AVFrame* decodedFrame;
 
-            const int StringBufferLength = 1024;
-            var filterLayoutString = stackalloc byte[StringBufferLength];
-            var decoderLayoutString = stackalloc byte[StringBufferLength];
-
             do
             {
-                if ((gotSamples = DecodeFrame(out decodedFrame)) < 0)
-                    goto the_end;
+                gotSamples = DecodeFrame(out decodedFrame);
 
-                if (gotSamples != 0)
+                if (gotSamples < 0)
+                    break;
+
+                if (gotSamples == 0)
+                    continue;
+
+                var decoderTimeBase = ffmpeg.av_make_q(1, decodedFrame->sample_rate);
+                var decoderChannelLayout = AudioParams.ValidateChannelLayout(decodedFrame->channel_layout, decodedFrame->channels);
+
+                var needsDifferentSpec = FilterSpec.IsDifferent(decodedFrame) ||
+                    FilterSpec.Layout != decoderChannelLayout ||
+                    FilterSpec.Frequency != decodedFrame->sample_rate ||
+                    PacketSerial != lastPacketSerial;
+
+                if (needsDifferentSpec)
                 {
-                    var decoderTimeBase = ffmpeg.av_make_q(1, decodedFrame->sample_rate);
-                    var decoderChannelLayout = AudioParams.ValidateChannelLayout(decodedFrame->channel_layout, decodedFrame->channels);
+                    var decoderLayoutString = AudioParams.GetChannelLayoutString(decoderChannelLayout);
 
-                    var reconfigure = FilterSpec.IsDifferent(decodedFrame) ||
-                        FilterSpec.Layout != decoderChannelLayout ||
-                        FilterSpec.Frequency != decodedFrame->sample_rate ||
-                        PacketSerial != lastPacketSerial;
+                    Helpers.LogDebug(
+                       $"Audio frame changed from " +
+                       $"rate:{FilterSpec.Frequency} ch:{FilterSpec.Channels} fmt:{FilterSpec.SampleFormatName} layout:{FilterSpec.LayoutString} serial:{lastPacketSerial} to " +
+                       $"rate:{decodedFrame->sample_rate} ch:{decodedFrame->channels} fmt:{AudioParams.GetSampleFormatName(decodedFrame->format)} layout:{decoderLayoutString} serial:{PacketSerial}\n");
 
-                    if (reconfigure)
-                    {
-                        ffmpeg.av_get_channel_layout_string(filterLayoutString, StringBufferLength, -1, (ulong)FilterSpec.Layout);
-                        ffmpeg.av_get_channel_layout_string(decoderLayoutString, StringBufferLength, -1, (ulong)decoderChannelLayout);
-                        ffmpeg.av_log(null, ffmpeg.AV_LOG_DEBUG,
-                           $"Audio frame changed from " +
-                           $"rate:{FilterSpec.Frequency} ch:{FilterSpec.Channels} fmt:{ffmpeg.av_get_sample_fmt_name(FilterSpec.SampleFormat)} layout:{Helpers.PtrToString(filterLayoutString)} serial:{lastPacketSerial} to " +
-                           $"rate:{decodedFrame->sample_rate} ch:{decodedFrame->channels} fmt:{ffmpeg.av_get_sample_fmt_name((AVSampleFormat)decodedFrame->format)} layout:{Helpers.PtrToString(decoderLayoutString)} serial:{PacketSerial}\n");
+                    FilterSpec.ImportFrom(decodedFrame);
+                    lastPacketSerial = PacketSerial;
 
-                        FilterSpec.ImportFrom(decodedFrame);
-                        lastPacketSerial = PacketSerial;
-
-                        if ((resultCode = ConfigureFilters(true)) < 0)
-                            goto the_end;
-                    }
-
-                    if ((resultCode = ffmpeg.av_buffersrc_add_frame(InputFilter, decodedFrame)) < 0)
-                        goto the_end;
-
-                    while ((resultCode = ffmpeg.av_buffersink_get_frame_flags(OutputFilter, decodedFrame, 0)) >= 0)
-                    {
-                        decoderTimeBase = ffmpeg.av_buffersink_get_time_base(OutputFilter);
-                        var queuedFrame = Frames.PeekWriteable();
-
-                        if (queuedFrame == null)
-                            goto the_end;
-
-                        queuedFrame.Time = decodedFrame->pts.IsValidPts()
-                            ? decodedFrame->pts * ffmpeg.av_q2d(decoderTimeBase)
-                            : double.NaN;
-
-                        queuedFrame.Position = decodedFrame->pkt_pos;
-                        queuedFrame.Serial = PacketSerial;
-                        queuedFrame.Duration = ffmpeg.av_q2d(ffmpeg.av_make_q(decodedFrame->nb_samples, decodedFrame->sample_rate));
-
-                        ffmpeg.av_frame_move_ref(queuedFrame.FramePtr, decodedFrame);
-                        Frames.Push();
-
-                        if (Packets.Serial != PacketSerial)
-                            break;
-                    }
-
-                    if (resultCode == ffmpeg.AVERROR_EOF)
-                        EndOfFileSerial = PacketSerial;
+                    resultCode = ConfigureFilters(true);
+                    if (resultCode < 0)
+                        break;
                 }
+
+                if ((resultCode = ffmpeg.av_buffersrc_add_frame(InputFilter, decodedFrame)) < 0)
+                    break;
+
+                var isFrameQueueAvailable = true;
+                while ((resultCode = ffmpeg.av_buffersink_get_frame_flags(OutputFilter, decodedFrame, 0)) >= 0)
+                {
+                    decoderTimeBase = ffmpeg.av_buffersink_get_time_base(OutputFilter);
+                    var queuedFrame = Frames.PeekWriteable();
+
+                    if (queuedFrame == null)
+                    {
+                        isFrameQueueAvailable = false;
+                        break;
+                    }
+
+                    queuedFrame.Time = decodedFrame->pts.IsValidPts()
+                        ? decodedFrame->pts * decoderTimeBase.ToFactor()
+                        : double.NaN;
+
+                    queuedFrame.Position = decodedFrame->pkt_pos;
+                    queuedFrame.Serial = PacketSerial;
+                    queuedFrame.Duration = ffmpeg.av_make_q(decodedFrame->nb_samples, decodedFrame->sample_rate).ToFactor();
+
+                    ffmpeg.av_frame_move_ref(queuedFrame.FramePtr, decodedFrame);
+                    Frames.Push();
+
+                    if (Packets.Serial != PacketSerial)
+                        break;
+                }
+
+                if (!isFrameQueueAvailable)
+                    break;
+
+                if (resultCode == ffmpeg.AVERROR_EOF)
+                    EndOfFileSerial = PacketSerial;
+
             } while (resultCode >= 0 || resultCode == ffmpeg.AVERROR(ffmpeg.EAGAIN) || resultCode == ffmpeg.AVERROR_EOF);
 
-        the_end:
-            var filterGraph = FilterGraph;
-            ffmpeg.avfilter_graph_free(&filterGraph);
-            FilterGraph = null;
+            // Ported as the_end section.
+            ReleaseFilterGraph();
             ffmpeg.av_frame_free(&decodedFrame);
         }
     }

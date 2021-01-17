@@ -4,9 +4,9 @@
 
     public abstract unsafe class FilteringMediaComponent : MediaComponent
     {
-        public AVFilterGraph* FilterGraph = null;
-        public AVFilterContext* InputFilter = null;
-        public AVFilterContext* OutputFilter = null;
+        protected AVFilterGraph* FilterGraph = null;
+        protected AVFilterContext* InputFilter = null;
+        protected AVFilterContext* OutputFilter = null;
 
         protected FilteringMediaComponent(MediaContainer container)
             : base(container)
@@ -14,11 +14,11 @@
             // placeholder
         }
 
-        protected static int MaterializeFilterGraph(AVFilterGraph* filterGraph, string filterGraphLiteral,
+        protected int MaterializeFilterGraph(string filterGraphLiteral,
                          AVFilterContext* inputFilterContext, AVFilterContext* outputFilterContext)
         {
-            var ret = 0;
-            var initialFilterCount = filterGraph->nb_filters;
+            var resultCode = 0;
+            var initialFilterCount = (int)FilterGraph->nb_filters;
             AVFilterInOut* outputs = null;
             AVFilterInOut* inputs = null;
 
@@ -36,26 +36,45 @@
                 inputs->pad_idx = 0;
                 inputs->next = null;
 
-                if ((ret = ffmpeg.avfilter_graph_parse_ptr(filterGraph, filterGraphLiteral, &inputs, &outputs, null)) < 0)
+                if ((resultCode = ffmpeg.avfilter_graph_parse_ptr(FilterGraph, filterGraphLiteral, &inputs, &outputs, null)) < 0)
                     goto fail;
             }
             else
             {
-                if ((ret = ffmpeg.avfilter_link(inputFilterContext, 0, outputFilterContext, 0)) < 0)
+                if ((resultCode = ffmpeg.avfilter_link(inputFilterContext, 0, outputFilterContext, 0)) < 0)
                     goto fail;
             }
 
             // Reorder the filters to ensure that inputs of the custom filters are merged first
-            for (var i = 0; i < filterGraph->nb_filters - initialFilterCount; i++)
-                Helpers.FFSWAP(filterGraph->filters, i, i + (int)initialFilterCount);
+            for (var i = 0; i < FilterGraph->nb_filters - initialFilterCount; i++)
+                SwapFilters(i, i + initialFilterCount);
 
-            ret = ffmpeg.avfilter_graph_config(filterGraph, null);
+            resultCode = ffmpeg.avfilter_graph_config(FilterGraph, null);
 
         fail:
             ffmpeg.avfilter_inout_free(&outputs);
             ffmpeg.avfilter_inout_free(&inputs);
-            return ret;
+            return resultCode;
         }
 
+
+        /// <summary>
+        /// Port of FFSWAP
+        /// </summary>
+        /// <param name="indexA"></param>
+        /// <param name="indexB"></param>
+        private void SwapFilters(int indexA, int indexB)
+        {
+            var tempItem = FilterGraph->filters[indexB];
+            FilterGraph->filters[indexB] = FilterGraph->filters[indexA];
+            FilterGraph->filters[indexA] = tempItem;
+        }
+
+        protected void ReleaseFilterGraph()
+        {
+            var filterGraph = FilterGraph;
+            ffmpeg.avfilter_graph_free(&filterGraph);
+            FilterGraph = null;
+        }
     }
 }

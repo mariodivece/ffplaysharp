@@ -108,7 +108,7 @@
                     SDL.SDL_UnlockTexture(texture);
                 }
 
-                ffmpeg.av_log(null, ffmpeg.AV_LOG_VERBOSE, $"Created {new_width}x{new_height} texture with {SDL.SDL_GetPixelFormatName(new_format)}.\n");
+                Helpers.LogVerbose($"Created {new_width}x{new_height} texture with {SDL.SDL_GetPixelFormatName(new_format)}.\n");
             }
             return 0;
         }
@@ -160,7 +160,7 @@
                                     0, null, null, null);
                                 if (container.Subtitle.ConvertContext == null)
                                 {
-                                    ffmpeg.av_log(null, ffmpeg.AV_LOG_FATAL, "Cannot initialize the conversion context\n");
+                                    Helpers.LogFatal("Cannot initialize the conversion context\n");
                                     return;
                                 }
                                 if (SDL.SDL_LockTexture(sub_texture, ref sub_rect, out var pixels, out var pitch) == 0)
@@ -259,7 +259,7 @@
 
             if (SDL.SDL_Init(flags) != 0)
             {
-                ffmpeg.av_log(null, ffmpeg.AV_LOG_FATAL, $"Could not initialize SDL - {SDL.SDL_GetError()}\n");
+                Helpers.LogFatal($"Could not initialize SDL - {SDL.SDL_GetError()}\n");
                 return false;
             }
 
@@ -287,19 +287,19 @@
                     SdlRenderer = SDL.SDL_CreateRenderer(RenderingWindow, -1, SDL.SDL_RendererFlags.SDL_RENDERER_ACCELERATED | SDL.SDL_RendererFlags.SDL_RENDERER_PRESENTVSYNC);
                     if (SdlRenderer.IsNull())
                     {
-                        ffmpeg.av_log(null, ffmpeg.AV_LOG_WARNING, $"Failed to initialize a hardware accelerated renderer: {SDL.SDL_GetError()}\n");
+                        Helpers.LogWarning($"Failed to initialize a hardware accelerated renderer: {SDL.SDL_GetError()}\n");
                         SdlRenderer = SDL.SDL_CreateRenderer(RenderingWindow, -1, 0);
                     }
 
                     if (!SdlRenderer.IsNull())
                     {
                         if (SDL.SDL_GetRendererInfo(SdlRenderer, out SdlRendererInfo) == 0)
-                            ffmpeg.av_log(null, ffmpeg.AV_LOG_VERBOSE, $"Initialized {Helpers.PtrToString(SdlRendererInfo.name)} renderer.\n");
+                            Helpers.LogVerbose($"Initialized {Helpers.PtrToString(SdlRendererInfo.name)} renderer.\n");
                     }
                 }
                 if (RenderingWindow.IsNull() || SdlRenderer.IsNull() || SdlRendererInfo.num_texture_formats <= 0)
                 {
-                    ffmpeg.av_log(null, ffmpeg.AV_LOG_FATAL, $"Failed to create window or renderer: {SDL.SDL_GetError()}");
+                    Helpers.LogFatal($"Failed to create window or renderer: {SDL.SDL_GetError()}");
                     return false;
                 }
             }
@@ -341,7 +341,7 @@
 
             if (wantedSpec.freq <= 0 || wantedSpec.channels <= 0)
             {
-                ffmpeg.av_log(null, ffmpeg.AV_LOG_ERROR, "Invalid sample rate or channel count!\n");
+                Helpers.LogError("Invalid sample rate or channel count!\n");
                 return -1;
             }
 
@@ -358,7 +358,7 @@
             SDL.SDL_AudioSpec deviceSpec;
             while ((AudioDeviceId = SDL.SDL_OpenAudioDevice(null, 0, ref wantedSpec, out deviceSpec, AudioDeviceFlags)) == 0)
             {
-                ffmpeg.av_log(null, ffmpeg.AV_LOG_WARNING, $"SDL_OpenAudio ({wantedSpec.channels} channels, {wantedSpec.freq} Hz): {SDL.SDL_GetError()}\n");
+                Helpers.LogWarning($"SDL_OpenAudio ({wantedSpec.channels} channels, {wantedSpec.freq} Hz): {SDL.SDL_GetError()}\n");
                 wantedSpec.channels = (byte)next_nb_channels[Math.Min(7, (int)wantedSpec.channels)];
                 if (wantedSpec.channels == 0)
                 {
@@ -366,7 +366,7 @@
                     wantedSpec.channels = (byte)wantedChannelCount;
                     if (wantedSpec.freq == 0)
                     {
-                        ffmpeg.av_log(null, ffmpeg.AV_LOG_ERROR, "No more combinations to try, audio open failed\n");
+                        Helpers.LogError("No more combinations to try, audio open failed\n");
                         return -1;
                     }
                 }
@@ -376,8 +376,7 @@
 
             if (deviceSpec.format != SDL.AUDIO_S16SYS)
             {
-                ffmpeg.av_log(null, ffmpeg.AV_LOG_ERROR,
-                       $"SDL advised audio format {deviceSpec.format} is not supported!\n");
+                Helpers.LogError($"SDL advised audio format {deviceSpec.format} is not supported!\n");
                 return -1;
             }
 
@@ -386,8 +385,7 @@
                 wantedChannelLayout = AudioParams.DefaultChannelLayoutFor(deviceSpec.channels);
                 if (wantedChannelLayout == 0)
                 {
-                    ffmpeg.av_log(null, ffmpeg.AV_LOG_ERROR,
-                           $"SDL advised channel count {deviceSpec.channels} is not supported!\n");
+                    Helpers.LogError($"SDL advised channel count {deviceSpec.channels} is not supported!\n");
                     return -1;
                 }
             }
@@ -399,7 +397,7 @@
 
             if (audioDeviceSpec.BytesPerSecond <= 0 || audioDeviceSpec.FrameSize <= 0)
             {
-                ffmpeg.av_log(null, ffmpeg.AV_LOG_ERROR, "av_samples_get_buffer_size failed\n");
+                Helpers.LogError("av_samples_get_buffer_size failed\n");
                 return -1;
             }
 
@@ -487,7 +485,7 @@
                 }
                 else
                 {
-                    ffmpeg.av_log(null, ffmpeg.AV_LOG_FATAL, "Cannot initialize the conversion context\n");
+                    Helpers.LogFatal("Cannot initialize the conversion context\n");
                     ret = -1;
                 }
             }
@@ -507,7 +505,7 @@
                 }
                 else
                 {
-                    ffmpeg.av_log(null, ffmpeg.AV_LOG_ERROR, "Mixed negative and positive linesizes are not supported.\n");
+                    Helpers.LogError("Mixed negative and positive linesizes are not supported.\n");
                     return -1;
                 }
             }
@@ -686,20 +684,23 @@
                     var audioVideoDelay = container.ComponentSyncDelay;
 
                     var buf = new StringBuilder();
-                    buf.Append($"{container.MasterTime,-8:0.####} ");
+                    buf.Append($"{container.MasterTime,-8:0.####} | ");
                     buf.Append((container.Audio.Stream != null && container.Video.Stream != null) ? "A-V" : (container.Video.Stream != null ? "M-V" : (container.Audio.Stream != null ? "M-A" : "   ")));
-                    buf.Append($":{audioVideoDelay,-8:0.####} ");
-                    buf.Append($"fd={(container.Video.DroppedFrameCount + DroppedPictureCount)} ");
-                    buf.Append($"aq={(audioQueueSize / 1024)}KB ");
-                    buf.Append($"vq={(videoQueueSize / 1024)}KB ");
-                    buf.Append($"sq={(subtitleQueueSize)}B ");
+                    buf.Append($":{audioVideoDelay,-8:0.####} | ");
+                    buf.Append($"fd={(container.Video.DroppedFrameCount + DroppedPictureCount)} | ");
+                    buf.Append($"aq={(audioQueueSize / 1024)}KB | ");
+                    buf.Append($"vq={(videoQueueSize / 1024)}KB | ");
+                    buf.Append($"sq={subtitleQueueSize}B | ");
                     buf.Append($" f={(container.Video.Stream != null ? container.Video.CodecContext->pts_correction_num_faulty_dts : 0)} / ");
                     buf.Append($"{(container.Video.Stream != null ? container.Video.CodecContext->pts_correction_num_faulty_pts : 0)}");
+
+                    for (var i = buf.Length; i < 90; i++)
+                        buf.Append(' ');
 
                     if (container.Options.show_status == 1 && ffmpeg.av_log_get_level() < ffmpeg.AV_LOG_INFO)
                         Console.WriteLine(buf.ToString());
                     else
-                        ffmpeg.av_log(null, ffmpeg.AV_LOG_INFO, $"{buf}\n");
+                        Helpers.LogInfo($"\r{buf}");
 
                     last_time_status = currentTime;
                 }
@@ -867,7 +868,7 @@
                 }
             }
 
-            ffmpeg.av_log(null, ffmpeg.AV_LOG_TRACE, $"video: delay={pictureDuration,-8:0.####} A-V={-clockDifference,-8:0.####}\n");
+            Helpers.LogTrace($"video: delay={pictureDuration,-8:0.####} A-V={-clockDifference,-8:0.####}\n");
 
             return pictureDuration;
         }

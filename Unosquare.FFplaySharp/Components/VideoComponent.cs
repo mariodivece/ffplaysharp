@@ -31,10 +31,9 @@
         protected override void DecodingThreadMethod()
         {
             int resultCode;
-            var frameRate = ffmpeg.av_guess_frame_rate(Container.InputContext, Stream, null);
+            var frameRate = GuessFrameRate();
 
             AVFrame* decodedFrame;
-            AVFilterGraph* filterGraph = null;
             AVFilterContext* outputFilter = null;
             AVFilterContext* inputFilter = null;
 
@@ -62,19 +61,19 @@
                     var lastFormatName = ffmpeg.av_get_pix_fmt_name((AVPixelFormat)lastFormat) ?? "none";
                     var frameFormatName = ffmpeg.av_get_pix_fmt_name((AVPixelFormat)decodedFrame->format) ?? "none";
 
-                    ffmpeg.av_log(null, ffmpeg.AV_LOG_DEBUG,
+                    Helpers.LogDebug(
                            $"Video frame changed from size:{lastWidth}x%{lastHeight} format:{lastFormatName} serial:{lastSerial} to " +
                            $"size:{decodedFrame->width}x{decodedFrame->height} format:{frameFormatName} serial:{PacketSerial}\n");
 
-                    ffmpeg.avfilter_graph_free(&filterGraph);
-                    filterGraph = ffmpeg.avfilter_graph_alloc();
-                    filterGraph->nb_threads = Container.Options.filter_nbthreads;
+                    ReleaseFilterGraph();
+                    FilterGraph = ffmpeg.avfilter_graph_alloc();
+                    FilterGraph->nb_threads = Container.Options.filter_nbthreads;
 
                     var filterLiteral = Container.Options.vfilters_list.Count > 0
                         ? Container.Options.vfilters_list[CurrentFilterIndex]
                         : null;
 
-                    if ((resultCode = ConfigureFilters(filterGraph, filterLiteral, decodedFrame)) < 0)
+                    if ((resultCode = ConfigureFilters(filterLiteral, decodedFrame)) < 0)
                     {
                         var evt = new SDL.SDL_Event() { type = (SDL.SDL_EventType)Constants.FF_QUIT_EVENT, };
                         // evt.user.data1 = GCHandle.ToIntPtr(VideoStateHandle);
@@ -115,12 +114,12 @@
                         FilterDelay = 0;
 
                     var duration = (frameRate.num != 0 && frameRate.den != 0
-                        ? ffmpeg.av_q2d(ffmpeg.av_make_q(frameRate.den, frameRate.num))
+                        ? ffmpeg.av_make_q(frameRate.den, frameRate.num).ToFactor()
                         : 0);
 
                     var filteredTimeBase = ffmpeg.av_buffersink_get_time_base(outputFilter);
                     var frameTime = decodedFrame->pts.IsValidPts()
-                        ? decodedFrame->pts * ffmpeg.av_q2d(filteredTimeBase)
+                        ? decodedFrame->pts * filteredTimeBase.ToFactor()
                         : double.NaN;
 
                     resultCode = EnqueueFrame(decodedFrame, frameTime, duration, PacketSerial);
@@ -133,12 +132,14 @@
                 if (resultCode < 0)
                     goto the_end;
             }
-        the_end:
+            the_end:
 
-            ffmpeg.avfilter_graph_free(&filterGraph);
+            ReleaseFilterGraph();
             ffmpeg.av_frame_free(&decodedFrame);
             return; // 0;
         }
+
+        private AVRational GuessFrameRate() => ffmpeg.av_guess_frame_rate(Container.InputContext, Stream, null);
 
         private int EnqueueFrame(AVFrame* sourceFrame, double frameTime, double duration, int serial)
         {
@@ -183,7 +184,7 @@
             {
                 if (frame->pts.IsValidPts())
                 {
-                    var frameTime = ffmpeg.av_q2d(Stream->time_base) * frame->pts;
+                    var frameTime = Stream->time_base.ToFactor() * frame->pts;
                     var frameDelay = frameTime - Container.MasterTime;
 
                     if (!frameDelay.IsNaN() && Math.Abs(frameDelay) < Constants.AV_NOSYNC_THRESHOLD &&
@@ -201,41 +202,47 @@
             return gotPicture;
         }
 
-        private static unsafe bool InsertFilter(
-            string filterName, string filterArgs, AVFilterGraph* filterGraph, ref int ret, ref AVFilterContext* lastFilterContext)
+        /// <summary>
+        /// Port of the INSERT_FILT macro.
+        /// this macro adds a filter before the lastly added filter, so the 
+        /// processing order of the filters is in reverse
+        /// </summary>
+        /// <param name="filterName"></param>
+        /// <param name="filterArgs"></param>
+        /// <param name="resultCode"></param>
+        /// <param name="lastFilterContext"></param>
+        /// <returns></returns>
+        private unsafe bool InsertFilter(
+            string filterName, string filterArgs, ref int resultCode, ref AVFilterContext* lastFilterContext)
         {
-            do
-            {
-                var insertedFilter = ffmpeg.avfilter_get_by_name(filterName);
-                AVFilterContext* insertedFilterContext;
+            var insertedFilter = ffmpeg.avfilter_get_by_name(filterName);
+            AVFilterContext* insertedFilterContext;
 
-                ret = ffmpeg.avfilter_graph_create_filter(
-                    &insertedFilterContext, insertedFilter, $"ff_{filterName}", filterArgs, null, filterGraph);
+            resultCode = ffmpeg.avfilter_graph_create_filter(
+                &insertedFilterContext, insertedFilter, $"ff_{filterName}", filterArgs, null, FilterGraph);
 
-                if (ret < 0)
-                    return false;
+            if (resultCode < 0)
+                return false;
 
-                ret = ffmpeg.avfilter_link(insertedFilterContext, 0, lastFilterContext, 0);
+            resultCode = ffmpeg.avfilter_link(insertedFilterContext, 0, lastFilterContext, 0);
 
-                if (ret < 0)
-                    return false;
+            if (resultCode < 0)
+                return false;
 
-                lastFilterContext = insertedFilterContext;
-            } while (false);
-
+            lastFilterContext = insertedFilterContext;
             return true;
         }
 
 
-        private int ConfigureFilters(AVFilterGraph* filterGraph, string filterGraphLiteral, AVFrame* decoderFrame)
+        private int ConfigureFilters(string filterGraphLiteral, AVFrame* decoderFrame)
         {
-            int ret;
+            var resultCode = 0;
             AVFilterContext* sourceFilter = null;
             AVFilterContext* outputFilter = null;
             AVFilterContext* lastFilter = null;
 
             var codecParameters = Stream->codecpar;
-            var frameRate = ffmpeg.av_guess_frame_rate(Container.InputContext, Stream, null);
+            var frameRate = GuessFrameRate();
 
             var outputPixelFormats = new List<int>(MediaRenderer.sdl_texture_map.Count);
             for (var i = 0; i < Container.Renderer.SdlRendererInfo.num_texture_formats; i++)
@@ -262,7 +269,7 @@
             if (string.IsNullOrWhiteSpace(softwareScalerFlags))
                 softwareScalerFlags = null;
 
-            filterGraph->scale_sws_opts = softwareScalerFlags != null
+            FilterGraph->scale_sws_opts = softwareScalerFlags != null
                 ? ffmpeg.av_strdup(softwareScalerFlags)
                 : null;
 
@@ -281,20 +288,20 @@
             var sourceBuffer = ffmpeg.avfilter_get_by_name("buffer");
             var sinkBuffer = ffmpeg.avfilter_get_by_name("buffersink");
 
-            ret = ffmpeg.avfilter_graph_create_filter(
-                &sourceFilter, sourceBuffer, SourceBufferName, sourceFilterArguments, null, filterGraph);
+            resultCode = ffmpeg.avfilter_graph_create_filter(
+                &sourceFilter, sourceBuffer, SourceBufferName, sourceFilterArguments, null, FilterGraph);
 
-            if (ret < 0)
+            if (resultCode < 0)
                 goto fail;
 
-            ret = ffmpeg.avfilter_graph_create_filter(
-                &outputFilter, sinkBuffer, SinkBufferName, null, null, filterGraph);
+            resultCode = ffmpeg.avfilter_graph_create_filter(
+                &outputFilter, sinkBuffer, SinkBufferName, null, null, FilterGraph);
 
-            if (ret < 0)
+            if (resultCode < 0)
                 goto fail;
 
-            ret = Helpers.av_opt_set_int_list(outputFilter, "pix_fmts", outputPixelFormats.ToArray(), ffmpeg.AV_OPT_SEARCH_CHILDREN);
-            if (ret < 0)
+            resultCode = Helpers.av_opt_set_int_list(outputFilter, "pix_fmts", outputPixelFormats.ToArray(), ffmpeg.AV_OPT_SEARCH_CHILDREN);
+            if (resultCode < 0)
                 goto fail;
 
             lastFilter = outputFilter;
@@ -304,37 +311,37 @@
 
                 if (Math.Abs(theta - 90) < 1.0)
                 {
-                    if (!InsertFilter("transpose", "clock", filterGraph, ref ret, ref lastFilter))
+                    if (!InsertFilter("transpose", "clock", ref resultCode, ref lastFilter))
                         goto fail;
                 }
                 else if (Math.Abs(theta - 180) < 1.0)
                 {
-                    if (!InsertFilter("hflip", null, filterGraph, ref ret, ref lastFilter))
+                    if (!InsertFilter("hflip", null, ref resultCode, ref lastFilter))
                         goto fail;
 
-                    if (!InsertFilter("vflip", null, filterGraph, ref ret, ref lastFilter))
+                    if (!InsertFilter("vflip", null, ref resultCode, ref lastFilter))
                         goto fail;
                 }
                 else if (Math.Abs(theta - 270) < 1.0)
                 {
-                    if (!InsertFilter("transpose", "cclock", filterGraph, ref ret, ref lastFilter))
+                    if (!InsertFilter("transpose", "cclock", ref resultCode, ref lastFilter))
                         goto fail;
                 }
                 else if (Math.Abs(theta) > 1.0)
                 {
-                    if (!InsertFilter("rotate", $"{theta}*PI/180", filterGraph, ref ret, ref lastFilter))
+                    if (!InsertFilter("rotate", $"{theta}*PI/180", ref resultCode, ref lastFilter))
                         goto fail;
                 }
             }
 
-            if ((ret = MaterializeFilterGraph(filterGraph, filterGraphLiteral, sourceFilter, lastFilter)) < 0)
+            if ((resultCode = MaterializeFilterGraph(filterGraphLiteral, sourceFilter, lastFilter)) < 0)
                 goto fail;
 
             InputFilter = sourceFilter;
             OutputFilter = outputFilter;
 
-        fail:
-            return ret;
+            fail:
+            return resultCode;
         }
     }
 }

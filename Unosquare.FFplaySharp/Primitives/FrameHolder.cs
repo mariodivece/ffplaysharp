@@ -37,6 +37,8 @@
 
         public AVSampleFormat SampleFormat => (AVSampleFormat)FramePtr->format;
 
+        public string SampleFormatName => AudioParams.GetSampleFormatName(SampleFormat);
+
         public AVPixelFormat PixelFormat => (AVPixelFormat)FramePtr->format;
 
         public int Channels => FramePtr->channels;

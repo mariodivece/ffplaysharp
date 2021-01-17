@@ -33,7 +33,7 @@
                 Console.WriteLine();
 
             SDL.SDL_Quit();
-            ffmpeg.av_log(null, ffmpeg.AV_LOG_QUIET, "");
+            Helpers.LogQuiet(string.Empty);
             Environment.Exit(0);
         }
 
@@ -266,7 +266,7 @@
                             var targetTime = TimeSpan.FromSeconds(seekPercent * durationSecs);
                             var targetPosition = Convert.ToInt64(seekPercent * container.InputContext->duration);
 
-                            ffmpeg.av_log(null, ffmpeg.AV_LOG_INFO, $"Seek to {(seekPercent * 100):0.00} ({targetTime}) of total duration ({totalDuration})       \n");
+                            Helpers.LogInfo($"Seek to {(seekPercent * 100):0.00} ({targetTime}) of total duration ({totalDuration})       \n");
                             
                             if (container.InputContext->start_time.IsValidPts())
                                 targetPosition += container.InputContext->start_time;
@@ -332,7 +332,7 @@
 
             if (GlobalVideoState == null)
             {
-                ffmpeg.av_log(null, ffmpeg.AV_LOG_FATAL, "Failed to initialize VideoState!\n");
+                Helpers.LogFatal("Failed to initialize VideoState!\n");
                 do_exit(null);
             }
 

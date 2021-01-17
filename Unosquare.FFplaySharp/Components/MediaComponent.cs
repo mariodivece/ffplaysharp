@@ -55,7 +55,7 @@
             get
             {
                 var duration = Packets.DurationUnits > 0
-                    ? ffmpeg.av_q2d(Stream->time_base) * Packets.DurationUnits
+                    ? Stream->time_base.ToFactor() * Packets.DurationUnits
                     : 0d;
 
                 return StreamIndex < 0
@@ -203,7 +203,7 @@
                     {
                         if (ffmpeg.avcodec_send_packet(CodecContext, currentPacket.PacketPtr) == ffmpeg.AVERROR(ffmpeg.EAGAIN))
                         {
-                            ffmpeg.av_log(CodecContext, ffmpeg.AV_LOG_ERROR, "Receive_frame and send_packet both returned EAGAIN, which is an API violation.\n");
+                            Helpers.LogError(CodecContext, "Receive_frame and send_packet both returned EAGAIN, which is an API violation.\n");
                             IsPacketPending = true;
                             PendingPacket = new PacketHolder(ffmpeg.av_packet_clone(currentPacket.PacketPtr));
                         }
