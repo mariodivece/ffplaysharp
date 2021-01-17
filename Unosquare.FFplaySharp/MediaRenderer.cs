@@ -440,24 +440,18 @@
 
             if (container.Video.Stream != null)
                 video_image_display(container);
-            
+
             SDL.SDL_RenderPresent(SdlRenderer);
         }
 
         private int upload_texture(ref IntPtr texture, FrameHolder frame, ref SwsContext* convertContext)
         {
-            int ret = 0;
+            var resultCode = 0;
             (var sdlPixelFormat, var sdlBlendMode) = TranslateToSdlFormat(frame.PixelFormat);
-            if (realloc_texture(
-                ref texture,
-                sdlPixelFormat == SDL.SDL_PIXELFORMAT_UNKNOWN ? SDL.SDL_PIXELFORMAT_ARGB8888 : sdlPixelFormat,
-                frame.PixelWidth,
-                frame.PixelHeight,
-                sdlBlendMode,
-                false) < 0)
-            {
+            var textureFormat = sdlPixelFormat == SDL.SDL_PIXELFORMAT_UNKNOWN ? SDL.SDL_PIXELFORMAT_ARGB8888 : sdlPixelFormat;
+
+            if (realloc_texture(ref texture, textureFormat, frame.PixelWidth, frame.PixelHeight, sdlBlendMode, false) < 0)
                 return -1;
-            }
 
             var textureRect = new SDL.SDL_Rect { w = frame.PixelWidth, h = frame.PixelHeight, x = 0, y = 0 };
 
@@ -483,20 +477,20 @@
                 else
                 {
                     Helpers.LogFatal("Cannot initialize the conversion context\n");
-                    ret = -1;
+                    resultCode = -1;
                 }
             }
             else if (sdlPixelFormat == SDL.SDL_PIXELFORMAT_IYUV)
             {
                 if (frame.PixelStride[0] > 0 && frame.PixelStride[1] > 0 && frame.PixelStride[2] > 0)
                 {
-                    ret = SDL.SDL_UpdateYUVTexture(texture, ref textureRect, (IntPtr)frame.PixelData[0], frame.PixelStride[0],
+                    resultCode = SDL.SDL_UpdateYUVTexture(texture, ref textureRect, (IntPtr)frame.PixelData[0], frame.PixelStride[0],
                                                            (IntPtr)frame.PixelData[1], frame.PixelStride[1],
                                                            (IntPtr)frame.PixelData[2], frame.PixelStride[2]);
                 }
                 else if (frame.PixelStride[0] < 0 && frame.PixelStride[1] < 0 && frame.PixelStride[2] < 0)
                 {
-                    ret = SDL.SDL_UpdateYUVTexture(texture, ref textureRect, (IntPtr)frame.PixelData[0] + frame.PixelStride[0] * (frame.PixelHeight - 1), -frame.PixelStride[0],
+                    resultCode = SDL.SDL_UpdateYUVTexture(texture, ref textureRect, (IntPtr)frame.PixelData[0] + frame.PixelStride[0] * (frame.PixelHeight - 1), -frame.PixelStride[0],
                                                            (IntPtr)frame.PixelData[1] + frame.PixelStride[1] * (Helpers.AV_CEIL_RSHIFT(frame.PixelHeight, 1) - 1), -frame.PixelStride[1],
                                                            (IntPtr)frame.PixelData[2] + frame.PixelStride[2] * (Helpers.AV_CEIL_RSHIFT(frame.PixelHeight, 1) - 1), -frame.PixelStride[2]);
                 }
@@ -510,15 +504,15 @@
             {
                 if (frame.PixelStride[0] < 0)
                 {
-                    ret = SDL.SDL_UpdateTexture(texture, ref textureRect, (IntPtr)frame.PixelData[0] + frame.PixelStride[0] * (frame.PixelHeight - 1), -frame.PixelStride[0]);
+                    resultCode = SDL.SDL_UpdateTexture(texture, ref textureRect, (IntPtr)frame.PixelData[0] + frame.PixelStride[0] * (frame.PixelHeight - 1), -frame.PixelStride[0]);
                 }
                 else
                 {
-                    ret = SDL.SDL_UpdateTexture(texture, ref textureRect, (IntPtr)frame.PixelData[0], frame.PixelStride[0]);
+                    resultCode = SDL.SDL_UpdateTexture(texture, ref textureRect, (IntPtr)frame.PixelData[0], frame.PixelStride[0]);
                 }
             }
 
-            return ret;
+            return resultCode;
         }
 
         public int video_open(MediaContainer container)
@@ -551,7 +545,7 @@
 
             if (container.Video.Stream != null)
             {
-            retry:
+                retry:
                 if (container.Video.Frames.PendingCount == 0)
                 {
                     // nothing to do, no picture to display in the queue
@@ -662,7 +656,7 @@
                     if (container.IsInStepMode && !container.IsPaused)
                         container.StreamTogglePause();
                 }
-            display:
+                display:
                 /* display picture */
                 if (!container.Options.display_disable && force_refresh && container.ShowMode == ShowMode.Video && container.Video.Frames.IsReadIndexShown)
                     video_display(container);
