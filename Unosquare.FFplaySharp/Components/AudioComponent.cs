@@ -480,17 +480,17 @@
 
                     FilterSpec.ImportFrom(decodedFrame);
                     lastPacketSerial = PacketSerial;
-
                     resultCode = ConfigureFilters(true);
+
                     if (resultCode < 0)
                         break;
                 }
 
-                if ((resultCode = ffmpeg.av_buffersrc_add_frame(InputFilter, decodedFrame)) < 0)
+                if ((resultCode = EnqueueInputFilter(decodedFrame)) < 0)
                     break;
 
                 var isFrameQueueAvailable = true;
-                while ((resultCode = ffmpeg.av_buffersink_get_frame_flags(OutputFilter, decodedFrame, 0)) >= 0)
+                while ((resultCode = DequeueOutputFilter(decodedFrame)) >= 0)
                 {
                     decoderTimeBase = ffmpeg.av_buffersink_get_time_base(OutputFilter);
                     var queuedFrame = Frames.PeekWriteable();
@@ -501,15 +501,9 @@
                         break;
                     }
 
-                    queuedFrame.Time = decodedFrame->pts.IsValidPts()
-                        ? decodedFrame->pts * decoderTimeBase.ToFactor()
-                        : double.NaN;
-
-                    queuedFrame.Position = decodedFrame->pkt_pos;
-                    queuedFrame.Serial = PacketSerial;
-                    queuedFrame.Duration = ffmpeg.av_make_q(decodedFrame->nb_samples, decodedFrame->sample_rate).ToFactor();
-
-                    ffmpeg.av_frame_move_ref(queuedFrame.FramePtr, decodedFrame);
+                    var frameTime = decodedFrame->pts.IsValidPts() ? decodedFrame->pts * decoderTimeBase.ToFactor() : double.NaN;
+                    var frameDuration = ffmpeg.av_make_q(decodedFrame->nb_samples, decodedFrame->sample_rate).ToFactor();
+                    queuedFrame.Update(decodedFrame, PacketSerial, frameTime, frameDuration);
                     Frames.Push();
 
                     if (Packets.Serial != PacketSerial)
@@ -520,7 +514,7 @@
                     break;
 
                 if (resultCode == ffmpeg.AVERROR_EOF)
-                    EndOfFileSerial = PacketSerial;
+                    FinalSerial = PacketSerial;
 
             } while (resultCode >= 0 || resultCode == ffmpeg.AVERROR(ffmpeg.EAGAIN) || resultCode == ffmpeg.AVERROR_EOF);
 

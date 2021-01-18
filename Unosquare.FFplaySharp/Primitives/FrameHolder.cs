@@ -16,23 +16,33 @@
 
         public AVFrame* FramePtr { get; private set; }
 
-        public AVSubtitle* SubtitlePtr { get; set; }
+        public AVSubtitle* SubtitlePtr { get; private set; }
 
-        public int Serial;
+        public int Serial { get; private set; }
         
         /// <summary>
         /// Gets or sets the Presentation time in seconds.
         /// This is NOT a timestamp in stream units.
         /// </summary>
-        public double Time { get; set; }
+        public double Time { get; private set; }
 
-        public double Duration;      /* estimated duration of the frame */
-        public long Position;          /* byte position of the frame in the input file */
-        public int Width;
-        public int Height;
-        public int Format;
-        public AVRational Sar;
-        public bool uploaded;
+        /// <summary>
+        /// Gets the estimated duration of the frame in seconds.
+        /// </summary>
+        public double Duration { get; private set; }
+
+        /// <summary>
+        /// Gets the byte position of the frame in the input file
+        /// </summary>
+        public long Position => FramePtr->pkt_pos;
+
+        public int Width { get; private set; }
+        public int Height { get; private set; }
+
+        public AVRational Sar => FramePtr->sample_aspect_ratio;
+
+        public bool IsUploaded { get; private set; }
+
         public bool FlipVertical;
 
         public AVSampleFormat SampleFormat => (AVSampleFormat)FramePtr->format;
@@ -40,10 +50,6 @@
         public string SampleFormatName => AudioParams.GetSampleFormatName(SampleFormat);
 
         public AVPixelFormat PixelFormat => (AVPixelFormat)FramePtr->format;
-
-        public int PixelWidth => FramePtr->width;
-
-        public int PixelHeight => FramePtr->height;
 
         public byte_ptrArray8 PixelData => FramePtr->data;
 
@@ -56,6 +62,45 @@
         public int SampleCount => FramePtr->nb_samples;
 
         public bool HasValidTime => !Time.IsNaN();
+
+        public double StartDisplayTime => SubtitlePtr != null
+            ? Time + (SubtitlePtr->start_display_time / 1000d)
+            : Time;
+
+        public double EndDisplayTime => SubtitlePtr != null
+            ? Time + (SubtitlePtr->end_display_time / 1000d)
+            : Time + Duration;
+
+        public void MarkUploaded() => IsUploaded = true;
+
+        public void Update(AVFrame* sourceFrame, int serial, double time, double duration)
+        {
+            ffmpeg.av_frame_move_ref(FramePtr, sourceFrame);
+            IsUploaded = false;
+            Serial = serial;
+            Time = time;
+            Duration = duration;
+            Width = FramePtr->width;
+            Height = FramePtr->height;
+        }
+
+        public void Update(AVSubtitle* sourceFrame, AVCodecContext* codec, int serial, double time)
+        {
+            ffmpeg.avsubtitle_free(SubtitlePtr);
+            SubtitlePtr = sourceFrame;
+            IsUploaded = false;
+            Serial = serial;
+            Time = time;
+            Duration = (SubtitlePtr->end_display_time - SubtitlePtr->start_display_time) / 1000d;
+            Width = codec->width;
+            Height = codec->height;
+        }
+
+        public void UpdateDimensions(int width, int height)
+        {
+            Width = width;
+            Height = height;
+        }
 
         public void Unreference()
         {
@@ -74,7 +119,6 @@
             var framePtr = FramePtr;
             if (framePtr != null)
             {
-                ffmpeg.av_frame_unref(FramePtr);
                 ffmpeg.av_frame_free(&framePtr);
                 FramePtr = null;
             }

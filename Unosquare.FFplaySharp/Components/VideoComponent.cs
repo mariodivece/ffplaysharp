@@ -34,9 +34,6 @@
             var frameRate = GuessFrameRate();
 
             AVFrame* decodedFrame;
-            AVFilterContext* outputFilter = null;
-            AVFilterContext* inputFilter = null;
-
             var lastWidth = 0;
             var lastHeight = 0;
             var lastFormat = -2;
@@ -48,7 +45,7 @@
                 resultCode = DecodeFrame(out decodedFrame);
 
                 if (resultCode < 0)
-                    goto the_end;
+                    break;
 
                 if (resultCode == 0)
                     continue;
@@ -78,32 +75,30 @@
                         var evt = new SDL.SDL_Event() { type = (SDL.SDL_EventType)Constants.FF_QUIT_EVENT, };
                         // evt.user.data1 = GCHandle.ToIntPtr(VideoStateHandle);
                         SDL.SDL_PushEvent(ref evt);
-                        goto the_end;
+                        break;
                     }
 
-                    inputFilter = InputFilter;
-                    outputFilter = OutputFilter;
                     lastWidth = decodedFrame->width;
                     lastHeight = decodedFrame->height;
                     lastFormat = decodedFrame->format;
                     lastSerial = PacketSerial;
                     lastFilterIndex = CurrentFilterIndex;
-                    frameRate = ffmpeg.av_buffersink_get_frame_rate(outputFilter);
+                    frameRate = ffmpeg.av_buffersink_get_frame_rate(OutputFilter);
                 }
 
-                resultCode = ffmpeg.av_buffersrc_add_frame(inputFilter, decodedFrame);
+                resultCode = EnqueueInputFilter(decodedFrame);
                 if (resultCode < 0)
-                    goto the_end;
+                    break;
 
                 while (resultCode >= 0)
                 {
                     var preFilteringTime = Clock.SystemTime;
+                    resultCode = DequeueOutputFilter(decodedFrame);
 
-                    resultCode = ffmpeg.av_buffersink_get_frame_flags(outputFilter, decodedFrame, 0);
                     if (resultCode < 0)
                     {
                         if (resultCode == ffmpeg.AVERROR_EOF)
-                            EndOfFileSerial = PacketSerial;
+                            FinalSerial = PacketSerial;
 
                         resultCode = 0;
                         break;
@@ -117,7 +112,7 @@
                         ? ffmpeg.av_make_q(frameRate.den, frameRate.num).ToFactor()
                         : 0);
 
-                    var filteredTimeBase = ffmpeg.av_buffersink_get_time_base(outputFilter);
+                    var filteredTimeBase = ffmpeg.av_buffersink_get_time_base(OutputFilter);
                     var frameTime = decodedFrame->pts.IsValidPts()
                         ? decodedFrame->pts * filteredTimeBase.ToFactor()
                         : double.NaN;
@@ -130,9 +125,8 @@
                 }
 
                 if (resultCode < 0)
-                    goto the_end;
+                    break;
             }
-            the_end:
 
             ReleaseFilterGraph();
             ffmpeg.av_frame_free(&decodedFrame);
@@ -148,22 +142,10 @@
             if (frameSlot == null)
                 return -1;
 
-            frameSlot.Sar = sourceFrame->sample_aspect_ratio;
-            frameSlot.uploaded = false;
-
-            frameSlot.Width = sourceFrame->width;
-            frameSlot.Height = sourceFrame->height;
-            frameSlot.Format = sourceFrame->format;
-
-            frameSlot.Time = frameTime;
-            frameSlot.Duration = duration;
-            frameSlot.Position = sourceFrame->pkt_pos;
-            frameSlot.Serial = serial;
+            frameSlot.Update(sourceFrame, serial, frameTime, duration);
+            Frames.Push();
 
             Container.Renderer.set_default_window_size(frameSlot.Width, frameSlot.Height, frameSlot.Sar);
-
-            ffmpeg.av_frame_move_ref(frameSlot.FramePtr, sourceFrame);
-            Frames.Push();
             return 0;
         }
 

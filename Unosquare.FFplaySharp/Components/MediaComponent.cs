@@ -68,9 +68,9 @@
 
         public int PacketSerial { get; private set; }
 
-        public int EndOfFileSerial { get; protected set; }
+        public int FinalSerial { get; protected set; }
 
-        public bool HasFinishedDecoding => Stream == null || (EndOfFileSerial == Packets.Serial && Frames.PendingCount == 0);
+        public bool HasFinishedDecoding => Stream == null || (FinalSerial == Packets.Serial && Frames.PendingCount == 0);
 
         public virtual void Close()
         {
@@ -126,7 +126,7 @@
 
                         if (resultCode == ffmpeg.AVERROR_EOF)
                         {
-                            EndOfFileSerial = PacketSerial;
+                            FinalSerial = PacketSerial;
                             ffmpeg.avcodec_flush_buffers(CodecContext);
                             return 0;
                         }
@@ -217,7 +217,7 @@
         protected virtual void FlushCodecBuffers()
         {
             ffmpeg.avcodec_flush_buffers(CodecContext);
-            EndOfFileSerial = 0;
+            FinalSerial = 0;
         }
 
         public virtual int InitializeDecoder(AVCodecContext* codecContext, int streamIndex)

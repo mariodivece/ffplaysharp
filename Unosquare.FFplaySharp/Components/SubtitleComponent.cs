@@ -25,29 +25,25 @@
         {
             while (true)
             {
-                var queuedFrame = Frames.PeekWriteable();
-                if (queuedFrame == null) break;
-
                 var gotSubtitle = DecodeFrame(out var decodedFrame);
                 if (gotSubtitle < 0) break;
-
-                queuedFrame.SubtitlePtr = decodedFrame;
-
-                if (gotSubtitle != 0 && queuedFrame.SubtitlePtr->format == 0)
+                
+                if (gotSubtitle != 0 && decodedFrame->format == 0)
                 {
-                    queuedFrame.Time = queuedFrame.SubtitlePtr->pts.IsValidPts()
-                        ? queuedFrame.SubtitlePtr->pts / Clock.TimeBaseMicros : 0;
-                    queuedFrame.Serial = PacketSerial;
-                    queuedFrame.Width = CodecContext->width;
-                    queuedFrame.Height = CodecContext->height;
-                    queuedFrame.uploaded = false;
+                    var queuedFrame = Frames.PeekWriteable();
+                    if (queuedFrame == null) break;
+
+                    var frameTime = decodedFrame->pts.IsValidPts()
+                        ? decodedFrame->pts / Clock.TimeBaseMicros : 0;
+
+                    queuedFrame.Update(decodedFrame, CodecContext, PacketSerial, frameTime);
 
                     // now we can update the picture count
                     Frames.Push();
                 }
                 else if (gotSubtitle != 0)
                 {
-                    ffmpeg.avsubtitle_free(queuedFrame.SubtitlePtr);
+                    ffmpeg.avsubtitle_free(decodedFrame);
                 }
             }
         }

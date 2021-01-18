@@ -70,11 +70,18 @@
             FilterGraph->filters[indexA] = tempItem;
         }
 
+        protected int EnqueueInputFilter(AVFrame* decodedFrame) => ffmpeg.av_buffersrc_add_frame(InputFilter, decodedFrame);
+
+        protected int DequeueOutputFilter(AVFrame* decodedFrame) => ffmpeg.av_buffersink_get_frame_flags(OutputFilter, decodedFrame, 0);
+
+
         protected void ReleaseFilterGraph()
         {
             var filterGraph = FilterGraph;
             ffmpeg.avfilter_graph_free(&filterGraph);
             FilterGraph = null;
+            InputFilter = null;
+            OutputFilter = null;
         }
     }
 }
