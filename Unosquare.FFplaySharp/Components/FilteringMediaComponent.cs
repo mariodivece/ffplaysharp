@@ -14,6 +14,8 @@
             // placeholder
         }
 
+        protected AVRational OutputFilterTimeBase => ffmpeg.av_buffersink_get_time_base(OutputFilter);
+
         protected int MaterializeFilterGraph(string filterGraphLiteral,
                          AVFilterContext* inputFilterContext, AVFilterContext* outputFilterContext)
         {
@@ -74,7 +76,6 @@
 
         protected int DequeueOutputFilter(AVFrame* decodedFrame) => ffmpeg.av_buffersink_get_frame_flags(OutputFilter, decodedFrame, 0);
 
-
         protected void ReleaseFilterGraph()
         {
             var filterGraph = FilterGraph;
@@ -82,6 +83,13 @@
             FilterGraph = null;
             InputFilter = null;
             OutputFilter = null;
+        }
+
+        protected void ReallocateFilterGraph()
+        {
+            ReleaseFilterGraph();
+            FilterGraph = ffmpeg.avfilter_graph_alloc();
+            FilterGraph->nb_threads = Container.Options.filter_nbthreads;
         }
     }
 }

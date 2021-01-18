@@ -63,29 +63,9 @@
         {
             const int SearhChildrenFlags = ffmpeg.AV_OPT_SEARCH_CHILDREN;
             var outputSampleFormats = new[] { (int)AVSampleFormat.AV_SAMPLE_FMT_S16 };
-
-            var o = Container.Options;
-
-            AVFilterContext* inputFilterContext = null;
-            AVFilterContext* outputFilterContext = null;
-            AVDictionaryEntry* entry = null;
-
+            ReallocateFilterGraph();
+            var resamplerOptions = RetrieveResamplerOptions();
             int resultCode;
-
-            ReleaseFilterGraph();
-            FilterGraph = ffmpeg.avfilter_graph_alloc();
-            FilterGraph->nb_threads = o.filter_nbthreads;
-
-            string resamplerOptions = string.Empty;
-            while ((entry = ffmpeg.av_dict_get(o.swr_opts, "", entry, ffmpeg.AV_DICT_IGNORE_SUFFIX)) != null)
-            {
-                var key = Helpers.PtrToString(entry->key);
-                var value = Helpers.PtrToString(entry->value);
-                resamplerOptions = $"{key}={value}:{resamplerOptions}";
-            }
-
-            if (string.IsNullOrWhiteSpace(resamplerOptions))
-                resamplerOptions = null;
 
             ffmpeg.av_opt_set(FilterGraph, "aresample_swr_opts", resamplerOptions, 0);
             var sourceBufferOptions = $"sample_rate={FilterSpec.Frequency}:sample_fmt={FilterSpec.SampleFormatName}:" +
@@ -95,17 +75,17 @@
                 sourceBufferOptions = $"{sourceBufferOptions}:channel_layout=0x{FilterSpec.Layout:x16}";
 
             const string SourceBufferName = "audioSourceBuffer";
-            const string SinkBufferName = "audioSinkBuffer";
-
             var sourceBuffer = ffmpeg.avfilter_get_by_name("abuffer");
-            var sinkBuffer = ffmpeg.avfilter_get_by_name("abuffersink");
-
+            AVFilterContext* inputFilterContext = null;
             resultCode = ffmpeg.avfilter_graph_create_filter(
                 &inputFilterContext, sourceBuffer, SourceBufferName, sourceBufferOptions, null, FilterGraph);
 
             if (resultCode < 0)
                 goto end;
 
+            const string SinkBufferName = "audioSinkBuffer";
+            var sinkBuffer = ffmpeg.avfilter_get_by_name("abuffersink");
+            AVFilterContext* outputFilterContext = null;
             resultCode = ffmpeg.avfilter_graph_create_filter(
                 &outputFilterContext, sinkBuffer, SinkBufferName, null, null, FilterGraph);
 
@@ -134,8 +114,7 @@
                     goto end;
             }
 
-            var filterGraphLiteral = o.afilters;
-            resultCode = MaterializeFilterGraph(filterGraphLiteral, inputFilterContext, outputFilterContext);
+            resultCode = MaterializeFilterGraph(Container.Options.afilters, inputFilterContext, outputFilterContext);
 
             if (resultCode < 0) goto end;
 
@@ -407,6 +386,23 @@
             return 0;
         }
 
+        private string RetrieveResamplerOptions()
+        {
+            var resamplerOptions = string.Empty;
+            AVDictionaryEntry* entry = null;
+            while ((entry = ffmpeg.av_dict_get(Container.Options.swr_opts, "", entry, ffmpeg.AV_DICT_IGNORE_SUFFIX)) != null)
+            {
+                var key = Helpers.PtrToString(entry->key);
+                var value = Helpers.PtrToString(entry->value);
+                resamplerOptions = $"{key}={value}:{resamplerOptions}";
+            }
+
+            if (string.IsNullOrWhiteSpace(resamplerOptions))
+                resamplerOptions = null;
+
+            return resamplerOptions;
+        }
+
         private void ReleaseConvertContext()
         {
             var convertContext = ConvertContext;
@@ -461,9 +457,7 @@
                 if (gotSamples == 0)
                     continue;
 
-                var decoderTimeBase = ffmpeg.av_make_q(1, decodedFrame->sample_rate);
                 var decoderChannelLayout = AudioParams.ValidateChannelLayout(decodedFrame->channel_layout, decodedFrame->channels);
-
                 var needsDifferentSpec = FilterSpec.IsDifferent(decodedFrame) ||
                     FilterSpec.Layout != decoderChannelLayout ||
                     FilterSpec.Frequency != decodedFrame->sample_rate ||
@@ -492,7 +486,6 @@
                 var isFrameQueueAvailable = true;
                 while ((resultCode = DequeueOutputFilter(decodedFrame)) >= 0)
                 {
-                    decoderTimeBase = ffmpeg.av_buffersink_get_time_base(OutputFilter);
                     var queuedFrame = Frames.PeekWriteable();
 
                     if (queuedFrame == null)
@@ -501,7 +494,7 @@
                         break;
                     }
 
-                    var frameTime = decodedFrame->pts.IsValidPts() ? decodedFrame->pts * decoderTimeBase.ToFactor() : double.NaN;
+                    var frameTime = decodedFrame->pts.IsValidPts() ? decodedFrame->pts * OutputFilterTimeBase.ToFactor() : double.NaN;
                     var frameDuration = ffmpeg.av_make_q(decodedFrame->nb_samples, decodedFrame->sample_rate).ToFactor();
                     queuedFrame.Update(decodedFrame, PacketSerial, frameTime, frameDuration);
                     Frames.Push();

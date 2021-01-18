@@ -62,9 +62,7 @@
                            $"Video frame changed from size:{lastWidth}x%{lastHeight} format:{lastFormatName} serial:{lastSerial} to " +
                            $"size:{decodedFrame->width}x{decodedFrame->height} format:{frameFormatName} serial:{PacketSerial}\n");
 
-                    ReleaseFilterGraph();
-                    FilterGraph = ffmpeg.avfilter_graph_alloc();
-                    FilterGraph->nb_threads = Container.Options.filter_nbthreads;
+                    ReallocateFilterGraph();
 
                     var filterLiteral = Container.Options.vfilters_list.Count > 0
                         ? Container.Options.vfilters_list[CurrentFilterIndex]
@@ -112,9 +110,8 @@
                         ? ffmpeg.av_make_q(frameRate.den, frameRate.num).ToFactor()
                         : 0);
 
-                    var filteredTimeBase = ffmpeg.av_buffersink_get_time_base(OutputFilter);
                     var frameTime = decodedFrame->pts.IsValidPts()
-                        ? decodedFrame->pts * filteredTimeBase.ToFactor()
+                        ? decodedFrame->pts * OutputFilterTimeBase.ToFactor()
                         : double.NaN;
 
                     resultCode = EnqueueFrame(decodedFrame, frameTime, duration, PacketSerial);
