@@ -856,7 +856,7 @@
                 if (o.infinite_buffer < 1 && (HasEnoughPacketSize || HasEnoughPacketCount))
                 {
                     /* wait 10 ms */
-                    NeedsMorePacketsEvent.WaitOne(1);
+                    NeedsMorePacketsEvent.WaitOne(10);
                     continue;
                 }
 
@@ -897,7 +897,7 @@
                             break;
                     }
 
-                    NeedsMorePacketsEvent.WaitOne(1);
+                    NeedsMorePacketsEvent.WaitOne(10);
                     continue;
                 }
                 else

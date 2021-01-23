@@ -172,7 +172,7 @@
                 if (!block)
                     return null;
                 else
-                    IsAvailableEvent.WaitOne(1);
+                    IsAvailableEvent.WaitOne();
             }
         }
     }
