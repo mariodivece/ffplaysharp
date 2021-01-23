@@ -423,7 +423,7 @@
 
         public void video_display(MediaContainer container)
         {
-            if (container.width != 0)
+            if (container.width <= 0)
                 video_open(container);
 
             _ = SDL.SDL_SetRenderDrawColor(SdlRenderer, 0, 0, 0, 255);

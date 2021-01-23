@@ -24,8 +24,8 @@
         private int ReadPauseResultCode;
 
         public ShowMode ShowMode { get; set; }
-        public int width = 1;
-        public int height = 1;
+        public int width;
+        public int height;
         public int xleft;
         public int ytop;
 
