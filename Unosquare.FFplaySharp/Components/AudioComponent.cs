@@ -149,7 +149,7 @@
                     if ((Clock.SystemTime - Container.Renderer.AudioCallbackTime) > HardwareBufferSize / HardwareSpec.BytesPerSecond / 2)
                         return -1;
 
-                    Thread.Sleep(1);
+                    ffmpeg.av_usleep(1000);
                 }
 
                 if ((af = Frames.PeekReadable()) == null)

@@ -71,7 +71,7 @@
                 }
 
                 if (remainingTime > 0.0)
-                    Thread.Sleep(TimeSpan.FromSeconds(remainingTime));
+                    ffmpeg.av_usleep(Convert.ToUInt32(remainingTime * ffmpeg.AV_TIME_BASE));
 
                 remainingTime = Constants.REFRESH_RATE;
 
