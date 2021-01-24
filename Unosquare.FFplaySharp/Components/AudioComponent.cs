@@ -146,7 +146,7 @@
             {
                 while (Frames.PendingCount == 0)
                 {
-                    if ((Clock.SystemTime - Container.Renderer.AudioCallbackTime) > HardwareBufferSize / HardwareSpec.BytesPerSecond / 2)
+                    if ((Clock.SystemTime - Container.Renderer.Audio.AudioCallbackTime) > HardwareBufferSize / HardwareSpec.BytesPerSecond / 2)
                         return -1;
 
                     ffmpeg.av_usleep(1000);
@@ -325,7 +325,7 @@
                 return;
 
             AbortDecoder();
-            Container.Renderer.CloseAudio();
+            Container.Renderer.Audio.CloseAudio();
             DisposeDecoder();
 
             ReleaseConvertContext();
@@ -350,7 +350,7 @@
                 return -1;
 
             var wantedSpec = AudioParams.FromFilterContext(OutputFilter);
-            var hardwareBufferSize = Container.Renderer.audio_open(wantedSpec, out var audioHardwareSpec);
+            var hardwareBufferSize = Container.Renderer.Audio.audio_open(wantedSpec, out var audioHardwareSpec);
             if (hardwareBufferSize < 0)
                 return -1;
 

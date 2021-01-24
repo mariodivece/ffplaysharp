@@ -4,6 +4,7 @@
     using SDL2;
     using System;
     using System.Collections.Generic;
+    using System.Linq;
     using Unosquare.FFplaySharp.Primitives;
     using Unosquare.FFplaySharp.Rendering;
 
@@ -143,7 +144,7 @@
             frameSlot.Update(sourceFrame, serial, frameTime, duration);
             Frames.Push();
 
-            Container.Renderer.set_default_window_size(frameSlot.Width, frameSlot.Height, frameSlot.Sar);
+            Container.Renderer.Video.set_default_window_size(frameSlot.Width, frameSlot.Height, frameSlot.Sar);
             return 0;
         }
 
@@ -223,19 +224,10 @@
 
             var codecParameters = Stream->codecpar;
             var frameRate = GuessFrameRate();
-
-            var outputPixelFormats = new List<int>(MediaRenderer.sdl_texture_map.Count);
-            for (var i = 0; i < Container.Renderer.SdlRendererInfo.num_texture_formats; i++)
-            {
-                foreach (var kvp in MediaRenderer.sdl_texture_map)
-                {
-                    if (kvp.Value == Container.Renderer.SdlRendererInfo.texture_formats[i])
-                        outputPixelFormats.Add((int)kvp.Key);
-                }
-            }
-
+            var outputPixelFormats = Container.Renderer.Video.RetrieveSupportedPixelFormats().Cast<int>();
             var softwareScalerFlags = string.Empty;
             AVDictionaryEntry* optionEntry = null;
+
             while ((optionEntry = ffmpeg.av_dict_get(Container.Options.sws_dict, "", optionEntry, ffmpeg.AV_DICT_IGNORE_SUFFIX)) != null)
             {
                 var key = Helpers.PtrToString(optionEntry->key);

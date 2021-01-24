@@ -30,7 +30,7 @@
         public int xleft;
         public int ytop;
 
-        private MediaContainer(ProgramOptions options, MediaRenderer renderer)
+        private MediaContainer(ProgramOptions options, IPresenter renderer)
         {
             InputInterruptCallback = new(InputInterrupt);
             Options = options ?? new();
@@ -43,7 +43,7 @@
 
         public AVFormatContext* InputContext { get; private set; }
 
-        public MediaRenderer Renderer { get; }
+        public IPresenter Renderer { get; }
 
         public ProgramOptions Options { get; }
 
@@ -177,9 +177,10 @@
 
         private bool HasEnoughPacketSize => Components.Sum(c => c.Packets.Size) > Constants.MAX_QUEUE_SIZE;
 
-        public static MediaContainer Open(ProgramOptions options, MediaRenderer renderer)
+        public static MediaContainer Open(ProgramOptions options, IPresenter renderer)
         {
             var container = new MediaContainer(options, renderer);
+            renderer.Initialize(container);
 
             var o = container.Options;
             container.Video.LastStreamIndex = container.Video.StreamIndex = -1;
@@ -205,7 +206,7 @@
 
             container.Options.startup_volume = container.Options.startup_volume.Clamp(0, 100);
             container.Options.startup_volume = (SDL.SDL_MIX_MAXVOLUME * container.Options.startup_volume / 100).Clamp(0, SDL.SDL_MIX_MAXVOLUME);
-            renderer.audio_volume = container.Options.startup_volume;
+            renderer.Audio.audio_volume = container.Options.startup_volume;
             container.IsMuted = false;
             container.ClockSyncMode = container.Options.av_sync_type;
             container.StartReadThread();
@@ -493,7 +494,7 @@
                 IsPictureAttachmentPending = true;
 
             if (targetComponent.IsAudio)
-                Renderer.PauseAudio();
+                Renderer.Audio.PauseAudio();
 
             goto exit;
 
@@ -681,8 +682,8 @@
 
             MaxPictureDuration = ic->iformat->flags.HasFlag(ffmpeg.AVFMT_TS_DISCONT) ? 10.0 : 3600.0;
 
-            if (string.IsNullOrWhiteSpace(Renderer.window_title) && (formatOption = ffmpeg.av_dict_get(ic->metadata, "title", null, 0)) != null)
-                Renderer.window_title = $"{Helpers.PtrToString(formatOption->value)} - {o.input_filename}";
+            if (string.IsNullOrWhiteSpace(Renderer.Video.window_title) && (formatOption = ffmpeg.av_dict_get(ic->metadata, "title", null, 0)) != null)
+                Renderer.Video.window_title = $"{Helpers.PtrToString(formatOption->value)} - {o.input_filename}";
 
             /* if seeking requested, we execute it */
             if (o.start_time.IsValidPts())
@@ -747,7 +748,7 @@
                 AVCodecParameters* codecpar = st->codecpar;
                 AVRational sar = ffmpeg.av_guess_sample_aspect_ratio(ic, st, null);
                 if (codecpar->width != 0)
-                    Renderer.set_default_window_size(codecpar->width, codecpar->height, sar);
+                    Renderer.Video.set_default_window_size(codecpar->width, codecpar->height, sar);
             }
 
             /* open the streams */

@@ -7,27 +7,17 @@
     using System.Text;
     using Unosquare.FFplaySharp.Primitives;
 
-    public unsafe class MediaRenderer
+    public unsafe class SdlVideoRenderer : IVideoRenderer
     {
-        private readonly SDL.SDL_AudioCallback AudioCallback;
-        private uint AudioDeviceId;
-
         private int DroppedPictureCount;
-        
-
-        public double AudioCallbackTime { get; private set; }
-
-        private int ReadBufferSize; /* in bytes */
-        private int ReadBufferIndex; /* in bytes */
-
-        public int default_width = 640;
-        public int default_height = 480;
+        private int default_width = 640;
+        private int default_height = 480;
 
         private IntPtr RenderingWindow;
         private IntPtr SdlRenderer;
         public SDL.SDL_RendererInfo SdlRendererInfo;
 
-        public string window_title;
+        public string window_title { get; set; }
 
         private IntPtr sub_texture;
         private IntPtr vid_texture;
@@ -36,22 +26,17 @@
         private int screen_top = SDL.SDL_WINDOWPOS_CENTERED;
         private bool is_full_screen;
 
-        public int screen_width = 0;
-        public int screen_height = 0;
+        public int screen_width { get; set; } = 0;
+        public int screen_height { get; set; } = 0;
 
-        public bool force_refresh;
+        public bool force_refresh { get; set; }
 
         // inlined static variables
         public double last_time_status = 0;
 
-        public int audio_volume;
+        public MediaContainer Container => Presenter.Container;
 
-        public MediaRenderer()
-        {
-            AudioCallback = new(sdl_audio_callback);
-        }
-
-        public MediaContainer Container { get; private set; }
+        public IPresenter Presenter { get; private set; }
 
         public static readonly Dictionary<AVPixelFormat, uint> sdl_texture_map = new()
         {
@@ -76,6 +61,66 @@
             { AVPixelFormat.AV_PIX_FMT_UYVY422, SDL.SDL_PIXELFORMAT_UYVY },
             { AVPixelFormat.AV_PIX_FMT_NONE, SDL.SDL_PIXELFORMAT_UNKNOWN },
         };
+
+        public void Initialize(IPresenter presenter)
+        {
+            Presenter = presenter;
+
+            var parent = Presenter as SdlPresenter;
+            var o = Presenter.Container.Options;
+            if (o.display_disable) return;
+
+            parent.SdlInitFlags = (uint)SDL.SDL_WindowFlags.SDL_WINDOW_HIDDEN;
+            if (o.alwaysontop)
+                parent.SdlInitFlags |= (uint)SDL.SDL_WindowFlags.SDL_WINDOW_ALWAYS_ON_TOP;
+
+            if (o.borderless)
+                parent.SdlInitFlags |= (uint)SDL.SDL_WindowFlags.SDL_WINDOW_BORDERLESS;
+            else
+                parent.SdlInitFlags |= (uint)SDL.SDL_WindowFlags.SDL_WINDOW_RESIZABLE;
+
+            RenderingWindow = SDL.SDL_CreateWindow(
+                Constants.program_name, SDL.SDL_WINDOWPOS_UNDEFINED, SDL.SDL_WINDOWPOS_UNDEFINED, default_width, default_height, (SDL.SDL_WindowFlags)parent.SdlInitFlags);
+
+            SDL.SDL_SetHint(SDL.SDL_HINT_RENDER_SCALE_QUALITY, "best");
+
+            if (!RenderingWindow.IsNull())
+            {
+                SdlRenderer = SDL.SDL_CreateRenderer(RenderingWindow, -1, SDL.SDL_RendererFlags.SDL_RENDERER_ACCELERATED | SDL.SDL_RendererFlags.SDL_RENDERER_PRESENTVSYNC);
+                if (SdlRenderer.IsNull())
+                {
+                    Helpers.LogWarning($"Failed to initialize a hardware accelerated renderer: {SDL.SDL_GetError()}\n");
+                    SdlRenderer = SDL.SDL_CreateRenderer(RenderingWindow, -1, 0);
+                }
+
+                if (!SdlRenderer.IsNull())
+                {
+                    if (SDL.SDL_GetRendererInfo(SdlRenderer, out SdlRendererInfo) == 0)
+                        Helpers.LogVerbose($"Initialized {Helpers.PtrToString(SdlRendererInfo.name)} renderer.\n");
+                }
+            }
+            if (RenderingWindow.IsNull() || SdlRenderer.IsNull() || SdlRendererInfo.num_texture_formats <= 0)
+            {
+                var errorMessage = $"Failed to create window or renderer: {SDL.SDL_GetError()}";
+                Helpers.LogFatal(errorMessage);
+                throw new Exception(errorMessage);
+            }
+        }
+
+        public IEnumerable<AVPixelFormat> RetrieveSupportedPixelFormats()
+        {
+            var outputPixelFormats = new List<AVPixelFormat>(sdl_texture_map.Count);
+            for (var i = 0; i < SdlRendererInfo.num_texture_formats; i++)
+            {
+                foreach (var kvp in sdl_texture_map)
+                {
+                    if (kvp.Value == SdlRendererInfo.texture_formats[i])
+                        outputPixelFormats.Add(kvp.Key);
+                }
+            }
+
+            return outputPixelFormats;
+        }
 
         public int realloc_texture(ref IntPtr texture, uint new_format, int new_width, int new_height, SDL.SDL_BlendMode blendmode, bool init_texture)
         {
@@ -217,185 +262,6 @@
             }
         }
 
-        public void Link(MediaContainer container)
-        {
-            Container = container;
-        }
-
-        public bool Initialize(ProgramOptions o)
-        {
-            if (o.display_disable)
-                o.video_disable = true;
-
-            var flags = SDL.SDL_INIT_VIDEO | SDL.SDL_INIT_AUDIO | SDL.SDL_INIT_TIMER;
-
-            if (o.audio_disable)
-            {
-                flags &= ~SDL.SDL_INIT_AUDIO;
-            }
-            else
-            {
-                const string AlsaBufferSizeName = "SDL_AUDIO_ALSA_SET_BUFFER_SIZE";
-                /* Try to work around an occasional ALSA buffer underflow issue when the
-                 * period size is NPOT due to ALSA resampling by forcing the buffer size. */
-                if (Environment.GetEnvironmentVariable(AlsaBufferSizeName) == null)
-                    Environment.SetEnvironmentVariable(AlsaBufferSizeName, "1", EnvironmentVariableTarget.Process);
-            }
-
-            if (o.display_disable)
-                flags &= ~SDL.SDL_INIT_VIDEO;
-
-            if (SDL.SDL_Init(flags) != 0)
-            {
-                Helpers.LogFatal($"Could not initialize SDL - {SDL.SDL_GetError()}\n");
-                return false;
-            }
-
-            SDL.SDL_EventState(SDL.SDL_EventType.SDL_SYSWMEVENT, SDL.SDL_IGNORE);
-            SDL.SDL_EventState(SDL.SDL_EventType.SDL_USEREVENT, SDL.SDL_IGNORE);
-
-            if (!o.display_disable)
-            {
-                flags = (uint)SDL.SDL_WindowFlags.SDL_WINDOW_HIDDEN;
-                if (o.alwaysontop)
-                    flags |= (uint)SDL.SDL_WindowFlags.SDL_WINDOW_ALWAYS_ON_TOP;
-
-                if (o.borderless)
-                    flags |= (uint)SDL.SDL_WindowFlags.SDL_WINDOW_BORDERLESS;
-                else
-                    flags |= (uint)SDL.SDL_WindowFlags.SDL_WINDOW_RESIZABLE;
-
-                RenderingWindow = SDL.SDL_CreateWindow(
-                    Constants.program_name, SDL.SDL_WINDOWPOS_UNDEFINED, SDL.SDL_WINDOWPOS_UNDEFINED, default_width, default_height, (SDL.SDL_WindowFlags)flags);
-
-                SDL.SDL_SetHint(SDL.SDL_HINT_RENDER_SCALE_QUALITY, "linear");
-
-                if (!RenderingWindow.IsNull())
-                {
-                    SdlRenderer = SDL.SDL_CreateRenderer(RenderingWindow, -1, SDL.SDL_RendererFlags.SDL_RENDERER_ACCELERATED | SDL.SDL_RendererFlags.SDL_RENDERER_PRESENTVSYNC);
-                    if (SdlRenderer.IsNull())
-                    {
-                        Helpers.LogWarning($"Failed to initialize a hardware accelerated renderer: {SDL.SDL_GetError()}\n");
-                        SdlRenderer = SDL.SDL_CreateRenderer(RenderingWindow, -1, 0);
-                    }
-
-                    if (!SdlRenderer.IsNull())
-                    {
-                        if (SDL.SDL_GetRendererInfo(SdlRenderer, out SdlRendererInfo) == 0)
-                            Helpers.LogVerbose($"Initialized {Helpers.PtrToString(SdlRendererInfo.name)} renderer.\n");
-                    }
-                }
-                if (RenderingWindow.IsNull() || SdlRenderer.IsNull() || SdlRendererInfo.num_texture_formats <= 0)
-                {
-                    Helpers.LogFatal($"Failed to create window or renderer: {SDL.SDL_GetError()}");
-                    return false;
-                }
-            }
-
-            return true;
-        }
-
-        public int audio_open(AudioParams wantedSpec, out AudioParams audioDeviceSpec) =>
-            audio_open(wantedSpec.Layout, wantedSpec.Channels, wantedSpec.Frequency, out audioDeviceSpec);
-
-        public int audio_open(long wantedChannelLayout, int wantedChannelCount, int wantedSampleRate, out AudioParams audioDeviceSpec)
-        {
-            audioDeviceSpec = new AudioParams();
-            var next_nb_channels = new[] { 0, 0, 1, 6, 2, 6, 4, 6 };
-            var next_sample_rates = new[] { 0, 44100, 48000, 96000, 192000 };
-            int next_sample_rate_idx = next_sample_rates.Length - 1;
-
-            const string ChannelCountEnvVariable = "SDL_AUDIO_CHANNELS";
-            var env = Environment.GetEnvironmentVariable(ChannelCountEnvVariable);
-            if (!string.IsNullOrWhiteSpace(env))
-            {
-                wantedChannelCount = int.Parse(env);
-                wantedChannelLayout = AudioParams.DefaultChannelLayoutFor(wantedChannelCount);
-            }
-
-            if (wantedChannelLayout == 0 || wantedChannelCount != AudioParams.ChannelCountFor(wantedChannelLayout))
-            {
-                wantedChannelLayout = AudioParams.DefaultChannelLayoutFor(wantedChannelCount);
-                wantedChannelLayout &= ~ffmpeg.AV_CH_LAYOUT_STEREO_DOWNMIX;
-            }
-
-            wantedChannelCount = AudioParams.ChannelCountFor(wantedChannelLayout);
-
-            var wantedSpec = new SDL.SDL_AudioSpec
-            {
-                channels = (byte)wantedChannelCount,
-                freq = wantedSampleRate
-            };
-
-            if (wantedSpec.freq <= 0 || wantedSpec.channels <= 0)
-            {
-                Helpers.LogError("Invalid sample rate or channel count!\n");
-                return -1;
-            }
-
-            while (next_sample_rate_idx != 0 && next_sample_rates[next_sample_rate_idx] >= wantedSpec.freq)
-                next_sample_rate_idx--;
-
-            wantedSpec.format = SDL.AUDIO_S16SYS;
-            wantedSpec.silence = 0;
-            wantedSpec.samples = (ushort)Math.Max(Constants.SDL_AUDIO_MIN_BUFFER_SIZE, 2 << ffmpeg.av_log2((uint)(wantedSpec.freq / Constants.SDL_AUDIO_MAX_CALLBACKS_PER_SEC)));
-            wantedSpec.callback = AudioCallback;
-            // wanted_spec.userdata = GCHandle.ToIntPtr(VideoStateHandle);
-
-            const int AudioDeviceFlags = (int)(SDL.SDL_AUDIO_ALLOW_FREQUENCY_CHANGE | SDL.SDL_AUDIO_ALLOW_CHANNELS_CHANGE);
-            SDL.SDL_AudioSpec deviceSpec;
-            while ((AudioDeviceId = SDL.SDL_OpenAudioDevice(null, 0, ref wantedSpec, out deviceSpec, AudioDeviceFlags)) == 0)
-            {
-                Helpers.LogWarning($"SDL_OpenAudio ({wantedSpec.channels} channels, {wantedSpec.freq} Hz): {SDL.SDL_GetError()}\n");
-                wantedSpec.channels = (byte)next_nb_channels[Math.Min(7, (int)wantedSpec.channels)];
-                if (wantedSpec.channels == 0)
-                {
-                    wantedSpec.freq = next_sample_rates[next_sample_rate_idx--];
-                    wantedSpec.channels = (byte)wantedChannelCount;
-                    if (wantedSpec.freq == 0)
-                    {
-                        Helpers.LogError("No more combinations to try, audio open failed\n");
-                        return -1;
-                    }
-                }
-
-                wantedChannelLayout = AudioParams.DefaultChannelLayoutFor(wantedSpec.channels);
-            }
-
-            if (deviceSpec.format != SDL.AUDIO_S16SYS)
-            {
-                Helpers.LogError($"SDL advised audio format {deviceSpec.format} is not supported!\n");
-                return -1;
-            }
-
-            if (deviceSpec.channels != wantedSpec.channels)
-            {
-                wantedChannelLayout = AudioParams.DefaultChannelLayoutFor(deviceSpec.channels);
-                if (wantedChannelLayout == 0)
-                {
-                    Helpers.LogError($"SDL advised channel count {deviceSpec.channels} is not supported!\n");
-                    return -1;
-                }
-            }
-
-            audioDeviceSpec.SampleFormat = AVSampleFormat.AV_SAMPLE_FMT_S16;
-            audioDeviceSpec.Frequency = deviceSpec.freq;
-            audioDeviceSpec.Layout = wantedChannelLayout;
-            audioDeviceSpec.Channels = deviceSpec.channels;
-
-            if (audioDeviceSpec.BytesPerSecond <= 0 || audioDeviceSpec.FrameSize <= 0)
-            {
-                Helpers.LogError("av_samples_get_buffer_size failed\n");
-                return -1;
-            }
-
-            ReadBufferIndex = 0;
-            ReadBufferSize = 0;
-
-            return (int)deviceSpec.size;
-        }
-
-
         public void CloseVideo()
         {
             if (!SdlRenderer.IsNull())
@@ -411,15 +277,6 @@
                 SDL.SDL_DestroyTexture(sub_texture);
         }
 
-        public void CloseAudio()
-        {
-            SDL.SDL_CloseAudioDevice(AudioDeviceId);
-        }
-
-        public void PauseAudio()
-        {
-            SDL.SDL_PauseAudioDevice(AudioDeviceId, 0);
-        }
 
         public void video_display(MediaContainer container)
         {
@@ -556,14 +413,14 @@
         }
 
         /* called to display each frame */
-        public void video_refresh(MediaContainer container, ref double remaining_time)
+        public void video_refresh(MediaContainer container, ref double remainingTime)
         {
             if (!container.IsPaused && container.MasterSyncMode == ClockSync.External && container.IsRealtime)
                 container.SyncExternalClockSpeed();
 
             if (container.Video.Stream != null)
             {
-                retry:
+            retry:
                 if (container.Video.Frames.PendingCount == 0)
                 {
                     // nothing to do, no picture to display in the queue
@@ -593,7 +450,7 @@
                     var currentTime = Clock.SystemTime;
                     if (currentTime < container.PictureDisplayTimer + pictureDisplayDuration)
                     {
-                        remaining_time = Math.Min(container.PictureDisplayTimer + pictureDisplayDuration - currentTime, remaining_time);
+                        remainingTime = Math.Min(container.PictureDisplayTimer + pictureDisplayDuration - currentTime, remainingTime);
                         goto display;
                     }
 
@@ -668,7 +525,7 @@
                     if (container.IsInStepMode && !container.IsPaused)
                         container.StreamTogglePause();
                 }
-                display:
+            display:
                 /* display picture */
                 if (!container.Options.display_disable && force_refresh && container.ShowMode == ShowMode.Video && container.Video.Frames.IsReadIndexShown)
                     video_display(container);
@@ -772,73 +629,6 @@
             var rect = CalculateDisplayRect(0, 0, maxWidth, maxHeight, width, height, sar);
             default_width = rect.w;
             default_height = rect.h;
-        }
-
-        /* prepare a new audio buffer */
-        private void sdl_audio_callback(IntPtr opaque, IntPtr audioStream, int pendingByteCount)
-        {
-            AudioCallbackTime = Clock.SystemTime;
-
-            while (pendingByteCount > 0)
-            {
-                if (ReadBufferIndex >= ReadBufferSize)
-                {
-                    var audio_size = Container.Audio.RefillOutputBuffer();
-                    if (audio_size < 0)
-                    {
-                        // if error, just output silence.
-                        Container.Audio.OutputBuffer = null;
-                        ReadBufferSize = Constants.SDL_AUDIO_MIN_BUFFER_SIZE / Container.Audio.HardwareSpec.FrameSize * Container.Audio.HardwareSpec.FrameSize;
-                    }
-                    else
-                    {
-                        ReadBufferSize = audio_size;
-                    }
-
-                    ReadBufferIndex = 0;
-                }
-
-                var readByteCount = ReadBufferSize - ReadBufferIndex;
-                if (readByteCount > pendingByteCount)
-                    readByteCount = pendingByteCount;
-
-                var outputStream = (byte*)audioStream;
-                var inputStream = Container.Audio.OutputBuffer + ReadBufferIndex;
-
-                if (!Container.IsMuted && Container.Audio.OutputBuffer != null && audio_volume == SDL.SDL_MIX_MAXVOLUME)
-                {
-                    for (var b = 0; b < readByteCount; b++)
-                        outputStream[b] = inputStream[b];
-                }
-                else
-                {
-                    for (var b = 0; b < readByteCount; b++)
-                        outputStream[b] = 0;
-
-                    if (!Container.IsMuted && Container.Audio.OutputBuffer != null)
-                        SDL.SDL_MixAudioFormat(outputStream, inputStream, SDL.AUDIO_S16SYS, (uint)readByteCount, audio_volume);
-                }
-
-                pendingByteCount -= readByteCount;
-                audioStream += readByteCount;
-                ReadBufferIndex += readByteCount;
-            }
-
-            // Let's assume the audio driver that is used by SDL has two periods.
-            if (!Container.Audio.FrameTime.IsNaN())
-            {
-                var readBufferAvailable = ReadBufferSize - ReadBufferIndex;
-                var bufferDuration = (2d * Container.Audio.HardwareBufferSize + readBufferAvailable) / Container.Audio.HardwareSpec.BytesPerSecond;
-                Container.AudioClock.Set(Container.Audio.FrameTime - bufferDuration, Container.Audio.FrameSerial, AudioCallbackTime);
-                Container.ExternalClock.SyncToSlave(Container.AudioClock);
-            }
-        }
-
-        public void update_volume(int sign, double step)
-        {
-            var volume_level = audio_volume > 0 ? (20 * Math.Log(audio_volume / (double)SDL.SDL_MIX_MAXVOLUME) / Math.Log(10)) : -1000.0;
-            var new_volume = (int)Math.Round(SDL.SDL_MIX_MAXVOLUME * Math.Pow(10.0, (volume_level + sign * step) / 20.0), 0);
-            audio_volume = (audio_volume == new_volume ? (audio_volume + sign) : new_volume).Clamp(0, SDL.SDL_MIX_MAXVOLUME);
         }
 
         static double ComputePictureDisplayDuration(double pictureDuration, MediaContainer container)
