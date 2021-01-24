@@ -38,25 +38,24 @@
 
         public IPresenter Presenter { get; private set; }
 
-        // TODO: This table needs work. AV_PIX_FMT_NE and other definitions: AV_PIX_FMT_RGB32_1
         public static readonly Dictionary<AVPixelFormat, uint> sdl_texture_map = new()
         {
             { AVPixelFormat.AV_PIX_FMT_RGB8, SDL.SDL_PIXELFORMAT_RGB332 },
-            { AVPixelFormat.AV_PIX_FMT_RGB444LE, SDL.SDL_PIXELFORMAT_RGB444 },
-            { AVPixelFormat.AV_PIX_FMT_RGB555LE, SDL.SDL_PIXELFORMAT_RGB555 },
-            { AVPixelFormat.AV_PIX_FMT_BGR555LE, SDL.SDL_PIXELFORMAT_BGR555 },
-            { AVPixelFormat.AV_PIX_FMT_RGB565LE, SDL.SDL_PIXELFORMAT_RGB565 },
-            { AVPixelFormat.AV_PIX_FMT_BGR565LE, SDL.SDL_PIXELFORMAT_BGR565 },
+            { Constants.AV_PIX_FMT_RGB444, SDL.SDL_PIXELFORMAT_RGB444 },
+            { Constants.AV_PIX_FMT_RGB555, SDL.SDL_PIXELFORMAT_RGB555 },
+            { Constants.AV_PIX_FMT_BGR555, SDL.SDL_PIXELFORMAT_BGR555 },
+            { Constants.AV_PIX_FMT_RGB565, SDL.SDL_PIXELFORMAT_RGB565 },
+            { Constants.AV_PIX_FMT_BGR565, SDL.SDL_PIXELFORMAT_BGR565 },
             { AVPixelFormat.AV_PIX_FMT_RGB24, SDL.SDL_PIXELFORMAT_RGB24 },
             { AVPixelFormat.AV_PIX_FMT_BGR24, SDL.SDL_PIXELFORMAT_BGR24 },
-            { AVPixelFormat.AV_PIX_FMT_0RGB, SDL.SDL_PIXELFORMAT_RGB888 },
-            { AVPixelFormat.AV_PIX_FMT_0BGR, SDL.SDL_PIXELFORMAT_BGR888 },
-            { AVPixelFormat.AV_PIX_FMT_RGB0, SDL.SDL_PIXELFORMAT_RGBX8888 },
-            { AVPixelFormat.AV_PIX_FMT_BGR0, SDL.SDL_PIXELFORMAT_BGRX8888 },
-            { AVPixelFormat.AV_PIX_FMT_ARGB, SDL.SDL_PIXELFORMAT_ARGB8888 },
-            { AVPixelFormat.AV_PIX_FMT_RGBA, SDL.SDL_PIXELFORMAT_RGBA8888 },
-            { AVPixelFormat.AV_PIX_FMT_ABGR, SDL.SDL_PIXELFORMAT_ABGR8888 },
-            { AVPixelFormat.AV_PIX_FMT_BGRA, SDL.SDL_PIXELFORMAT_BGRA8888 },
+            { Constants.AV_PIX_FMT_0RGB32, SDL.SDL_PIXELFORMAT_RGB888 },
+            { Constants.AV_PIX_FMT_0BGR32, SDL.SDL_PIXELFORMAT_BGR888 },
+            { Constants.AV_PIX_FMT_0BGRLE, SDL.SDL_PIXELFORMAT_RGBX8888 },
+            { Constants.AV_PIX_FMT_0RGBLE, SDL.SDL_PIXELFORMAT_BGRX8888 },
+            { Constants.AV_PIX_FMT_RGB32, SDL.SDL_PIXELFORMAT_ARGB8888 },
+            { Constants.AV_PIX_FMT_RGB32_1, SDL.SDL_PIXELFORMAT_RGBA8888 },
+            { Constants.AV_PIX_FMT_BGR32, SDL.SDL_PIXELFORMAT_ABGR8888 },
+            { Constants.AV_PIX_FMT_BGR32_1, SDL.SDL_PIXELFORMAT_BGRA8888 },
             { AVPixelFormat.AV_PIX_FMT_YUV420P, SDL.SDL_PIXELFORMAT_IYUV },
             { AVPixelFormat.AV_PIX_FMT_YUYV422, SDL.SDL_PIXELFORMAT_YUY2 },
             { AVPixelFormat.AV_PIX_FMT_UYVY422, SDL.SDL_PIXELFORMAT_UYVY },
