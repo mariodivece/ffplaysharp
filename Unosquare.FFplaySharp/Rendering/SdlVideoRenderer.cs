@@ -17,7 +17,7 @@
         private IntPtr SdlRenderer;
         public SDL.SDL_RendererInfo SdlRendererInfo;
 
-        public string window_title { get; set; }
+        public string WindowTitle { get; set; }
 
         private IntPtr sub_texture;
         private IntPtr vid_texture;
@@ -29,7 +29,7 @@
         public int screen_width { get; set; } = 0;
         public int screen_height { get; set; } = 0;
 
-        public bool force_refresh { get; set; }
+        public bool ForceRefresh { get; set; }
 
         // inlined static variables
         public double last_time_status = 0;
@@ -38,6 +38,7 @@
 
         public IPresenter Presenter { get; private set; }
 
+        // TODO: This table needs work. AV_PIX_FMT_NE and other definitions: AV_PIX_FMT_RGB32_1
         public static readonly Dictionary<AVPixelFormat, uint> sdl_texture_map = new()
         {
             { AVPixelFormat.AV_PIX_FMT_RGB8, SDL.SDL_PIXELFORMAT_RGB332 },
@@ -163,7 +164,7 @@
             FrameHolder subtitleFrame = null;
             var videoFrame = container.Video.Frames.PeekLast();
 
-            if (container.Subtitle.Stream != null && container.Subtitle.Frames.PendingCount > 0)
+            if (container.HasSubtitles && container.Subtitle.Frames.PendingCount > 0)
             {
                 subtitleFrame = container.Subtitle.Frames.Peek();
 
@@ -262,7 +263,7 @@
             }
         }
 
-        public void CloseVideo()
+        public void Close()
         {
             if (!SdlRenderer.IsNull())
                 SDL.SDL_DestroyRenderer(SdlRenderer);
@@ -278,16 +279,16 @@
         }
 
 
-        public void video_display(MediaContainer container)
+        public void video_display()
         {
-            if (container.width <= 0)
-                video_open(container);
+            if (Container.width <= 0)
+                video_open();
 
             _ = SDL.SDL_SetRenderDrawColor(SdlRenderer, 0, 0, 0, 255);
             _ = SDL.SDL_RenderClear(SdlRenderer);
 
-            if (container.Video.Stream != null)
-                video_image_display(container);
+            if (Container.HasVideo)
+                video_image_display(Container);
 
             SDL.SDL_RenderPresent(SdlRenderer);
         }
@@ -390,14 +391,14 @@
             return resultCode;
         }
 
-        public int video_open(MediaContainer container)
+        public int video_open()
         {
             var w = screen_width != 0 ? screen_width : default_width;
             var h = screen_height != 0 ? screen_height : default_height;
 
-            if (string.IsNullOrWhiteSpace(window_title))
-                window_title = container.Options.input_filename;
-            SDL.SDL_SetWindowTitle(RenderingWindow, window_title);
+            if (string.IsNullOrWhiteSpace(WindowTitle))
+                WindowTitle = Container.Options.input_filename;
+            SDL.SDL_SetWindowTitle(RenderingWindow, WindowTitle);
 
             SDL.SDL_SetWindowSize(RenderingWindow, w, h);
             SDL.SDL_SetWindowPosition(RenderingWindow, screen_left, screen_top);
@@ -406,88 +407,88 @@
 
             SDL.SDL_ShowWindow(RenderingWindow);
 
-            container.width = w;
-            container.height = h;
+            Container.width = w;
+            Container.height = h;
 
             return 0;
         }
 
         /* called to display each frame */
-        public void video_refresh(MediaContainer container, ref double remainingTime)
+        public void Present(ref double remainingTime)
         {
-            if (!container.IsPaused && container.MasterSyncMode == ClockSync.External && container.IsRealtime)
-                container.SyncExternalClockSpeed();
+            if (!Container.IsPaused && Container.MasterSyncMode == ClockSync.External && Container.IsRealtime)
+                Container.SyncExternalClockSpeed();
 
-            if (container.Video.Stream != null)
+            if (Container.HasVideo)
             {
             retry:
-                if (container.Video.Frames.PendingCount == 0)
+                if (Container.Video.Frames.PendingCount == 0)
                 {
                     // nothing to do, no picture to display in the queue
                 }
                 else
                 {
                     /* dequeue the picture */
-                    var previousPicture = container.Video.Frames.PeekLast();
-                    var currentPicture = container.Video.Frames.Peek();
+                    var previousPicture = Container.Video.Frames.PeekLast();
+                    var currentPicture = Container.Video.Frames.Peek();
 
-                    if (currentPicture.Serial != container.Video.Packets.Serial)
+                    if (currentPicture.Serial != Container.Video.Packets.Serial)
                     {
-                        container.Video.Frames.Next();
+                        Container.Video.Frames.Next();
                         goto retry;
                     }
 
                     if (previousPicture.Serial != currentPicture.Serial)
-                        container.PictureDisplayTimer = Clock.SystemTime;
+                        Container.PictureDisplayTimer = Clock.SystemTime;
 
-                    if (container.IsPaused)
+                    if (Container.IsPaused)
                         goto display;
 
                     /* compute nominal last_duration */
-                    var pictureDuration = ComputePictureDuration(container, previousPicture, currentPicture);
-                    var pictureDisplayDuration = ComputePictureDisplayDuration(pictureDuration, container);
+                    var pictureDuration = ComputePictureDuration(Container, previousPicture, currentPicture);
+                    var pictureDisplayDuration = ComputePictureDisplayDuration(pictureDuration, Container);
 
                     var currentTime = Clock.SystemTime;
-                    if (currentTime < container.PictureDisplayTimer + pictureDisplayDuration)
+                    if (currentTime < Container.PictureDisplayTimer + pictureDisplayDuration)
                     {
-                        remainingTime = Math.Min(container.PictureDisplayTimer + pictureDisplayDuration - currentTime, remainingTime);
+                        remainingTime = Math.Min(Container.PictureDisplayTimer + pictureDisplayDuration - currentTime, remainingTime);
                         goto display;
                     }
 
-                    container.PictureDisplayTimer += pictureDisplayDuration;
-                    if (pictureDisplayDuration > 0 && currentTime - container.PictureDisplayTimer > Constants.AV_SYNC_THRESHOLD_MAX)
-                        container.PictureDisplayTimer = currentTime;
+                    Container.PictureDisplayTimer += pictureDisplayDuration;
+                    if (pictureDisplayDuration > 0 && currentTime - Container.PictureDisplayTimer > Constants.AV_SYNC_THRESHOLD_MAX)
+                        Container.PictureDisplayTimer = currentTime;
 
                     if (currentPicture.HasValidTime)
-                        update_video_pts(container, currentPicture.Time, currentPicture.Serial);
+                        update_video_pts(Container, currentPicture.Time, currentPicture.Serial);
 
-                    if (container.Video.Frames.PendingCount > 1)
+                    if (Container.Video.Frames.PendingCount > 1)
                     {
-                        var nextPicture = container.Video.Frames.PeekNext();
-                        var duration = ComputePictureDuration(container, currentPicture, nextPicture);
-                        if (container.IsInStepMode == false &&
-                            (container.Options.framedrop > 0 ||
-                            (container.Options.framedrop != 0 && container.MasterSyncMode != ClockSync.Video)) &&
-                            currentTime > container.PictureDisplayTimer + duration)
+                        var nextPicture = Container.Video.Frames.PeekNext();
+                        var duration = ComputePictureDuration(Container, currentPicture, nextPicture);
+                        if (Container.IsInStepMode == false &&
+                            (Container.Options.framedrop > 0 ||
+                            (Container.Options.framedrop != 0 && Container.MasterSyncMode != ClockSync.Video)) &&
+                            currentTime > Container.PictureDisplayTimer + duration)
                         {
                             DroppedPictureCount++;
-                            container.Video.Frames.Next();
+                            Container.Video.Frames.Next();
                             goto retry;
                         }
                     }
 
-                    if (container.Subtitle.Stream != null)
+                    if (Container.HasSubtitles)
                     {
-                        while (container.Subtitle.Frames.PendingCount > 0)
+                        while (Container.Subtitle.Frames.PendingCount > 0)
                         {
-                            var sp = container.Subtitle.Frames.Peek();
-                            var sp2 = container.Subtitle.Frames.PendingCount > 1
-                                ? container.Subtitle.Frames.PeekNext()
+                            var sp = Container.Subtitle.Frames.Peek();
+                            var sp2 = Container.Subtitle.Frames.PendingCount > 1
+                                ? Container.Subtitle.Frames.PeekNext()
                                 : null;
 
-                            if (sp.Serial != container.Subtitle.Packets.Serial
-                                    || (container.VideoClock.BaseTime > sp.EndDisplayTime)
-                                    || (sp2 != null && container.VideoClock.BaseTime > sp2.StartDisplayTime))
+                            if (sp.Serial != Container.Subtitle.Packets.Serial
+                                    || (Container.VideoClock.BaseTime > sp.EndDisplayTime)
+                                    || (sp2 != null && Container.VideoClock.BaseTime > sp2.StartDisplayTime))
                             {
                                 if (sp.IsUploaded)
                                 {
@@ -510,7 +511,7 @@
                                         }
                                     }
                                 }
-                                container.Subtitle.Frames.Next();
+                                Container.Subtitle.Frames.Next();
                             }
                             else
                             {
@@ -519,45 +520,45 @@
                         }
                     }
 
-                    container.Video.Frames.Next();
-                    force_refresh = true;
+                    Container.Video.Frames.Next();
+                    ForceRefresh = true;
 
-                    if (container.IsInStepMode && !container.IsPaused)
-                        container.StreamTogglePause();
+                    if (Container.IsInStepMode && !Container.IsPaused)
+                        Container.StreamTogglePause();
                 }
             display:
                 /* display picture */
-                if (!container.Options.display_disable && force_refresh && container.ShowMode == ShowMode.Video && container.Video.Frames.IsReadIndexShown)
-                    video_display(container);
+                if (!Container.Options.display_disable && ForceRefresh && Container.ShowMode == ShowMode.Video && Container.Video.Frames.IsReadIndexShown)
+                    video_display();
             }
 
-            force_refresh = false;
-            if (container.Options.show_status != 0)
+            ForceRefresh = false;
+            if (Container.Options.show_status != 0)
             {
                 var currentTime = Clock.SystemTime;
                 if (last_time_status == 0 || (currentTime - last_time_status) >= 0.03)
                 {
-                    var audioQueueSize = container.Audio.Stream != null ? container.Audio.Packets.Size : 0;
-                    var videoQueueSize = container.Video.Stream != null ? container.Video.Packets.Size : 0;
-                    var subtitleQueueSize = container.Subtitle.Stream != null ? container.Subtitle.Packets.Size : 0;
+                    var audioQueueSize = Container.HasAudio ? Container.Audio.Packets.Size : 0;
+                    var videoQueueSize = Container.HasVideo ? Container.Video.Packets.Size : 0;
+                    var subtitleQueueSize = Container.HasSubtitles ? Container.Subtitle.Packets.Size : 0;
 
-                    var audioVideoDelay = container.ComponentSyncDelay;
+                    var audioVideoDelay = Container.ComponentSyncDelay;
 
                     var buf = new StringBuilder();
-                    buf.Append($"{container.MasterTime,-8:0.####} | ");
-                    buf.Append((container.Audio.Stream != null && container.Video.Stream != null) ? "A-V" : (container.Video.Stream != null ? "M-V" : (container.Audio.Stream != null ? "M-A" : "   ")));
+                    buf.Append($"{Container.MasterTime,-8:0.####} | ");
+                    buf.Append((Container.HasAudio && Container.HasVideo) ? "A-V" : (Container.HasVideo ? "M-V" : (Container.HasAudio ? "M-A" : "   ")));
                     buf.Append($":{audioVideoDelay,9:0.####} | ");
-                    buf.Append($"fd={(container.Video.DroppedFrameCount + DroppedPictureCount)} | ");
+                    buf.Append($"fd={(Container.Video.DroppedFrameCount + DroppedPictureCount)} | ");
                     buf.Append($"aq={(audioQueueSize / 1024)}KB | ");
                     buf.Append($"vq={(videoQueueSize / 1024)}KB | ");
                     buf.Append($"sq={subtitleQueueSize}B | ");
-                    buf.Append($" f={(container.Video.Stream != null ? container.Video.CodecContext->pts_correction_num_faulty_dts : 0)} / ");
-                    buf.Append($"{(container.Video.Stream != null ? container.Video.CodecContext->pts_correction_num_faulty_pts : 0)}");
+                    buf.Append($" f={(Container.HasVideo ? Container.Video.CodecContext->pts_correction_num_faulty_dts : 0)} / ");
+                    buf.Append($"{(Container.HasVideo ? Container.Video.CodecContext->pts_correction_num_faulty_pts : 0)}");
 
                     for (var i = buf.Length; i < 90; i++)
                         buf.Append(' ');
 
-                    if (container.Options.show_status == 1 && ffmpeg.av_log_get_level() < ffmpeg.AV_LOG_INFO)
+                    if (Container.Options.show_status == 1 && ffmpeg.av_log_get_level() < ffmpeg.AV_LOG_INFO)
                         Console.Write($"{buf}\r");
                     else
                         Helpers.LogInfo($"{buf}\r");
@@ -567,7 +568,7 @@
             }
         }
 
-        public void toggle_full_screen()
+        public void ToggleFullScreen()
         {
             is_full_screen = !is_full_screen;
             SDL.SDL_SetWindowFullscreen(RenderingWindow, (uint)(is_full_screen ? SDL.SDL_WindowFlags.SDL_WINDOW_FULLSCREEN_DESKTOP : 0));

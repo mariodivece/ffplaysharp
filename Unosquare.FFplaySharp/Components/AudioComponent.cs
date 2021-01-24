@@ -325,7 +325,7 @@
                 return;
 
             AbortDecoder();
-            Container.Renderer.Audio.CloseAudio();
+            Container.Renderer.Audio.Close();
             DisposeDecoder();
 
             ReleaseConvertContext();
@@ -350,7 +350,7 @@
                 return -1;
 
             var wantedSpec = AudioParams.FromFilterContext(OutputFilter);
-            var hardwareBufferSize = Container.Renderer.Audio.audio_open(wantedSpec, out var audioHardwareSpec);
+            var hardwareBufferSize = Container.Renderer.Audio.Open(wantedSpec, out var audioHardwareSpec);
             if (hardwareBufferSize < 0)
                 return -1;
 

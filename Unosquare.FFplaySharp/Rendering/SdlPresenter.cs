@@ -3,12 +3,11 @@
     using FFmpeg.AutoGen;
     using SDL2;
     using System;
-    using System.Threading;
     using Unosquare.FFplaySharp.Primitives;
 
     public unsafe class SdlPresenter : IPresenter
     {
-        private double last_mouse_left_click;
+        private double LastMouseLeftClick;
 
         public IVideoRenderer Video { get; private set; }
 
@@ -71,7 +70,7 @@
             {
                 if (!Options.cursor_hidden && Clock.SystemTime - Options.cursor_last_shown > Constants.CURSOR_HIDE_DELAY)
                 {
-                    SDL.SDL_ShowCursor(0);
+                    _ = SDL.SDL_ShowCursor(0);
                     Options.cursor_hidden = true;
                 }
 
@@ -80,8 +79,8 @@
 
                 remainingTime = Constants.REFRESH_RATE;
 
-                if (Container.ShowMode != ShowMode.None && (!Container.IsPaused || Video.force_refresh))
-                    Video.video_refresh(Container, ref remainingTime);
+                if (Container.ShowMode != ShowMode.None && (!Container.IsPaused || Video.ForceRefresh))
+                    Video.Present(ref remainingTime);
 
                 SDL.SDL_PumpEvents();
             }
@@ -95,7 +94,7 @@
             if (Container != null)
                 Container.Close();
 
-            Video.CloseVideo();
+            Video.Close();
 
             Container.Options.uninit_opts();
             Container.Options.vfilters_list.Clear();
@@ -118,7 +117,7 @@
             } while (next != (int)Container.ShowMode && (next == (int)ShowMode.Video && Container.Video.Stream == null || next != (int)ShowMode.Video && Container.Audio.Stream == null));
             if ((int)Container.ShowMode != next)
             {
-                Video.force_refresh = true;
+                Video.ForceRefresh = true;
                 Container.ShowMode = (ShowMode)next;
             }
         }
@@ -148,8 +147,8 @@
                         switch (sdlEvent.key.keysym.sym)
                         {
                             case SDL.SDL_Keycode.SDLK_f:
-                                Video.toggle_full_screen();
-                                Video.force_refresh = true;
+                                Video.ToggleFullScreen();
+                                Video.ForceRefresh = true;
                                 break;
                             case SDL.SDL_Keycode.SDLK_p:
                             case SDL.SDL_Keycode.SDLK_SPACE:
@@ -160,11 +159,11 @@
                                 break;
                             case SDL.SDL_Keycode.SDLK_KP_MULTIPLY:
                             case SDL.SDL_Keycode.SDLK_0:
-                                Audio.update_volume(1, Constants.SDL_VOLUME_STEP);
+                                Audio.UpdateVolume(1, Constants.SDL_VOLUME_STEP);
                                 break;
                             case SDL.SDL_Keycode.SDLK_KP_DIVIDE:
                             case SDL.SDL_Keycode.SDLK_9:
-                                Audio.update_volume(-1, Constants.SDL_VOLUME_STEP);
+                                Audio.UpdateVolume(-1, Constants.SDL_VOLUME_STEP);
                                 break;
                             case SDL.SDL_Keycode.SDLK_s: // S: Step to next frame
                                 Container.StepToNextFrame();
@@ -261,15 +260,15 @@
                         if (sdlEvent.button.button == SDL.SDL_BUTTON_LEFT)
                         {
                             // last_mouse_left_click = 0;
-                            if (Clock.SystemTime - last_mouse_left_click <= 0.5d)
+                            if (Clock.SystemTime - LastMouseLeftClick <= 0.5d)
                             {
-                                Video.toggle_full_screen();
-                                Video.force_refresh = true;
-                                last_mouse_left_click = 0d;
+                                Video.ToggleFullScreen();
+                                Video.ForceRefresh = true;
+                                LastMouseLeftClick = 0d;
                             }
                             else
                             {
-                                last_mouse_left_click = Clock.SystemTime;
+                                LastMouseLeftClick = Clock.SystemTime;
                             }
                         }
 
@@ -322,7 +321,7 @@
                                 Video.screen_height = Container.height = sdlEvent.window.data2;
                                 break;
                             case SDL.SDL_WindowEventID.SDL_WINDOWEVENT_EXPOSED:
-                                Video.force_refresh = true;
+                                Video.ForceRefresh = true;
                                 break;
                         }
                         break;

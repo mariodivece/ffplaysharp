@@ -7,5 +7,7 @@
         public IPresenter Presenter { get; }
 
         public void Initialize(IPresenter presenter);
+
+        public void Close();
     }
 }

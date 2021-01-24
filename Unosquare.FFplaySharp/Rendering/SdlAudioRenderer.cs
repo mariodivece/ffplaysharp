@@ -3,18 +3,14 @@
     using FFmpeg.AutoGen;
     using SDL2;
     using System;
-    using System.Collections.Generic;
-    using System.Linq;
-    using System.Text;
-    using System.Threading.Tasks;
     using Unosquare.FFplaySharp.Primitives;
 
     public unsafe class SdlAudioRenderer : IAudioRenderer
     {
         private readonly SDL.SDL_AudioCallback AudioCallback;
         private uint AudioDeviceId;
-        private int ReadBufferSize; /* in bytes */
-        private int ReadBufferIndex; /* in bytes */
+        private int ReadBufferSize;
+        private int ReadBufferIndex;
 
         public double AudioCallbackTime { get; private set; }
 
@@ -47,14 +43,16 @@
             }
         }
 
-        public int audio_volume { get; set; }
+        public int Volume { get; set; }
 
 
-        public int audio_open(AudioParams wantedSpec, out AudioParams audioDeviceSpec) =>
-            audio_open(wantedSpec.Layout, wantedSpec.Channels, wantedSpec.Frequency, out audioDeviceSpec);
+        public int Open(AudioParams wantedSpec, out AudioParams audioDeviceSpec) =>
+            Open(wantedSpec.Layout, wantedSpec.Channels, wantedSpec.Frequency, out audioDeviceSpec);
 
-        public int audio_open(long wantedChannelLayout, int wantedChannelCount, int wantedSampleRate, out AudioParams audioDeviceSpec)
+        private int Open(long wantedChannelLayout, int wantedChannelCount, int wantedSampleRate, out AudioParams audioDeviceSpec)
         {
+            Volume = Container.Options.startup_volume;
+
             audioDeviceSpec = new AudioParams();
             var next_nb_channels = new[] { 0, 0, 1, 6, 2, 6, 4, 6 };
             var next_sample_rates = new[] { 0, 44100, 48000, 96000, 192000 };
@@ -150,12 +148,12 @@
             return (int)deviceSpec.size;
         }
 
-        public void CloseAudio()
+        public void Close()
         {
             SDL.SDL_CloseAudioDevice(AudioDeviceId);
         }
 
-        public void PauseAudio()
+        public void Pause()
         {
             SDL.SDL_PauseAudioDevice(AudioDeviceId, 0);
         }
@@ -169,8 +167,8 @@
             {
                 if (ReadBufferIndex >= ReadBufferSize)
                 {
-                    var audio_size = Container.Audio.RefillOutputBuffer();
-                    if (audio_size < 0)
+                    var audioSize = Container.Audio.RefillOutputBuffer();
+                    if (audioSize < 0)
                     {
                         // if error, just output silence.
                         Container.Audio.OutputBuffer = null;
@@ -178,7 +176,7 @@
                     }
                     else
                     {
-                        ReadBufferSize = audio_size;
+                        ReadBufferSize = audioSize;
                     }
 
                     ReadBufferIndex = 0;
@@ -191,7 +189,7 @@
                 var outputStream = (byte*)audioStream;
                 var inputStream = Container.Audio.OutputBuffer + ReadBufferIndex;
 
-                if (!Container.IsMuted && Container.Audio.OutputBuffer != null && audio_volume == SDL.SDL_MIX_MAXVOLUME)
+                if (!Container.IsMuted && Container.Audio.OutputBuffer != null && Volume == SDL.SDL_MIX_MAXVOLUME)
                 {
                     for (var b = 0; b < readByteCount; b++)
                         outputStream[b] = inputStream[b];
@@ -202,7 +200,7 @@
                         outputStream[b] = 0;
 
                     if (!Container.IsMuted && Container.Audio.OutputBuffer != null)
-                        SDL.SDL_MixAudioFormat(outputStream, inputStream, SDL.AUDIO_S16SYS, (uint)readByteCount, audio_volume);
+                        SDL.SDL_MixAudioFormat(outputStream, inputStream, SDL.AUDIO_S16SYS, (uint)readByteCount, Volume);
                 }
 
                 pendingByteCount -= readByteCount;
@@ -220,11 +218,11 @@
             }
         }
 
-        public void update_volume(int sign, double step)
+        public void UpdateVolume(int sign, double step)
         {
-            var volume_level = audio_volume > 0 ? (20 * Math.Log(audio_volume / (double)SDL.SDL_MIX_MAXVOLUME) / Math.Log(10)) : -1000.0;
-            var new_volume = (int)Math.Round(SDL.SDL_MIX_MAXVOLUME * Math.Pow(10.0, (volume_level + sign * step) / 20.0), 0);
-            audio_volume = (audio_volume == new_volume ? (audio_volume + sign) : new_volume).Clamp(0, SDL.SDL_MIX_MAXVOLUME);
+            var volumeLevel = Volume > 0 ? (20 * Math.Log(Volume / (double)SDL.SDL_MIX_MAXVOLUME) / Math.Log(10)) : -1000.0;
+            var new_volume = (int)Math.Round(SDL.SDL_MIX_MAXVOLUME * Math.Pow(10.0, (volumeLevel + sign * step) / 20.0), 0);
+            Volume = (Volume == new_volume ? (Volume + sign) : new_volume).Clamp(0, SDL.SDL_MIX_MAXVOLUME);
         }
     }
 }

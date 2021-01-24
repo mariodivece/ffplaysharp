@@ -77,10 +77,10 @@
             {
                 var bytePosition = -1L;
 
-                if (bytePosition < 0 && Video.StreamIndex >= 0)
+                if (bytePosition < 0 && HasVideo)
                     bytePosition = Video.Frames.LastPosition;
 
-                if (bytePosition < 0 && Audio.StreamIndex >= 0)
+                if (bytePosition < 0 && HasAudio)
                     bytePosition = Audio.Frames.LastPosition;
 
                 if (bytePosition < 0)
@@ -105,14 +105,14 @@
             {
                 if (ClockSyncMode == ClockSync.Video)
                 {
-                    if (Video.Stream != null)
+                    if (HasVideo)
                         return ClockSync.Video;
                     else
                         return ClockSync.Audio;
                 }
                 else if (ClockSyncMode == ClockSync.Audio)
                 {
-                    if (Audio.Stream != null)
+                    if (HasAudio)
                         return ClockSync.Audio;
                     else
                         return ClockSync.External;
@@ -146,11 +146,11 @@
             {
                 var syncDelay = 0d;
 
-                if (Audio.Stream != null && Video.Stream != null)
+                if (HasAudio && HasVideo)
                     syncDelay = AudioClock.Value - VideoClock.Value;
-                else if (Video.Stream != null)
+                else if (HasVideo)
                     syncDelay = MasterTime - VideoClock.Value;
-                else if (Audio.Stream != null)
+                else if (HasAudio)
                     syncDelay = MasterTime - AudioClock.Value;
 
                 return syncDelay;
@@ -172,6 +172,12 @@
         public SubtitleComponent Subtitle { get; }
 
         public IReadOnlyList<MediaComponent> Components { get; }
+
+        public bool HasVideo => Video != null && Video.Stream != null && Video.StreamIndex >= 0;
+
+        public bool HasAudio => Audio != null && Audio.Stream != null && Audio.StreamIndex >= 0;
+
+        public bool HasSubtitles => Subtitle != null && Subtitle.Stream != null && Subtitle.StreamIndex >= 0;
 
         private bool HasEnoughPacketCount => Components.All(c => c.HasEnoughPackets);
 
@@ -206,7 +212,7 @@
 
             container.Options.startup_volume = container.Options.startup_volume.Clamp(0, 100);
             container.Options.startup_volume = (SDL.SDL_MIX_MAXVOLUME * container.Options.startup_volume / 100).Clamp(0, SDL.SDL_MIX_MAXVOLUME);
-            renderer.Audio.audio_volume = container.Options.startup_volume;
+            
             container.IsMuted = false;
             container.ClockSyncMode = container.Options.av_sync_type;
             container.StartReadThread();
@@ -222,8 +228,8 @@
         /// </summary>
         public void SyncExternalClockSpeed()
         {
-            if (Video.StreamIndex >= 0 && Video.Packets.Count <= Constants.EXTERNAL_CLOCK_MIN_FRAMES ||
-                Audio.StreamIndex >= 0 && Audio.Packets.Count <= Constants.EXTERNAL_CLOCK_MIN_FRAMES)
+            if (HasVideo && Video.Packets.Count <= Constants.EXTERNAL_CLOCK_MIN_FRAMES ||
+                HasAudio && Audio.Packets.Count <= Constants.EXTERNAL_CLOCK_MIN_FRAMES)
             {
                 ExternalClock.SetSpeed(Math.Max(Constants.EXTERNAL_CLOCK_SPEED_MIN, ExternalClock.SpeedRatio - Constants.EXTERNAL_CLOCK_SPEED_STEP));
             }
@@ -494,7 +500,7 @@
                 IsPictureAttachmentPending = true;
 
             if (targetComponent.IsAudio)
-                Renderer.Audio.PauseAudio();
+                Renderer.Audio.Pause();
 
             goto exit;
 
@@ -682,8 +688,8 @@
 
             MaxPictureDuration = ic->iformat->flags.HasFlag(ffmpeg.AVFMT_TS_DISCONT) ? 10.0 : 3600.0;
 
-            if (string.IsNullOrWhiteSpace(Renderer.Video.window_title) && (formatOption = ffmpeg.av_dict_get(ic->metadata, "title", null, 0)) != null)
-                Renderer.Video.window_title = $"{Helpers.PtrToString(formatOption->value)} - {o.input_filename}";
+            if (string.IsNullOrWhiteSpace(Renderer.Video.WindowTitle) && (formatOption = ffmpeg.av_dict_get(ic->metadata, "title", null, 0)) != null)
+                Renderer.Video.WindowTitle = $"{Helpers.PtrToString(formatOption->value)} - {o.input_filename}";
 
             /* if seeking requested, we execute it */
             if (o.start_time.IsValidPts())

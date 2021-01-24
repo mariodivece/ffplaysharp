@@ -29,7 +29,7 @@
 
         public AVStream* Stream;
 
-        public int StreamIndex;
+        public int StreamIndex { get; set; }
 
         public int LastStreamIndex;
 

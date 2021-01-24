@@ -6,14 +6,12 @@
     {
         public double AudioCallbackTime { get; }
 
-        public int audio_volume { get; set; }
+        public int Volume { get; }
 
-        public int audio_open(AudioParams wantedSpec, out AudioParams audioDeviceSpec);
+        public int Open(AudioParams wantedSpec, out AudioParams audioDeviceSpec);
 
-        public void CloseAudio();
+        public void Pause();
 
-        public void PauseAudio();
-
-        public void update_volume(int sign, double step);
+        public void UpdateVolume(int sign, double step);
     }
 }
