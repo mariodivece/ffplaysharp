@@ -3,8 +3,8 @@
     using FFmpeg.AutoGen;
     using SDL2;
     using System;
-    using System.Threading;
     using Unosquare.FFplaySharp.Primitives;
+    using Unosquare.FFplaySharp.Rendering;
 
     public static unsafe class PortedProgram
     {
@@ -15,6 +15,8 @@
 
         static MediaContainer GlobalVideoState;
         static MediaRenderer SdlRenderer;
+
+        static double last_mouse_left_click;
 
         static void do_exit(MediaContainer container)
         {
@@ -221,15 +223,15 @@
                         if (sdlEvent.button.button == SDL.SDL_BUTTON_LEFT)
                         {
                             // last_mouse_left_click = 0;
-                            if (Clock.SystemTime - SdlRenderer.last_mouse_left_click <= 0.5d)
+                            if (Clock.SystemTime - last_mouse_left_click <= 0.5d)
                             {
                                 SdlRenderer.toggle_full_screen();
                                 SdlRenderer.force_refresh = true;
-                                SdlRenderer.last_mouse_left_click = 0d;
+                                last_mouse_left_click = 0d;
                             }
                             else
                             {
-                                SdlRenderer.last_mouse_left_click = Clock.SystemTime;
+                                last_mouse_left_click = Clock.SystemTime;
                             }
                         }
 

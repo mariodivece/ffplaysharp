@@ -8,6 +8,7 @@
     using System.Threading;
     using Unosquare.FFplaySharp.Components;
     using Unosquare.FFplaySharp.Primitives;
+    using Unosquare.FFplaySharp.Rendering;
 
     public unsafe class MediaContainer
     {

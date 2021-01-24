@@ -5,6 +5,7 @@
     using System;
     using System.Collections.Generic;
     using Unosquare.FFplaySharp.Primitives;
+    using Unosquare.FFplaySharp.Rendering;
 
     public unsafe sealed class VideoComponent : FilteringMediaComponent
     {

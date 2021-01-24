@@ -1,4 +1,4 @@
-﻿namespace Unosquare.FFplaySharp
+﻿namespace Unosquare.FFplaySharp.Rendering
 {
     using FFmpeg.AutoGen;
     using SDL2;
@@ -13,7 +13,7 @@
         private uint AudioDeviceId;
 
         private int DroppedPictureCount;
-        public double last_mouse_left_click;
+        
 
         public double AudioCallbackTime { get; private set; }
 
