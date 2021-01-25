@@ -68,6 +68,10 @@
 
             var parent = Presenter as SdlPresenter;
             var o = Presenter.Container.Options;
+            screen_width = o.screen_width;
+            screen_height = o.screen_height;
+            is_full_screen = o.is_full_screen;
+
             if (o.display_disable) return;
 
             parent.SdlInitFlags = (uint)SDL.SDL_WindowFlags.SDL_WINDOW_HIDDEN;

@@ -714,17 +714,17 @@
                 var st = ic->streams[i];
                 var type = st->codecpar->codec_type;
                 st->discard = AVDiscard.AVDISCARD_ALL;
-                if (type >= 0 && o.wanted_stream_spec[(int)type] != null && streamIndexes[type] == -1)
-                    if (ffmpeg.avformat_match_stream_specifier(ic, st, o.wanted_stream_spec[(int)type]) > 0)
+                if (type >= 0 && o.wanted_stream_spec[type] != null && streamIndexes[type] == -1)
+                    if (ffmpeg.avformat_match_stream_specifier(ic, st, o.wanted_stream_spec[type]) > 0)
                         streamIndexes[type] = i;
             }
 
-            for (i = 0; i < (int)AVMediaType.AVMEDIA_TYPE_NB; i++)
+            foreach (var kvp in o.wanted_stream_spec)
             {
-                if (o.wanted_stream_spec[i] != null && streamIndexes[(AVMediaType)i] == -1)
+                if (kvp.Value != null && streamIndexes[(AVMediaType)i] == -1)
                 {
-                    Helpers.LogError($"Stream specifier {Options.wanted_stream_spec[i]} does not match any {ffmpeg.av_get_media_type_string((AVMediaType)i)} stream\n");
-                    streamIndexes[(AVMediaType)i] = int.MaxValue;
+                    Helpers.LogError($"Stream specifier {kvp.Value} does not match any {ffmpeg.av_get_media_type_string(kvp.Key)} stream\n");
+                    streamIndexes[kvp.Key] = int.MaxValue;
                 }
             }
 
