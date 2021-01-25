@@ -2,7 +2,7 @@
   "profiles": {
     "Unosquare.FFplaySharp": {
       "commandName": "Project",
-      "commandLineArgs": "-f dshow -i video=\"Microsoft® LifeCam Cinema(TM)\"",
+      "commandLineArgs": "C:\\Users\\UnoSp\\OneDrive\\ffme-testsuite\\video-subtitles-03.mkv -t 10 -ss 20",
       "nativeDebugging": true
     }
   }

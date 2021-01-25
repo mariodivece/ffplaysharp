@@ -54,32 +54,38 @@
 
         public static double ToFactor(this AVRational r) => ffmpeg.av_q2d(r);
 
-        public static double CONV_FP(int m) => Convert.ToDouble(m);
+        public static double ToDouble(this int m) => Convert.ToDouble(m);
 
         public static double hypot(double s1, double s2) => Math.Sqrt((s1 * s1) + (s2 * s2));
 
-        public static unsafe double av_display_rotation_get(int* matrix)
+        /// <summary>
+        /// Port of av_display_rotation_get.
+        /// </summary>
+        /// <param name="matrix"></param>
+        /// <returns></returns>
+        public static unsafe double ComputeMatrixRotation(int* matrix)
         {
             var scale = new double[2];
-            scale[0] = hypot(CONV_FP(matrix[0]), CONV_FP(matrix[3]));
-            scale[1] = hypot(CONV_FP(matrix[1]), CONV_FP(matrix[4]));
+            scale[0] = hypot(matrix[0].ToDouble(), matrix[3].ToDouble());
+            scale[1] = hypot(matrix[1].ToDouble(), matrix[4].ToDouble());
 
             if (scale[0] == 0.0 || scale[1] == 0.0)
                 return double.NaN;
 
-            var rotation = Math.Atan2(CONV_FP(matrix[1]) / scale[1],
-                             CONV_FP(matrix[0]) / scale[0]) * 180 / Math.PI;
+            var rotation = Math.Atan2(matrix[1].ToDouble() / scale[1], matrix[0].ToDouble() / scale[0]) * 180 / Math.PI;
 
             return -rotation;
         }
 
-        public static unsafe double get_rotation(AVStream* st)
+        /// <summary>
+        /// Port of get_rotation
+        /// </summary>
+        /// <param name="stream"></param>
+        /// <returns></returns>
+        public static unsafe double ComputeDisplayRotation(AVStream* stream)
         {
-            var displaymatrix = ffmpeg.av_stream_get_side_data(st, AVPacketSideDataType.AV_PKT_DATA_DISPLAYMATRIX, null);
-            double theta = 0;
-            if (displaymatrix != null)
-                theta = -av_display_rotation_get((int*)displaymatrix);
-
+            var displayMatrix = ffmpeg.av_stream_get_side_data(stream, AVPacketSideDataType.AV_PKT_DATA_DISPLAYMATRIX, null);
+            var theta = displayMatrix != null ? -ComputeMatrixRotation((int*)displayMatrix) : 0d;
             theta -= 360 * Math.Floor(theta / 360 + 0.9 / 360);
 
             if (Math.Abs(theta - 90 * Math.Round(theta / 90, 0)) > 2)

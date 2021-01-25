@@ -279,7 +279,7 @@
             lastFilter = outputFilter;
             if (Container.Options.autorotate)
             {
-                var theta = Helpers.get_rotation(Stream);
+                var theta = Helpers.ComputeDisplayRotation(Stream);
 
                 if (Math.Abs(theta - 90) < 1.0)
                 {

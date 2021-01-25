@@ -159,9 +159,46 @@
                 t.wanted_stream_spec[AVMediaType.AVMEDIA_TYPE_VIDEO] = a),
             Option("sst", true, "select desired subtitle stream", "stream_specifier", (t, a) =>
                 t.wanted_stream_spec[AVMediaType.AVMEDIA_TYPE_SUBTITLE] = a),
+
+            Option("ss", true, "seek to a given position in seconds", "pos", (t, a) => t.start_time = ParseTime(a)),
+            Option("t", true, "play  \"duration\" seconds of audio/video", "duration", (t, a) => t.duration = ParseTime(a)),
+            Option("bytes", true, "seek by bytes 0=off 1=on -1=auto", "val", (t, a) => t.seek_by_bytes = int.TryParse(a, out var v) ? v : t.seek_by_bytes),
+
+
             Option("f", true, "force format", "fmt", (t, a) => t.file_iformat = ffmpeg.av_find_input_format(a)),
             Option("i", true, "read specified file", "input_file", (t, a) => t.input_filename = a)
         };
+
+        public static long ParseTime(string timeStr)
+        {
+            // HOURS:MM:SS.MILLISECONDS
+            timeStr = timeStr.Trim();
+            var segments = timeStr.Split(':', StringSplitOptions.TrimEntries).Reverse().ToArray();
+            var span = (Hours: 0d, Minutes: 0d, Seconds: 0d);
+            for (var i = 0; i < segments.Length; i++)
+            {
+                var value = double.TryParse(segments[i], out var parsedValue) ? parsedValue : 0;
+                switch (i)
+                {
+                    case 0:
+                        span.Seconds = value;
+                        break;
+                    case 1:
+                        span.Minutes = value;
+                        break;
+                    case 2:
+                        span.Hours = value;
+                        break;
+                    default:
+                        break;
+                }
+            }
+
+            var isNegative = span.Seconds < 0 || span.Hours < 0;
+            var secondsSum = Math.Abs(span.Hours * 60 * 60) + Math.Abs(span.Minutes * 60) + Math.Abs(span.Seconds);
+            var totalSeconds = secondsSum * (isNegative ? -1d : 1d);
+            return Convert.ToInt64(totalSeconds) * ffmpeg.AV_TIME_BASE;
+        }
 
         private static bool TryParseBool(string arg, out bool value)
         {
