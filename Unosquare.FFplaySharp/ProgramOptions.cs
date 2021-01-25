@@ -159,6 +159,8 @@
                 t.wanted_stream_spec[AVMediaType.AVMEDIA_TYPE_VIDEO] = a),
             Option("sst", true, "select desired subtitle stream", "stream_specifier", (t, a) =>
                 t.wanted_stream_spec[AVMediaType.AVMEDIA_TYPE_SUBTITLE] = a),
+            Option("f", true, "force format", "fmt", (t, a) => t.file_iformat = ffmpeg.av_find_input_format(a)),
+            Option("i", true, "read specified file", "input_file", (t, a) => t.input_filename = a)
         };
 
         private static bool TryParseBool(string arg, out bool value)
