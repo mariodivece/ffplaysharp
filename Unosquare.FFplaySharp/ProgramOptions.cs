@@ -8,145 +8,7 @@
 
     public unsafe class ProgramOptions
     {
-        /* options specified by the user */
-        public AVInputFormat* InputFormat { get; set; }
-        public string InputFileName { get; set; }
-        public string WindowTitle { get; set; }
-        public int WindowWidth { get; set; }
-        public int WindowHeight { get; set; }
-        public int? WindowLeft { get; set; }
-        public int? WindowTop { get; set; }
-        public bool IsFullScreen { get; set; }
-        public bool IsAudioDisabled { get; set; }
-        public bool IsVideoDisabled { get; set; }
-        public bool IsSubtitleDisabled { get; set; }
-        public Dictionary<AVMediaType, string> WantedStreams { get; private set; }
-        public ThreeState IsByteSeekingEnabled { get; set; } = ThreeState.Auto;
-        public double SeekInterval { get; set; } = 1;
-        public bool IsDisplayDisabled { get; set; }
-        public bool IsWindowBorderless { get; set; }
-        public bool IsWindowAlwaysOnTop { get; set; }
-        public int StartupVolume { get; set; } = 100;
-        public ThreeState ShowStatus { get; set; } = ThreeState.Auto;
-        public ClockSync ClockSyncType { get; set; } = ClockSync.Audio;
-        public long StartOffset { get; set; } = ffmpeg.AV_NOPTS_VALUE;
-        public long Duration { get; set; } = ffmpeg.AV_NOPTS_VALUE;
-        public ThreeState IsFastDecodingEnabled { get; set; } = ThreeState.Off;
-        public bool GeneratePts { get; set; } = false;
-        public int LowResolution { get; set; } = 0;
-        public ThreeState IsPtsReorderingEnabled { get; set; } = ThreeState.Auto;
-        public bool ExitOnFinish { get; set; }
-        public bool ExitOnKeyDown { get; set; }
-        public bool ExitOnMouseDown { get; set; }
-        public int LoopCount { get; set; } = 1;
-        public ThreeState IsFrameDropEnabled { get; set; } = ThreeState.Auto;
-        public ThreeState IsInfiniteBufferEnabled { get; set; } = ThreeState.Auto;
-        public ShowMode ShowMode { get; set; } = ShowMode.None;
-        public string AudioForcedCodecName { get; set; }
-        public string SubtitleForcedCodecName { get; set; }
-        public string VideoForcedCodecName { get; set; }
-        public List<string> VideoFilterGraphs { get; } = new(32);
-        public string AudioFilterGraphs { get; set; }
-        public bool IsAutorotateEnabled { get; set; } = true;
-        public bool IsStreamInfoEnabled { get; set; } = true;
-        public int FilteringThreadCount { get; set; } = 0;
-
-        /* From cmdutils.c */
-        public AVDictionary* ScalerOptions;
-        public AVDictionary* ResamplerOptions;
-        public AVDictionary* FormatOptions;
-        public AVDictionary* CodecOptions;
-
-        public ProgramOptions()
-        {
-            WantedStreams = new Dictionary<AVMediaType, string>
-            {
-                [AVMediaType.AVMEDIA_TYPE_AUDIO] = null,
-                [AVMediaType.AVMEDIA_TYPE_VIDEO] = null,
-                [AVMediaType.AVMEDIA_TYPE_SUBTITLE] = null
-            };
-        }
-
-        public void uninit_opts()
-        {
-            var r_swr_opts = ResamplerOptions;
-            var r_sws_dict = ScalerOptions;
-            var r_format_opts = FormatOptions;
-            var r_codec_opts = CodecOptions;
-
-            ffmpeg.av_dict_free(&r_swr_opts);
-            ffmpeg.av_dict_free(&r_sws_dict);
-            ffmpeg.av_dict_free(&r_format_opts);
-            ffmpeg.av_dict_free(&r_codec_opts);
-
-            ResamplerOptions = null;
-            ScalerOptions = null;
-            FormatOptions = null;
-            CodecOptions = null;
-        }
-
-        public static ProgramOptions FromCommandLineArguments(string[] args)
-        {
-            var options = new ProgramOptions();
-            var arguments = args.ToList();
-
-            for (var i = 0; i < arguments.Count; i++)
-            {
-                var argumentName = arguments[i];
-
-                // Handle first argument as being the input file name by default
-                if (i == 0)
-                {
-                    if (argumentName == "-")
-                    {
-                        options.InputFileName = "-";
-                        continue;
-                    }
-                    else if (!argumentName.StartsWith("-"))
-                    {
-                        options.InputFileName = argumentName;
-                        continue;
-                    }
-                }
-
-                if (argumentName.StartsWith("-"))
-                    argumentName = argumentName.TrimStart('-').ToLowerInvariant();
-                else
-                    continue;
-
-                var argumentValue = string.Empty;
-                var nextItem = i + 1 < arguments.Count ? arguments[i + 1] : null;
-
-                var definition = Definitions.Where(d => d.Name == argumentName || d.ArgumentName == argumentName).FirstOrDefault();
-
-                // handle catch-all option
-                if (definition == null)
-                {
-                    if (nextItem != null)
-                    {
-                        options.ApplyDefaultOption(argumentName, nextItem);
-                        i++;
-                    }
-
-                    continue;
-                }
-
-                if (definition.Flags.HasFlag(OptionFlags.HAS_ARG))
-                {
-                    argumentValue = nextItem;
-                    i++;
-                }
-
-                definition.Apply(options, argumentValue);
-            }
-
-            if (options.InputFileName == "-")
-                options.InputFileName = "pipe:";
-
-            return options;
-        }
-
-        private static IReadOnlyList<OptionDef<ProgramOptions>> Definitions = new List<OptionDef<ProgramOptions>>
+        private static readonly IReadOnlyList<OptionDef<ProgramOptions>> Definitions = new List<OptionDef<ProgramOptions>>
         {
             Option("x", true, "force displayed width", "width", (t, a) =>
                 t.WindowWidth = int.TryParse(a, out var v) ? v : t.WindowWidth),
@@ -252,6 +114,183 @@
                 t.InputFileName = a)
         };
 
+        public AVInputFormat* InputFormat { get; set; }
+
+        public string InputFileName { get; set; }
+        
+        public string WindowTitle { get; set; }
+        
+        public int WindowWidth { get; set; }
+        
+        public int WindowHeight { get; set; }
+        
+        public int? WindowLeft { get; set; }
+        
+        public int? WindowTop { get; set; }
+        
+        public bool IsFullScreen { get; set; }
+        
+        public bool IsAudioDisabled { get; set; }
+        
+        public bool IsVideoDisabled { get; set; }
+        
+        public bool IsSubtitleDisabled { get; set; }
+        
+        public Dictionary<AVMediaType, string> WantedStreams { get; private set; }
+        
+        public ThreeState IsByteSeekingEnabled { get; set; } = ThreeState.Auto;
+        
+        public double SeekInterval { get; set; } = 1;
+        
+        public bool IsDisplayDisabled { get; set; }
+        
+        public bool IsWindowBorderless { get; set; }
+        
+        public bool IsWindowAlwaysOnTop { get; set; }
+        
+        public int StartupVolume { get; set; } = 100;
+        
+        public ThreeState ShowStatus { get; set; } = ThreeState.Auto;
+        
+        public ClockSync ClockSyncType { get; set; } = ClockSync.Audio;
+        
+        public long StartOffset { get; set; } = ffmpeg.AV_NOPTS_VALUE;
+        
+        public long Duration { get; set; } = ffmpeg.AV_NOPTS_VALUE;
+        
+        public ThreeState IsFastDecodingEnabled { get; set; } = ThreeState.Off;
+        
+        public bool GeneratePts { get; set; } = false;
+        
+        public int LowResolution { get; set; } = 0;
+        
+        public ThreeState IsPtsReorderingEnabled { get; set; } = ThreeState.Auto;
+        
+        public bool ExitOnFinish { get; set; }
+        
+        public bool ExitOnKeyDown { get; set; }
+        
+        public bool ExitOnMouseDown { get; set; }
+        
+        public int LoopCount { get; set; } = 1;
+        
+        public ThreeState IsFrameDropEnabled { get; set; } = ThreeState.Auto;
+        
+        public ThreeState IsInfiniteBufferEnabled { get; set; } = ThreeState.Auto;
+        
+        public ShowMode ShowMode { get; set; } = ShowMode.None;
+        
+        public string AudioForcedCodecName { get; set; }
+        
+        public string SubtitleForcedCodecName { get; set; }
+        
+        public string VideoForcedCodecName { get; set; }
+        
+        public List<string> VideoFilterGraphs { get; } = new(32);
+        
+        public string AudioFilterGraphs { get; set; }
+        
+        public bool IsAutorotateEnabled { get; set; } = true;
+        
+        public bool IsStreamInfoEnabled { get; set; } = true;
+        
+        public int FilteringThreadCount { get; set; } = 0;
+
+        // Internal option dictionaries
+        public AVDictionary* ScalerOptions;
+        public AVDictionary* ResamplerOptions;
+        public AVDictionary* FormatOptions;
+        public AVDictionary* CodecOptions;
+
+        public ProgramOptions()
+        {
+            WantedStreams = new Dictionary<AVMediaType, string>
+            {
+                [AVMediaType.AVMEDIA_TYPE_AUDIO] = null,
+                [AVMediaType.AVMEDIA_TYPE_VIDEO] = null,
+                [AVMediaType.AVMEDIA_TYPE_SUBTITLE] = null
+            };
+        }
+
+        public void uninit_opts()
+        {
+            var r_swr_opts = ResamplerOptions;
+            var r_sws_dict = ScalerOptions;
+            var r_format_opts = FormatOptions;
+            var r_codec_opts = CodecOptions;
+
+            ffmpeg.av_dict_free(&r_swr_opts);
+            ffmpeg.av_dict_free(&r_sws_dict);
+            ffmpeg.av_dict_free(&r_format_opts);
+            ffmpeg.av_dict_free(&r_codec_opts);
+
+            ResamplerOptions = null;
+            ScalerOptions = null;
+            FormatOptions = null;
+            CodecOptions = null;
+        }
+
+        public static ProgramOptions FromCommandLineArguments(string[] args)
+        {
+            var options = new ProgramOptions();
+            var arguments = args.ToList();
+
+            for (var i = 0; i < arguments.Count; i++)
+            {
+                var argumentName = arguments[i];
+
+                // Handle first argument as being the input file name by default
+                if (i == 0)
+                {
+                    if (argumentName == "-")
+                    {
+                        options.InputFileName = "-";
+                        continue;
+                    }
+                    else if (!argumentName.StartsWith("-"))
+                    {
+                        options.InputFileName = argumentName;
+                        continue;
+                    }
+                }
+
+                if (argumentName.StartsWith("-"))
+                    argumentName = argumentName.TrimStart('-').ToLowerInvariant();
+                else
+                    continue;
+
+                var argumentValue = string.Empty;
+                var nextItem = i + 1 < arguments.Count ? arguments[i + 1] : null;
+
+                var definition = Definitions.Where(d => d.Name == argumentName || d.ArgumentName == argumentName).FirstOrDefault();
+
+                // handle catch-all option
+                if (definition == null)
+                {
+                    if (nextItem != null)
+                    {
+                        options.ApplyDefaultOption(argumentName, nextItem);
+                        i++;
+                    }
+
+                    continue;
+                }
+
+                if (definition.Flags.HasFlag(OptionFlags.HAS_ARG))
+                {
+                    argumentValue = nextItem;
+                    i++;
+                }
+
+                definition.Apply(options, argumentValue);
+            }
+
+            if (options.InputFileName == "-")
+                options.InputFileName = "pipe:";
+
+            return options;
+        }
+
         private static OptionDef<ProgramOptions> Option(string name, OptionFlags flags, string help, string argName, Action<ProgramOptions, string> apply)
             => new OptionDef<ProgramOptions>(name, flags, apply, help, argName);
 
@@ -267,35 +306,35 @@
         /// <summary>
         /// Port of opt_find. Finds an option in a given ffmpeg class.
         /// </summary>
-        /// <param name="obj"></param>
-        /// <param name="name"></param>
+        /// <param name="classObject"></param>
+        /// <param name="optionName"></param>
         /// <param name="unit"></param>
         /// <param name="opt_flags"></param>
-        /// <param name="search_flags"></param>
+        /// <param name="searchFlags"></param>
         /// <returns></returns>
-        private static AVOption* FindClassOption(void* obj, string name, string unit, int opt_flags, int search_flags)
+        private static AVOption* FindClassOption(void* classObject, string optionName, int searchFlags)
         {
-            var o = ffmpeg.av_opt_find(obj, name, unit, opt_flags, search_flags);
+            var o = ffmpeg.av_opt_find(classObject, optionName, null, 0, searchFlags);
             if (o != null && o->flags == 0)
                 return null;
 
             return o;
         }
 
-        private static int FlagMode(AVOption* o, string arg)
-        {
-            return (o->type == AVOptionType.AV_OPT_TYPE_FLAGS && (arg[0] == '-' || arg[0] == '+')) ? ffmpeg.AV_DICT_APPEND : 0;
-        }
+        private static int FlagMode(AVOption* option, string flagName) =>
+            option->type == AVOptionType.AV_OPT_TYPE_FLAGS && (flagName.StartsWith('-') || flagName.StartsWith('+'))
+                ? ffmpeg.AV_DICT_APPEND : 0;
 
         /// <summary>
         /// Port of opt_default
         /// </summary>
-        /// <param name="opt"></param>
-        /// <param name="arg"></param>
+        /// <param name="optionName"></param>
+        /// <param name="optionValue"></param>
         /// <returns></returns>
-        private unsafe int ApplyDefaultOption(string opt, string arg)
+        private unsafe int ApplyDefaultOption(string optionName, string optionValue)
         {
             const int SearchFlags = ffmpeg.AV_OPT_SEARCH_CHILDREN | ffmpeg.AV_OPT_SEARCH_FAKE_OBJ;
+
             AVOption* o;
             bool isConsumed = false;
             var codecClass = ffmpeg.avcodec_get_class();
@@ -303,70 +342,76 @@
             var scalerClass = ffmpeg.sws_get_class();
             var resamplerClass = ffmpeg.swr_get_class();
 
-            if (opt == "debug" || opt == "fdebug")
+            if (optionName == "debug" || optionName == "fdebug")
                 ffmpeg.av_log_set_level(ffmpeg.AV_LOG_DEBUG);
 
-            // Example: -codec:a:1 ac3
-            var opt_stripped = opt.Contains(':') ? opt.Substring(0, opt.IndexOf(':')) : new string(opt);
+            // Example: codec:a:1 ac3
+            var strippedOptionName = optionName.Contains(':')
+                ? optionName.Substring(0, optionName.IndexOf(':'))
+                : new string(optionName);
 
-            if ((o = FindClassOption(&codecClass, opt_stripped, null, 0, SearchFlags)) != null ||
-                ((opt[0] == 'v' || opt[0] == 'a' || opt[0] == 's') &&
-                 (o = FindClassOption(&codecClass, opt + 1, null, 0, ffmpeg.AV_OPT_SEARCH_FAKE_OBJ)) != null))
+            if ((o = FindClassOption(&codecClass, strippedOptionName, SearchFlags)) != null || (
+                (optionName[0] == 'v' || optionName[0] == 'a' || optionName[0] == 's') &&
+                (o = FindClassOption(&codecClass, optionName.Substring(1), ffmpeg.AV_OPT_SEARCH_FAKE_OBJ)) != null))
             {
                 var codecOptions = CodecOptions;
-                ffmpeg.av_dict_set(&codecOptions, opt, arg, FlagMode(o, arg));
+                ffmpeg.av_dict_set(&codecOptions, optionName, optionValue, FlagMode(o, optionValue));
                 CodecOptions = codecOptions;
                 isConsumed = true;
             }
 
-            if ((o = FindClassOption(&formatClass, opt, null, 0, SearchFlags)) != null)
+            if ((o = FindClassOption(&formatClass, optionName, SearchFlags)) != null)
             {
                 var formatOptions = FormatOptions;
-                ffmpeg.av_dict_set(&formatOptions, opt, arg, FlagMode(o, arg));
+                ffmpeg.av_dict_set(&formatOptions, optionName, optionValue, FlagMode(o, optionValue));
                 FormatOptions = formatOptions;
+
                 if (isConsumed)
-                    ffmpeg.av_log(null, ffmpeg.AV_LOG_VERBOSE, $"Routing option {opt} to both codec and muxer layer\n");
+                    ffmpeg.av_log(null, ffmpeg.AV_LOG_VERBOSE, $"Routing option {optionName} to both codec and muxer layer\n");
+
                 isConsumed = true;
             }
 
-            if (!isConsumed && (o = FindClassOption(&scalerClass, opt, null, 0, SearchFlags)) != null)
+            if (!isConsumed && (o = FindClassOption(&scalerClass, optionName, SearchFlags)) != null)
             {
-                var sws = ffmpeg.sws_alloc_context();
-                int ret = ffmpeg.av_opt_set(sws, opt, arg, 0);
-                ffmpeg.sws_freeContext(sws);
-                if (opt == "srcw" || opt == "srch" ||
-                    opt == "dstw" || opt == "dsth" ||
-                    opt == "src_format" || opt == "dst_format")
+                var dummyContext = ffmpeg.sws_alloc_context();
+                var setResult = ffmpeg.av_opt_set(dummyContext, optionName, optionValue, 0);
+                ffmpeg.sws_freeContext(dummyContext);
+
+                var invalidOptions = new[] { "srcw", "srch", "dstw", "dsth", "src_format", "dst_format" };
+
+                if (invalidOptions.Contains(optionName))
                 {
                     ffmpeg.av_log(null, ffmpeg.AV_LOG_ERROR, "Directly using swscale dimensions/format options is not supported, please use the -s or -pix_fmt options\n");
                     return ffmpeg.AVERROR(ffmpeg.EINVAL);
                 }
-                if (ret < 0)
+
+                if (setResult < 0)
                 {
-                    ffmpeg.av_log(null, ffmpeg.AV_LOG_ERROR, $"Error setting option {opt}.\n");
-                    return ret;
+                    ffmpeg.av_log(null, ffmpeg.AV_LOG_ERROR, $"Error setting option {optionName}.\n");
+                    return setResult;
                 }
 
                 var scalerOptions = ScalerOptions;
-                ffmpeg.av_dict_set(&scalerOptions, opt, arg, FlagMode(o, arg));
+                ffmpeg.av_dict_set(&scalerOptions, optionName, optionValue, FlagMode(o, optionValue));
                 ScalerOptions = scalerOptions;
 
                 isConsumed = true;
             }
 
-            if (!isConsumed && (o = FindClassOption(&resamplerClass, opt, null, 0, SearchFlags)) != null)
+            if (!isConsumed && (o = FindClassOption(&resamplerClass, optionName, SearchFlags)) != null)
             {
-                var swr = ffmpeg.swr_alloc();
-                int ret = ffmpeg.av_opt_set(swr, opt, arg, 0);
-                ffmpeg.swr_free(&swr);
-                if (ret < 0)
+                var dummyRescaler = ffmpeg.swr_alloc();
+                var setResult = ffmpeg.av_opt_set(dummyRescaler, optionName, optionValue, 0);
+                ffmpeg.swr_free(&dummyRescaler);
+                if (setResult < 0)
                 {
-                    ffmpeg.av_log(null, ffmpeg.AV_LOG_ERROR, $"Error setting option {opt}.\n");
-                    return ret;
+                    ffmpeg.av_log(null, ffmpeg.AV_LOG_ERROR, $"Error setting option {optionName}.\n");
+                    return setResult;
                 }
 
                 var resamplerOptions = ResamplerOptions;
-                ffmpeg.av_dict_set(&resamplerOptions, opt, arg, FlagMode(o, arg));
+                ffmpeg.av_dict_set(&resamplerOptions, optionName, optionValue, FlagMode(o, optionValue));
                 ResamplerOptions = resamplerOptions;
                 isConsumed = true;
             }

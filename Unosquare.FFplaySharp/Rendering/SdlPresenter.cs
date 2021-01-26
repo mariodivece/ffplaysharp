@@ -51,101 +51,31 @@
             return true;
         }
 
+        /// <summary>
+        /// Port of event_loop
+        /// </summary>
         public void Start()
         {
-            event_loop();
-        }
-
-        public void Stop()
-        {
-            do_exit();
-        }
-
-
-        private SDL.SDL_Event refresh_loop_wait_event()
-        {
-            var remainingTime = 0d;
-            SDL.SDL_PumpEvents();
-            var events = new SDL.SDL_Event[1];
-
-            while (SDL.SDL_PeepEvents(events, 1, SDL.SDL_eventaction.SDL_GETEVENT, SDL.SDL_EventType.SDL_FIRSTEVENT, SDL.SDL_EventType.SDL_LASTEVENT) == 0)
-            {
-                if (!IsCursorHidden && Clock.SystemTime - LastCursorShownTime > Constants.CURSOR_HIDE_DELAY)
-                {
-                    _ = SDL.SDL_ShowCursor(0);
-                    IsCursorHidden = true;
-                }
-
-                if (remainingTime > 0.0)
-                    ffmpeg.av_usleep(Convert.ToUInt32(remainingTime * ffmpeg.AV_TIME_BASE));
-
-                remainingTime = Constants.REFRESH_RATE;
-
-                if (Container.ShowMode != ShowMode.None && (!Container.IsPaused || Video.ForceRefresh))
-                    Video.Present(ref remainingTime);
-
-                SDL.SDL_PumpEvents();
-            }
-
-            return events[0];
-        }
-
-
-        private void do_exit()
-        {
-            if (Container != null)
-                Container.Close();
-
-            Video.Close();
-
-            Container.Options.uninit_opts();
-            Container.Options.VideoFilterGraphs.Clear();
-
-            ffmpeg.avformat_network_deinit();
-            if (Container.Options.ShowStatus != 0)
-                Console.WriteLine();
-
-            SDL.SDL_Quit();
-            Helpers.LogQuiet(string.Empty);
-            Environment.Exit(0);
-        }
-
-        private void toggle_audio_display()
-        {
-            int next = (int)Container.ShowMode;
-            do
-            {
-                next = (next + 1) % (int)ShowMode.Last;
-            } while (next != (int)Container.ShowMode && (next == (int)ShowMode.Video && Container.Video.Stream == null || next != (int)ShowMode.Video && Container.Audio.Stream == null));
-            if ((int)Container.ShowMode != next)
-            {
-                Video.ForceRefresh = true;
-                Container.ShowMode = (ShowMode)next;
-            }
-        }
-
-
-        /* handle an event sent by the GUI */
-        private void event_loop()
-        {
-            double incr, pos, x;
+            // handle an event sent by the GUI.
+            double incr, pos;
 
             while (true)
             {
-                // double x;
-                var sdlEvent = refresh_loop_wait_event();
+                var mouseX = 0d;
+                var sdlEvent = RetrieveNextEvent();
                 switch ((int)sdlEvent.type)
                 {
                     case (int)SDL.SDL_EventType.SDL_KEYDOWN:
                         if (Options.ExitOnKeyDown || sdlEvent.key.keysym.sym == SDL.SDL_Keycode.SDLK_ESCAPE || sdlEvent.key.keysym.sym == SDL.SDL_Keycode.SDLK_q)
                         {
-                            do_exit();
+                            Stop();
                             break;
                         }
 
                         // If we don't yet have a window, skip all key events, because read_thread might still be initializing...
                         if (Container.width <= 0)
                             continue;
+
                         switch (sdlEvent.key.keysym.sym)
                         {
                             case SDL.SDL_Keycode.SDLK_f:
@@ -194,7 +124,7 @@
                                 else
                                 {
                                     Container.Video.CurrentFilterIndex = 0;
-                                    toggle_audio_display();
+                                    ToggleAudioDisplay();
                                 }
                                 break;
                             case SDL.SDL_Keycode.SDLK_PAGEUP:
@@ -255,7 +185,7 @@
                     case (int)SDL.SDL_EventType.SDL_MOUSEBUTTONDOWN:
                         if (Container.Options.ExitOnMouseDown)
                         {
-                            do_exit();
+                            Stop();
                             break;
                         }
 
@@ -287,22 +217,22 @@
                         {
                             if (sdlEvent.button.button != SDL.SDL_BUTTON_RIGHT)
                                 break;
-                            x = sdlEvent.button.x;
+                            mouseX = sdlEvent.button.x;
                         }
                         else
                         {
                             if ((sdlEvent.motion.state & SDL.SDL_BUTTON_RMASK) == 0)
                                 break;
-                            x = sdlEvent.motion.x;
+                            mouseX = sdlEvent.motion.x;
                         }
                         if (Container.Options.IsByteSeekingEnabled != 0 || Container.InputContext->duration <= 0)
                         {
                             var fileSize = ffmpeg.avio_size(Container.InputContext->pb);
-                            Container.SeekByPosition(Convert.ToInt64(fileSize * x / Container.width));
+                            Container.SeekByPosition(Convert.ToInt64(fileSize * mouseX / Container.width));
                         }
                         else
                         {
-                            var seekPercent = (x / Container.width);
+                            var seekPercent = (mouseX / Container.width);
                             var durationSecs = Container.InputContext->duration / Clock.TimeBaseMicros;
                             var totalDuration = TimeSpan.FromSeconds(durationSecs);
                             var targetTime = TimeSpan.FromSeconds(seekPercent * durationSecs);
@@ -330,13 +260,85 @@
                         break;
                     case (int)SDL.SDL_EventType.SDL_QUIT:
                     case Constants.FF_QUIT_EVENT:
-                        do_exit();
+                        Stop();
                         break;
                     default:
                         break;
                 }
             }
         }
+
+        /// <summary>
+        /// Port of do_exit
+        /// </summary>
+        public void Stop()
+        {
+            if (Container != null)
+                Container.Close();
+
+            Video.Close();
+
+            Container.Options.uninit_opts();
+            Container.Options.VideoFilterGraphs.Clear();
+
+            ffmpeg.avformat_network_deinit();
+            if (Container.Options.ShowStatus != ThreeState.Off)
+                Console.WriteLine();
+
+            SDL.SDL_Quit();
+            Helpers.LogQuiet(string.Empty);
+            Environment.Exit(0);
+        }
+
+        /// <summary>
+        /// Port of refresh_loop_wait_event.
+        /// </summary>
+        /// <returns></returns>
+        private SDL.SDL_Event RetrieveNextEvent()
+        {
+            var remainingTime = 0d;
+            SDL.SDL_PumpEvents();
+            var events = new SDL.SDL_Event[1];
+
+            while (SDL.SDL_PeepEvents(events, 1, SDL.SDL_eventaction.SDL_GETEVENT, SDL.SDL_EventType.SDL_FIRSTEVENT, SDL.SDL_EventType.SDL_LASTEVENT) == 0)
+            {
+                if (!IsCursorHidden && Clock.SystemTime - LastCursorShownTime > Constants.CURSOR_HIDE_DELAY)
+                {
+                    _ = SDL.SDL_ShowCursor(0);
+                    IsCursorHidden = true;
+                }
+
+                if (remainingTime > 0.0)
+                    ffmpeg.av_usleep(Convert.ToUInt32(remainingTime * ffmpeg.AV_TIME_BASE));
+
+                remainingTime = Constants.REFRESH_RATE;
+
+                if (Container.ShowMode != ShowMode.None && (!Container.IsPaused || Video.ForceRefresh))
+                    Video.Present(ref remainingTime);
+
+                SDL.SDL_PumpEvents();
+            }
+
+            return events[0];
+        }
+
+        /// <summary>
+        /// Port of toggle_audio_display.
+        /// </summary>
+        private void ToggleAudioDisplay()
+        {
+            int next = (int)Container.ShowMode;
+            do
+            {
+                next = (next + 1) % (int)ShowMode.Last;
+            } while (next != (int)Container.ShowMode && (next == (int)ShowMode.Video && Container.Video.Stream == null || next != (int)ShowMode.Video && Container.Audio.Stream == null));
+            if ((int)Container.ShowMode != next)
+            {
+                Video.ForceRefresh = true;
+                Container.ShowMode = (ShowMode)next;
+            }
+        }
+
 
     }
 }
