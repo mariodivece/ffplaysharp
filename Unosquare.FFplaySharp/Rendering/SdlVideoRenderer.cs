@@ -561,7 +561,7 @@
                     for (var i = buf.Length; i < 90; i++)
                         buf.Append(' ');
 
-                    if (Container.Options.show_status == 1 && ffmpeg.av_log_get_level() < ffmpeg.AV_LOG_INFO)
+                    if (Container.Options.show_status == ThreeState.On && ffmpeg.av_log_get_level() < ffmpeg.AV_LOG_INFO)
                         Console.Write($"{buf}\r");
                     else
                         Helpers.LogInfo($"{buf}\r");

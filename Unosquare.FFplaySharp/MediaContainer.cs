@@ -684,7 +684,7 @@
                 ic->pb->eof_reached = 0; // FIXME hack, ffplay maybe should not use avio_feof() to test for the end
 
             if (o.seek_by_bytes.IsAuto())
-                o.seek_by_bytes = ic->iformat->flags.HasFlag(ffmpeg.AVFMT_TS_DISCONT) && Helpers.PtrToString(ic->iformat->name) != "ogg" ? 1 : 0;
+                o.seek_by_bytes = ic->iformat->flags.HasFlag(ffmpeg.AVFMT_TS_DISCONT) && Helpers.PtrToString(ic->iformat->name) != "ogg" ? ThreeState.On : ThreeState.Off;
 
             MaxPictureDuration = ic->iformat->flags.HasFlag(ffmpeg.AVFMT_TS_DISCONT) ? 10.0 : 3600.0;
 
@@ -785,7 +785,7 @@
             }
 
             if (o.infinite_buffer < 0 && IsRealtime)
-                o.infinite_buffer = 1;
+                o.infinite_buffer = ThreeState.On;
 
             while (true)
             {
@@ -861,7 +861,7 @@
                 }
 
                 /* if the queue are full, no need to read more */
-                if (o.infinite_buffer < 1 && (HasEnoughPacketSize || HasEnoughPacketCount))
+                if (o.infinite_buffer != ThreeState.On && (HasEnoughPacketSize || HasEnoughPacketCount))
                 {
                     /* wait 10 ms */
                     NeedsMorePacketsEvent.WaitOne(10);

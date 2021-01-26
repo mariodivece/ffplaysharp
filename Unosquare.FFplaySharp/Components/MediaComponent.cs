@@ -6,7 +6,7 @@
 
     public abstract unsafe class MediaComponent
     {
-        private readonly int ReorderPts;
+        private readonly ThreeState ReorderPts;
         private PacketHolder PendingPacket;
         private bool IsPacketPending;
         private Thread Worker;
@@ -110,7 +110,7 @@
                                 resultCode = ffmpeg.avcodec_receive_frame(CodecContext, decodedFrame);
                                 if (resultCode >= 0)
                                 {
-                                    if (ReorderPts == -1)
+                                    if (ReorderPts.IsAuto())
                                         decodedFrame->pts = decodedFrame->best_effort_timestamp;
                                     else if (ReorderPts == 0)
                                         decodedFrame->pts = decodedFrame->pkt_dts;

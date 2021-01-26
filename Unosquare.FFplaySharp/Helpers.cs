@@ -252,6 +252,10 @@
 
         public static bool IsAuto(this int x) => x < 0;
 
+        public static bool IsAuto(this ThreeState x) => ((int)x).IsAuto();
+
+        public static ThreeState ToThreeState(this int x) => x < 0 ? ThreeState.Auto : x > 0 ? ThreeState.On : ThreeState.Off;
+
         public static bool IsFalse(this int x) => x == 0;
 
         public static bool IsNaN(this double x) => double.IsNaN(x);

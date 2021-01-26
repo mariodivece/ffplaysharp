@@ -18,26 +18,26 @@
         public bool video_disable;
         public bool subtitle_disable;
         public Dictionary<AVMediaType, string> wanted_stream_spec;
-        public int seek_by_bytes = -1;
-        public float seek_interval = 1;
+        public ThreeState seek_by_bytes = ThreeState.Auto;
+        public double seek_interval = 1;
         public bool display_disable;
         public bool borderless;
         public bool alwaysontop;
         public int startup_volume = 100;
-        public int show_status = -1;
+        public ThreeState show_status = ThreeState.Auto;
         public ClockSync av_sync_type = ClockSync.Audio;
         public long start_time = ffmpeg.AV_NOPTS_VALUE;
         public long duration = ffmpeg.AV_NOPTS_VALUE;
-        public int fast = 0;
+        public ThreeState fast = ThreeState.Off;
         public bool genpts = false;
         public int lowres = 0;
-        public int decoder_reorder_pts = -1;
+        public ThreeState decoder_reorder_pts = ThreeState.Auto;
         public bool autoexit;
         public bool exit_on_keydown;
         public bool exit_on_mousedown;
         public int loop = 1;
-        public int framedrop = -1;
-        public int infinite_buffer = -1;
+        public ThreeState framedrop = ThreeState.Auto;
+        public ThreeState infinite_buffer = ThreeState.Auto;
         public ShowMode show_mode = ShowMode.None;
         public string AudioForcedCodecName;
         public string SubtitleForcedCodecName;
@@ -142,31 +142,83 @@
 
         public static IReadOnlyList<OptionDef<ProgramOptions>> Definitions = new List<OptionDef<ProgramOptions>>
         {
-            Option("x", true, "force displayed width", "width", (t, a) => t.screen_width = int.TryParse(a, out var v) ? v : t.screen_width),
-            Option("y", true, "force displayed height", "height", (t, a) => t.screen_height = int.TryParse(a, out var v) ? v : t.screen_height),
+            Option("x", true, "force displayed width", "width", (t, a) =>
+                t.screen_width = int.TryParse(a, out var v) ? v : t.screen_width),
+            Option("y", true, "force displayed height", "height", (t, a) =>
+                t.screen_height = int.TryParse(a, out var v) ? v : t.screen_height),
             Option("s", true, "set frame size (WxH or abbreviation)", "size", (t, a) =>
             {
                 ffmpeg.av_log(null, ffmpeg.AV_LOG_WARNING, "Option -s is deprecated, use -video_size.\n");
                 t.opt_default(null, "video_size", a);
             }),
-            Option("fs", false, "force full screen", (t, a) => t.is_full_screen = true),
-            Option("an", false, "disable audio", (t, a) => t.audio_disable = true),
-            Option("vn", false, "disable video", (t, a) => t.video_disable = true),
-            Option("sn", false, "disable subtitling", (t, a) => t.subtitle_disable = true),
+            Option("fs", false, "force full screen", (t, a) =>
+                t.is_full_screen = true),
+            Option("an", false, "disable audio", (t, a) =>
+                t.audio_disable = true),
+            Option("vn", false, "disable video", (t, a) =>
+                t.video_disable = true),
+            Option("sn", false, "disable subtitling", (t, a) =>
+                t.subtitle_disable = true),
             Option("ast", true, "select desired audio stream", "stream_specifier", (t, a) =>
                 t.wanted_stream_spec[AVMediaType.AVMEDIA_TYPE_AUDIO] = a),
             Option("vst", true, "select desired video stream", "stream_specifier", (t, a) =>
                 t.wanted_stream_spec[AVMediaType.AVMEDIA_TYPE_VIDEO] = a),
             Option("sst", true, "select desired subtitle stream", "stream_specifier", (t, a) =>
                 t.wanted_stream_spec[AVMediaType.AVMEDIA_TYPE_SUBTITLE] = a),
+            Option("ss", true, "seek to a given position in seconds", "pos", (t, a) =>
+                t.start_time = ParseTime(a)),
+            Option("t", true, "play  \"duration\" seconds of audio/video", "duration", (t, a) =>
+                t.duration = ParseTime(a)),
+            Option("bytes", true, "seek by bytes 0=off 1=on -1=auto", "val", (t, a) =>
+                t.seek_by_bytes = int.TryParse(a, out var v) ? v.ToThreeState() : t.seek_by_bytes),
+            Option("seek_interval", true, "set seek interval for left/right keys, in seconds", "seconds", (t, a) =>
+                t.seek_interval = int.TryParse(a, out var v) ? v : t.seek_interval),
+            Option("nodisp", false, "disable graphical display", (t, a) =>
+                t.display_disable = true),
+            Option("noborder", false, "borderless window", (t, a) =>
+                t.borderless = true),
+            Option("alwaysontop", false, "window always on top", (t, a) =>
+                t.alwaysontop = true),
+            Option("volume", true, "set startup volume 0=min 100=max", "volume", (t, a) =>
+                t.startup_volume = int.TryParse(a, out var v) ? v : t.startup_volume),
+            Option("f", true, "force format", "fmt", (t, a) =>
+                t.file_iformat = ffmpeg.av_find_input_format(a)),
+            Option("pix_fmt", true, "set pixel format", "format", (t, a) =>
+            {
+                ffmpeg.av_log(null, ffmpeg.AV_LOG_WARNING, "Option -pix_fmt is deprecated, use -pixel_format.\n");
+                t.opt_default(null, "pixel_format", a);
+            }),
+            Option("stats", false, "show status", (t, a) =>
+                t.show_status = ThreeState.On),
+            Option("fast", false, "non spec compliant optimizations", (t, a) =>
+                t.fast = ThreeState.On),
+            Option("genpts", false, "generate pts", (t, a) =>
+                t.genpts = true),
+            Option("drp", true, "let decoder reorder pts 0=off 1=on -1=auto", (t, a) =>
+                t.decoder_reorder_pts = int.TryParse(a, out var v) ? v.ToThreeState() : t.decoder_reorder_pts),
+            Option("lowres", true, "set low resolution scaler. Higher 2 means half the resolution. 4 means a quarter", (t, a) =>
+                t.lowres = int.TryParse(a, out var v) ? v : t.lowres),
+            Option("sync", true, "set audio-video sync. type (type=audio/video/ext)", "type", (t, a) =>
+                t.av_sync_type = a == "audio" ? ClockSync.Audio : a == "video" ? ClockSync.Video : ClockSync.External),
+            Option("autoexit", false, "exit at the end", (t, a) =>
+                t.autoexit = true),
+            Option("exitonkeydown", false, "exit on key down", (t, a) =>
+                t.exit_on_keydown = true),
+            Option("exitonmousedown", false, "exit on mouse down", (t, a) =>
+                t.exit_on_mousedown = true),
+            Option("loop", true, "set number of times the playback shall be looped", (t, a) =>
+                t.loop = int.TryParse(a, out var v) ? v : t.loop),
+            Option("framedrop", false, "drop frames when cpu is too slow", (t, a) =>
+                t.framedrop = ThreeState.On),
+            Option("infbuf", false, "don't limit the input buffer size (useful with realtime streams)", (t, a) =>
+                t.infinite_buffer = ThreeState.On),
+            /*
+            Option("window_title", true, "set window title", (t, a) =>
+                t.scr = int.TryParse(a, out var v) ? v : t.loop),
+            */
 
-            Option("ss", true, "seek to a given position in seconds", "pos", (t, a) => t.start_time = ParseTime(a)),
-            Option("t", true, "play  \"duration\" seconds of audio/video", "duration", (t, a) => t.duration = ParseTime(a)),
-            Option("bytes", true, "seek by bytes 0=off 1=on -1=auto", "val", (t, a) => t.seek_by_bytes = int.TryParse(a, out var v) ? v : t.seek_by_bytes),
-
-
-            Option("f", true, "force format", "fmt", (t, a) => t.file_iformat = ffmpeg.av_find_input_format(a)),
-            Option("i", true, "read specified file", "input_file", (t, a) => t.input_filename = a)
+            Option("i", true, "read specified file", "input_file", (t, a) =>
+                t.input_filename = a)
         };
 
         public static long ParseTime(string timeStr)
