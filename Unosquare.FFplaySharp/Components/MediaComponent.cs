@@ -16,7 +16,7 @@
             Container = container;
             Packets = new(this);
             Frames = CreateFrameQueue();
-            ReorderPts = Container.Options.decoder_reorder_pts;
+            ReorderPts = Container.Options.IsPtsReorderingEnabled;
         }
 
         public MediaContainer Container { get; }

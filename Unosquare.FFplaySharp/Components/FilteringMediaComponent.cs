@@ -89,7 +89,7 @@
         {
             ReleaseFilterGraph();
             FilterGraph = ffmpeg.avfilter_graph_alloc();
-            FilterGraph->nb_threads = Container.Options.filter_nbthreads;
+            FilterGraph->nb_threads = Container.Options.FilteringThreadCount;
         }
     }
 }

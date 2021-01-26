@@ -114,7 +114,7 @@
                     goto end;
             }
 
-            resultCode = MaterializeFilterGraph(Container.Options.afilters, inputFilterContext, outputFilterContext);
+            resultCode = MaterializeFilterGraph(Container.Options.AudioFilterGraphs, inputFilterContext, outputFilterContext);
 
             if (resultCode < 0) goto end;
 
@@ -390,7 +390,7 @@
         {
             var resamplerOptions = string.Empty;
             AVDictionaryEntry* entry = null;
-            while ((entry = ffmpeg.av_dict_get(Container.Options.swr_opts, "", entry, ffmpeg.AV_DICT_IGNORE_SUFFIX)) != null)
+            while ((entry = ffmpeg.av_dict_get(Container.Options.ResamplerOptions, "", entry, ffmpeg.AV_DICT_IGNORE_SUFFIX)) != null)
             {
                 var key = Helpers.PtrToString(entry->key);
                 var value = Helpers.PtrToString(entry->value);

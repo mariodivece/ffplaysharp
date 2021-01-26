@@ -29,7 +29,7 @@
 
             var parent = Presenter as SdlPresenter;
             var o = Presenter.Container.Options;
-            if (o.audio_disable)
+            if (o.IsAudioDisabled)
             {
                 parent.SdlInitFlags &= ~SDL.SDL_INIT_AUDIO;
             }
@@ -51,7 +51,7 @@
 
         private int Open(long wantedChannelLayout, int wantedChannelCount, int wantedSampleRate, out AudioParams audioDeviceSpec)
         {
-            Volume = Container.Options.startup_volume;
+            Volume = Container.Options.StartupVolume;
 
             audioDeviceSpec = new AudioParams();
             var next_nb_channels = new[] { 0, 0, 1, 6, 2, 6, 4, 6 };

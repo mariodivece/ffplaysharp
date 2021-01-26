@@ -68,17 +68,22 @@
 
             var parent = Presenter as SdlPresenter;
             var o = Presenter.Container.Options;
-            screen_width = o.screen_width;
-            screen_height = o.screen_height;
-            is_full_screen = o.is_full_screen;
 
-            if (o.display_disable) return;
+            // Initialize renderer values based on user options
+            screen_width = o.WindowWidth;
+            screen_height = o.WindowHeight;
+            is_full_screen = o.IsFullScreen;
+            WindowTitle = o.WindowTitle;
+            screen_left = o.WindowLeft.HasValue ? o.WindowLeft.Value : screen_left;
+            screen_top = o.WindowTop.HasValue ? o.WindowTop.Value : screen_top;
+
+            if (o.IsDisplayDisabled) return;
 
             parent.SdlInitFlags = (uint)SDL.SDL_WindowFlags.SDL_WINDOW_HIDDEN;
-            if (o.alwaysontop)
+            if (o.IsWindowAlwaysOnTop)
                 parent.SdlInitFlags |= (uint)SDL.SDL_WindowFlags.SDL_WINDOW_ALWAYS_ON_TOP;
 
-            if (o.borderless)
+            if (o.IsWindowBorderless)
                 parent.SdlInitFlags |= (uint)SDL.SDL_WindowFlags.SDL_WINDOW_BORDERLESS;
             else
                 parent.SdlInitFlags |= (uint)SDL.SDL_WindowFlags.SDL_WINDOW_RESIZABLE;
@@ -400,7 +405,7 @@
             var h = screen_height != 0 ? screen_height : default_height;
 
             if (string.IsNullOrWhiteSpace(WindowTitle))
-                WindowTitle = Container.Options.input_filename;
+                WindowTitle = Container.Options.InputFileName;
             SDL.SDL_SetWindowTitle(RenderingWindow, WindowTitle);
 
             SDL.SDL_SetWindowSize(RenderingWindow, w, h);
@@ -470,8 +475,8 @@
                         var nextPicture = Container.Video.Frames.PeekNext();
                         var duration = ComputePictureDuration(Container, currentPicture, nextPicture);
                         if (Container.IsInStepMode == false &&
-                            (Container.Options.framedrop > 0 ||
-                            (Container.Options.framedrop != 0 && Container.MasterSyncMode != ClockSync.Video)) &&
+                            (Container.Options.IsFrameDropEnabled > 0 ||
+                            (Container.Options.IsFrameDropEnabled != 0 && Container.MasterSyncMode != ClockSync.Video)) &&
                             currentTime > Container.PictureDisplayTimer + duration)
                         {
                             DroppedPictureCount++;
@@ -531,12 +536,12 @@
                 }
             display:
                 /* display picture */
-                if (!Container.Options.display_disable && ForceRefresh && Container.ShowMode == ShowMode.Video && Container.Video.Frames.IsReadIndexShown)
+                if (!Container.Options.IsDisplayDisabled && ForceRefresh && Container.ShowMode == ShowMode.Video && Container.Video.Frames.IsReadIndexShown)
                     video_display();
             }
 
             ForceRefresh = false;
-            if (Container.Options.show_status != 0)
+            if (Container.Options.ShowStatus != 0)
             {
                 var currentTime = Clock.SystemTime;
                 if (last_time_status == 0 || (currentTime - last_time_status) >= 0.03)
@@ -561,7 +566,7 @@
                     for (var i = buf.Length; i < 90; i++)
                         buf.Append(' ');
 
-                    if (Container.Options.show_status == ThreeState.On && ffmpeg.av_log_get_level() < ffmpeg.AV_LOG_INFO)
+                    if (Container.Options.ShowStatus == ThreeState.On && ffmpeg.av_log_get_level() < ffmpeg.AV_LOG_INFO)
                         Console.Write($"{buf}\r");
                     else
                         Helpers.LogInfo($"{buf}\r");

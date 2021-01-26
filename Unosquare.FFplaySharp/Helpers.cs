@@ -4,6 +4,7 @@
     using System;
     using System.Collections.Generic;
     using System.IO;
+    using System.Linq;
     using System.Runtime.InteropServices;
     using Unosquare.FFplaySharp.Primitives;
 
@@ -49,6 +50,45 @@
         public static bool HasFlag(this int flagsVariable, int flagValue) => (flagsVariable & flagValue) != 0;
 
         public static int AV_CEIL_RSHIFT(int a, int b) => ((a) + (1 << (b)) - 1) >> (b);
+
+
+        /// <summary>
+        /// Parses a hexagesimal or simple second and decimal string representing time
+        /// and returns total microseconds.
+        /// </summary>
+        /// <param name="timeStr"></param>
+        /// <returns></returns>
+        public static long ParseTime(this string timeStr)
+        {
+            // HOURS:MM:SS.MILLISECONDS
+            timeStr = timeStr.Trim();
+            var segments = timeStr.Split(':', StringSplitOptions.TrimEntries).Reverse().ToArray();
+            var span = (Hours: 0d, Minutes: 0d, Seconds: 0d);
+            for (var i = 0; i < segments.Length; i++)
+            {
+                var value = double.TryParse(segments[i], out var parsedValue) ? parsedValue : 0;
+                switch (i)
+                {
+                    case 0:
+                        span.Seconds = value;
+                        break;
+                    case 1:
+                        span.Minutes = value;
+                        break;
+                    case 2:
+                        span.Hours = value;
+                        break;
+                    default:
+                        break;
+                }
+            }
+
+            var isNegative = span.Seconds < 0 || span.Hours < 0;
+            var secondsSum = Math.Abs(span.Hours * 60 * 60) + Math.Abs(span.Minutes * 60) + Math.Abs(span.Seconds);
+            var totalSeconds = secondsSum * (isNegative ? -1d : 1d);
+            return Convert.ToInt64(totalSeconds) * ffmpeg.AV_TIME_BASE;
+        }
+
 
         public static int Clamp(this int number, int min, int max) => number < min ? min : number > max ? max : number;
 

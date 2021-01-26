@@ -28,7 +28,7 @@
             //signal(SIGINT, sigterm_handler); /* Interrupt (ANSI).    */
             //signal(SIGTERM, sigterm_handler); /* Termination (ANSI).  */
 
-            if (string.IsNullOrWhiteSpace(o.input_filename))
+            if (string.IsNullOrWhiteSpace(o.InputFileName))
                 Environment.Exit(1);
 
             var presenter = new SdlPresenter();

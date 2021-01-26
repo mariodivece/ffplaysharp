@@ -66,8 +66,8 @@
 
                     ReallocateFilterGraph();
 
-                    var filterLiteral = Container.Options.vfilters_list.Count > 0
-                        ? Container.Options.vfilters_list[CurrentFilterIndex]
+                    var filterLiteral = Container.Options.VideoFilterGraphs.Count > 0
+                        ? Container.Options.VideoFilterGraphs[CurrentFilterIndex]
                         : null;
 
                     if ((resultCode = ConfigureFilters(filterLiteral, decodedFrame)) < 0)
@@ -161,7 +161,7 @@
 
             frame->sample_aspect_ratio = ffmpeg.av_guess_sample_aspect_ratio(Container.InputContext, Stream, frame);
 
-            if (Container.Options.framedrop > 0 || (Container.Options.framedrop != 0 && Container.MasterSyncMode != ClockSync.Video))
+            if (Container.Options.IsFrameDropEnabled > 0 || (Container.Options.IsFrameDropEnabled != 0 && Container.MasterSyncMode != ClockSync.Video))
             {
                 if (frame->pts.IsValidPts())
                 {
@@ -228,7 +228,7 @@
             var softwareScalerFlags = string.Empty;
             AVDictionaryEntry* optionEntry = null;
 
-            while ((optionEntry = ffmpeg.av_dict_get(Container.Options.sws_dict, "", optionEntry, ffmpeg.AV_DICT_IGNORE_SUFFIX)) != null)
+            while ((optionEntry = ffmpeg.av_dict_get(Container.Options.ScalerOptions, "", optionEntry, ffmpeg.AV_DICT_IGNORE_SUFFIX)) != null)
             {
                 var key = Helpers.PtrToString(optionEntry->key);
                 var value = Helpers.PtrToString(optionEntry->value);
@@ -277,7 +277,7 @@
                 goto fail;
 
             lastFilter = outputFilter;
-            if (Container.Options.autorotate)
+            if (Container.Options.IsAutorotateEnabled)
             {
                 var theta = Helpers.ComputeDisplayRotation(Stream);
 

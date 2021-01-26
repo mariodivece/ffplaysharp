@@ -192,11 +192,11 @@
             container.Video.LastStreamIndex = container.Video.StreamIndex = -1;
             container.Audio.LastStreamIndex = container.Audio.StreamIndex = -1;
             container.Subtitle.LastStreamIndex = container.Subtitle.StreamIndex = -1;
-            container.FileName = o.input_filename;
+            container.FileName = o.InputFileName;
             if (string.IsNullOrWhiteSpace(container.FileName))
                 goto fail;
 
-            container.InputFormat = o.file_iformat;
+            container.InputFormat = o.InputFormat;
             container.ytop = 0;
             container.xleft = 0;
 
@@ -204,17 +204,17 @@
             container.AudioClock = new Clock(container.Audio.Packets);
             container.ExternalClock = new Clock(container.ExternalClock);
 
-            if (container.Options.startup_volume < 0)
-                Helpers.LogWarning($"-volume={container.Options.startup_volume} < 0, setting to 0\n");
+            if (container.Options.StartupVolume < 0)
+                Helpers.LogWarning($"-volume={container.Options.StartupVolume} < 0, setting to 0\n");
 
-            if (container.Options.startup_volume > 100)
-                Helpers.LogWarning($"-volume={container.Options.startup_volume} > 100, setting to 100\n");
+            if (container.Options.StartupVolume > 100)
+                Helpers.LogWarning($"-volume={container.Options.StartupVolume} > 100, setting to 100\n");
 
-            container.Options.startup_volume = container.Options.startup_volume.Clamp(0, 100);
-            container.Options.startup_volume = (SDL.SDL_MIX_MAXVOLUME * container.Options.startup_volume / 100).Clamp(0, SDL.SDL_MIX_MAXVOLUME);
+            container.Options.StartupVolume = container.Options.StartupVolume.Clamp(0, 100);
+            container.Options.StartupVolume = (SDL.SDL_MIX_MAXVOLUME * container.Options.StartupVolume / 100).Clamp(0, SDL.SDL_MIX_MAXVOLUME);
             
             container.IsMuted = false;
-            container.ClockSyncMode = container.Options.av_sync_type;
+            container.ClockSyncMode = container.Options.ClockSyncType;
             container.StartReadThread();
             return container;
 
@@ -413,7 +413,7 @@
         {
             var ic = InputContext;
             var ret = 0;
-            var lowResFactor = Options.lowres;
+            var lowResFactor = Options.LowResolution;
 
             if (streamIndex < 0 || streamIndex >= ic->nb_streams)
                 return -1;
@@ -460,13 +460,13 @@
 
             codecContext->lowres = lowResFactor;
 
-            if (Options.fast != 0)
+            if (Options.IsFastDecodingEnabled != 0)
                 codecContext->flags2 |= ffmpeg.AV_CODEC_FLAG2_FAST;
 
             const string ThreadsOptionKey = "threads";
             const string ThreadsOptionValue = "auto";
 
-            var codecOptions = Helpers.filter_codec_opts(Options.codec_opts, codecContext->codec_id, ic, ic->streams[streamIndex], codec);
+            var codecOptions = Helpers.filter_codec_opts(Options.CodecOptions, codecContext->codec_id, ic, ic->streams[streamIndex], codec);
             if (ffmpeg.av_dict_get(codecOptions, ThreadsOptionKey, null, 0) == null)
                 ffmpeg.av_dict_set(&codecOptions, ThreadsOptionKey, ThreadsOptionValue, 0);
 
@@ -617,18 +617,18 @@
             var ic = ffmpeg.avformat_alloc_context();
             ic->interrupt_callback.callback = InputInterruptCallback;
 
-            if (ffmpeg.av_dict_get(o.format_opts, "scan_all_pmts", null, ffmpeg.AV_DICT_MATCH_CASE) == null)
+            if (ffmpeg.av_dict_get(o.FormatOptions, "scan_all_pmts", null, ffmpeg.AV_DICT_MATCH_CASE) == null)
             {
-                var formatOptions = o.format_opts;
+                var formatOptions = o.FormatOptions;
                 ffmpeg.av_dict_set(&formatOptions, "scan_all_pmts", "1", ffmpeg.AV_DICT_DONT_OVERWRITE);
-                o.format_opts = formatOptions;
+                o.FormatOptions = formatOptions;
                 scan_all_pmts_set = true;
             }
 
             {
-                var formatOptions = o.format_opts;
+                var formatOptions = o.FormatOptions;
                 err = ffmpeg.avformat_open_input(&ic, FileName, InputFormat, &formatOptions);
-                o.format_opts = formatOptions;
+                o.FormatOptions = formatOptions;
             }
 
             if (err < 0)
@@ -640,13 +640,13 @@
 
             if (scan_all_pmts_set)
             {
-                var formatOptions = o.format_opts;
+                var formatOptions = o.FormatOptions;
                 ffmpeg.av_dict_set(&formatOptions, "scan_all_pmts", null, ffmpeg.AV_DICT_MATCH_CASE);
-                o.format_opts = formatOptions;
+                o.FormatOptions = formatOptions;
             }
 
             AVDictionaryEntry* formatOption;
-            if ((formatOption = ffmpeg.av_dict_get(o.format_opts, string.Empty, null, ffmpeg.AV_DICT_IGNORE_SUFFIX)) != null)
+            if ((formatOption = ffmpeg.av_dict_get(o.FormatOptions, string.Empty, null, ffmpeg.AV_DICT_IGNORE_SUFFIX)) != null)
             {
                 Helpers.LogError($"Option {Helpers.PtrToString(formatOption->key)} not found.\n");
                 ret = ffmpeg.AVERROR_OPTION_NOT_FOUND;
@@ -655,14 +655,14 @@
 
             InputContext = ic;
 
-            if (o.genpts)
+            if (o.GeneratePts)
                 ic->flags |= ffmpeg.AVFMT_FLAG_GENPTS;
 
             ffmpeg.av_format_inject_global_side_data(ic);
 
-            if (o.find_stream_info)
+            if (o.IsStreamInfoEnabled)
             {
-                var opts = Helpers.setup_find_stream_info_opts(ic, o.codec_opts);
+                var opts = Helpers.setup_find_stream_info_opts(ic, o.CodecOptions);
                 int orig_nb_streams = (int)ic->nb_streams;
 
                 err = ffmpeg.avformat_find_stream_info(ic, opts);
@@ -683,18 +683,18 @@
             if (ic->pb != null)
                 ic->pb->eof_reached = 0; // FIXME hack, ffplay maybe should not use avio_feof() to test for the end
 
-            if (o.seek_by_bytes.IsAuto())
-                o.seek_by_bytes = ic->iformat->flags.HasFlag(ffmpeg.AVFMT_TS_DISCONT) && Helpers.PtrToString(ic->iformat->name) != "ogg" ? ThreeState.On : ThreeState.Off;
+            if (o.IsByteSeekingEnabled.IsAuto())
+                o.IsByteSeekingEnabled = ic->iformat->flags.HasFlag(ffmpeg.AVFMT_TS_DISCONT) && Helpers.PtrToString(ic->iformat->name) != "ogg" ? ThreeState.On : ThreeState.Off;
 
             MaxPictureDuration = ic->iformat->flags.HasFlag(ffmpeg.AVFMT_TS_DISCONT) ? 10.0 : 3600.0;
 
             if (string.IsNullOrWhiteSpace(Renderer.Video.WindowTitle) && (formatOption = ffmpeg.av_dict_get(ic->metadata, "title", null, 0)) != null)
-                Renderer.Video.WindowTitle = $"{Helpers.PtrToString(formatOption->value)} - {o.input_filename}";
+                Renderer.Video.WindowTitle = $"{Helpers.PtrToString(formatOption->value)} - {o.InputFileName}";
 
             /* if seeking requested, we execute it */
-            if (o.start_time.IsValidPts())
+            if (o.StartOffset.IsValidPts())
             {
-                var startTimestamp = o.start_time;
+                var startTimestamp = o.StartOffset;
                 /* add the stream start time */
                 if (ic->start_time.IsValidPts())
                     startTimestamp += ic->start_time;
@@ -706,7 +706,7 @@
 
             IsRealtime = IsInputFormatRealtime(ic);
 
-            if (o.show_status != 0)
+            if (o.ShowStatus != 0)
                 ffmpeg.av_dump_format(ic, 0, FileName, 0);
 
             for (i = 0; i < ic->nb_streams; i++)
@@ -714,12 +714,12 @@
                 var st = ic->streams[i];
                 var type = st->codecpar->codec_type;
                 st->discard = AVDiscard.AVDISCARD_ALL;
-                if (type >= 0 && o.wanted_stream_spec[type] != null && streamIndexes[type] == -1)
-                    if (ffmpeg.avformat_match_stream_specifier(ic, st, o.wanted_stream_spec[type]) > 0)
+                if (type >= 0 && o.WantedStreams[type] != null && streamIndexes[type] == -1)
+                    if (ffmpeg.avformat_match_stream_specifier(ic, st, o.WantedStreams[type]) > 0)
                         streamIndexes[type] = i;
             }
 
-            foreach (var kvp in o.wanted_stream_spec)
+            foreach (var kvp in o.WantedStreams)
             {
                 if (kvp.Value != null && streamIndexes[(AVMediaType)i] == -1)
                 {
@@ -728,17 +728,17 @@
                 }
             }
 
-            if (!o.video_disable)
+            if (!o.IsVideoDisabled)
                 streamIndexes[AVMediaType.AVMEDIA_TYPE_VIDEO] =
                     ffmpeg.av_find_best_stream(ic, AVMediaType.AVMEDIA_TYPE_VIDEO,
                                         streamIndexes[AVMediaType.AVMEDIA_TYPE_VIDEO], -1, null, 0);
-            if (!o.audio_disable)
+            if (!o.IsAudioDisabled)
                 streamIndexes[AVMediaType.AVMEDIA_TYPE_AUDIO] =
                     ffmpeg.av_find_best_stream(ic, AVMediaType.AVMEDIA_TYPE_AUDIO,
                                         streamIndexes[AVMediaType.AVMEDIA_TYPE_AUDIO],
                                         streamIndexes[AVMediaType.AVMEDIA_TYPE_VIDEO],
                                         null, 0);
-            if (!o.video_disable && !o.subtitle_disable)
+            if (!o.IsVideoDisabled && !o.IsSubtitleDisabled)
                 streamIndexes[AVMediaType.AVMEDIA_TYPE_SUBTITLE] =
                     ffmpeg.av_find_best_stream(ic, AVMediaType.AVMEDIA_TYPE_SUBTITLE,
                                         streamIndexes[AVMediaType.AVMEDIA_TYPE_SUBTITLE],
@@ -747,7 +747,7 @@
                                          streamIndexes[AVMediaType.AVMEDIA_TYPE_VIDEO]),
                                         null, 0);
 
-            ShowMode = o.show_mode;
+            ShowMode = o.ShowMode;
             if (streamIndexes[AVMediaType.AVMEDIA_TYPE_VIDEO] >= 0)
             {
                 AVStream* st = ic->streams[streamIndexes[AVMediaType.AVMEDIA_TYPE_VIDEO]];
@@ -784,8 +784,8 @@
                 goto fail;
             }
 
-            if (o.infinite_buffer < 0 && IsRealtime)
-                o.infinite_buffer = ThreeState.On;
+            if (o.IsInfiniteBufferEnabled < 0 && IsRealtime)
+                o.IsInfiniteBufferEnabled = ThreeState.On;
 
             while (true)
             {
@@ -803,7 +803,7 @@
 
                 if (IsPaused &&
                         (Helpers.PtrToString(ic->iformat->name) == "rtsp" ||
-                         (ic->pb != null && o.input_filename.StartsWith("mmsh:"))))
+                         (ic->pb != null && o.InputFileName.StartsWith("mmsh:"))))
                 {
                     /* wait 10 ms to avoid trying to get another packet */
                     /* XXX: horrible */
@@ -861,7 +861,7 @@
                 }
 
                 /* if the queue are full, no need to read more */
-                if (o.infinite_buffer != ThreeState.On && (HasEnoughPacketSize || HasEnoughPacketCount))
+                if (o.IsInfiniteBufferEnabled != ThreeState.On && (HasEnoughPacketSize || HasEnoughPacketCount))
                 {
                     /* wait 10 ms */
                     NeedsMorePacketsEvent.WaitOne(10);
@@ -870,11 +870,11 @@
 
                 if (!IsPaused && Audio.HasFinishedDecoding && Video.HasFinishedDecoding)
                 {
-                    if (o.loop != 1 && (o.loop == 0 || (--o.loop) > 0))
+                    if (o.LoopCount != 1 && (o.LoopCount == 0 || (--o.LoopCount) > 0))
                     {
-                        SeekByTimestamp(o.start_time.IsValidPts() ? o.start_time : 0);
+                        SeekByTimestamp(o.StartOffset.IsValidPts() ? o.StartOffset : 0);
                     }
-                    else if (o.autoexit)
+                    else if (o.ExitOnFinish)
                     {
                         ret = ffmpeg.AVERROR_EOF;
                         goto fail;
@@ -899,7 +899,7 @@
 
                     if (ic->pb != null && ic->pb->error != 0)
                     {
-                        if (o.autoexit)
+                        if (o.ExitOnFinish)
                             goto fail;
                         else
                             break;
@@ -919,11 +919,11 @@
                     ? readPacket->pts
                     : readPacket->dts;
 
-                var isPacketInPlayRange = !o.duration.IsValidPts() ||
+                var isPacketInPlayRange = !o.Duration.IsValidPts() ||
                         (packetPts - (streamStartPts.IsValidPts() ? streamStartPts : 0)) *
                         ic->streams[readPacket->stream_index]->time_base.ToFactor() -
-                        (o.start_time.IsValidPts() ? o.start_time : 0) / Clock.TimeBaseMicros
-                        <= (o.duration / Clock.TimeBaseMicros);
+                        (o.StartOffset.IsValidPts() ? o.StartOffset : 0) / Clock.TimeBaseMicros
+                        <= (o.Duration / Clock.TimeBaseMicros);
 
                 var component = FindComponentByStreamIndex(readPacket->stream_index);
                 if (component != null && !component.IsPictureAttachmentStream && isPacketInPlayRange)

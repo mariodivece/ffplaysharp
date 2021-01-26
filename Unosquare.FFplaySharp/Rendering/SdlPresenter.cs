@@ -8,6 +8,8 @@
     public unsafe class SdlPresenter : IPresenter
     {
         private double LastMouseLeftClick;
+        private double LastCursorShownTime;
+        private bool IsCursorHidden = false;
 
         public IVideoRenderer Video { get; private set; }
 
@@ -26,14 +28,14 @@
             Video = new SdlVideoRenderer();
 
             var o = Container.Options;
-            if (o.display_disable)
-                o.video_disable = true;
+            if (o.IsDisplayDisabled)
+                o.IsVideoDisabled = true;
 
             SdlInitFlags = SDL.SDL_INIT_VIDEO | SDL.SDL_INIT_AUDIO | SDL.SDL_INIT_TIMER;
 
             Audio.Initialize(this);
 
-            if (o.display_disable)
+            if (o.IsDisplayDisabled)
                 SdlInitFlags &= ~SDL.SDL_INIT_VIDEO;
 
             if (SDL.SDL_Init(SdlInitFlags) != 0)
@@ -68,10 +70,10 @@
 
             while (SDL.SDL_PeepEvents(events, 1, SDL.SDL_eventaction.SDL_GETEVENT, SDL.SDL_EventType.SDL_FIRSTEVENT, SDL.SDL_EventType.SDL_LASTEVENT) == 0)
             {
-                if (!Options.cursor_hidden && Clock.SystemTime - Options.cursor_last_shown > Constants.CURSOR_HIDE_DELAY)
+                if (!IsCursorHidden && Clock.SystemTime - LastCursorShownTime > Constants.CURSOR_HIDE_DELAY)
                 {
                     _ = SDL.SDL_ShowCursor(0);
-                    Options.cursor_hidden = true;
+                    IsCursorHidden = true;
                 }
 
                 if (remainingTime > 0.0)
@@ -97,10 +99,10 @@
             Video.Close();
 
             Container.Options.uninit_opts();
-            Container.Options.vfilters_list.Clear();
+            Container.Options.VideoFilterGraphs.Clear();
 
             ffmpeg.avformat_network_deinit();
-            if (Container.Options.show_status != 0)
+            if (Container.Options.ShowStatus != 0)
                 Console.WriteLine();
 
             SDL.SDL_Quit();
@@ -135,7 +137,7 @@
                 switch ((int)sdlEvent.type)
                 {
                     case (int)SDL.SDL_EventType.SDL_KEYDOWN:
-                        if (Options.exit_on_keydown || sdlEvent.key.keysym.sym == SDL.SDL_Keycode.SDLK_ESCAPE || sdlEvent.key.keysym.sym == SDL.SDL_Keycode.SDLK_q)
+                        if (Options.ExitOnKeyDown || sdlEvent.key.keysym.sym == SDL.SDL_Keycode.SDLK_ESCAPE || sdlEvent.key.keysym.sym == SDL.SDL_Keycode.SDLK_q)
                         {
                             do_exit();
                             break;
@@ -184,9 +186,9 @@
                                 break;
                             case SDL.SDL_Keycode.SDLK_w:
 
-                                if (Container.ShowMode == ShowMode.Video && Container.Video.CurrentFilterIndex < Container.Options.nb_vfilters - 1)
+                                if (Container.ShowMode == ShowMode.Video && Container.Video.CurrentFilterIndex < Container.Options.VideoFilterGraphs.Count - 1)
                                 {
-                                    if (++Container.Video.CurrentFilterIndex >= Container.Options.nb_vfilters)
+                                    if (++Container.Video.CurrentFilterIndex >= Container.Options.VideoFilterGraphs.Count)
                                         Container.Video.CurrentFilterIndex = 0;
                                 }
                                 else
@@ -212,10 +214,10 @@
                                 Container.ChapterSeek(-1);
                                 break;
                             case SDL.SDL_Keycode.SDLK_LEFT:
-                                incr = Container.Options.seek_interval != 0 ? -Container.Options.seek_interval : -10.0;
+                                incr = Container.Options.SeekInterval != 0 ? -Container.Options.SeekInterval : -10.0;
                                 goto do_seek;
                             case SDL.SDL_Keycode.SDLK_RIGHT:
-                                incr = Container.Options.seek_interval != 0 ? Container.Options.seek_interval : 10.0;
+                                incr = Container.Options.SeekInterval != 0 ? Container.Options.SeekInterval : 10.0;
                                 goto do_seek;
                             case SDL.SDL_Keycode.SDLK_UP:
                                 incr = 60.0;
@@ -223,7 +225,7 @@
                             case SDL.SDL_Keycode.SDLK_DOWN:
                                 incr = -60.0;
                             do_seek:
-                                if (Container.Options.seek_by_bytes != 0)
+                                if (Container.Options.IsByteSeekingEnabled != 0)
                                 {
                                     pos = Container.StreamBytePosition;
 
@@ -251,7 +253,7 @@
                         }
                         break;
                     case (int)SDL.SDL_EventType.SDL_MOUSEBUTTONDOWN:
-                        if (Container.Options.exit_on_mousedown)
+                        if (Container.Options.ExitOnMouseDown)
                         {
                             do_exit();
                             break;
@@ -274,12 +276,13 @@
 
                         break;
                     case (int)SDL.SDL_EventType.SDL_MOUSEMOTION:
-                        if (Container.Options.cursor_hidden)
+                        if (IsCursorHidden)
                         {
                             SDL.SDL_ShowCursor(1);
-                            Container.Options.cursor_hidden = false;
+                            IsCursorHidden = false;
                         }
-                        Container.Options.cursor_last_shown = Clock.SystemTime;
+
+                        LastCursorShownTime = Clock.SystemTime;
                         if (sdlEvent.type == SDL.SDL_EventType.SDL_MOUSEBUTTONDOWN)
                         {
                             if (sdlEvent.button.button != SDL.SDL_BUTTON_RIGHT)
@@ -292,7 +295,7 @@
                                 break;
                             x = sdlEvent.motion.x;
                         }
-                        if (Container.Options.seek_by_bytes != 0 || Container.InputContext->duration <= 0)
+                        if (Container.Options.IsByteSeekingEnabled != 0 || Container.InputContext->duration <= 0)
                         {
                             var fileSize = ffmpeg.avio_size(Container.InputContext->pb);
                             Container.SeekByPosition(Convert.ToInt64(fileSize * x / Container.width));
