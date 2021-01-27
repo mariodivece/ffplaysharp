@@ -2,8 +2,19 @@
 {
     public enum ClockSync
     {
-        Audio, /* default choice */
+        /// <summary>
+        /// The default choice.
+        /// </summary>
+        Audio,
+
+        /// <summary>
+        /// Synchronize to video clock.
+        /// </summary>
         Video,
-        External, /* synchronize to an external clock */
+
+        /// <summary>
+        /// Synchronize to external clock.
+        /// </summary>
+        External,
     }
 }

@@ -308,8 +308,6 @@
         /// </summary>
         /// <param name="classObject"></param>
         /// <param name="optionName"></param>
-        /// <param name="unit"></param>
-        /// <param name="opt_flags"></param>
         /// <param name="searchFlags"></param>
         /// <returns></returns>
         private static AVOption* FindClassOption(void* classObject, string optionName, int searchFlags)
@@ -321,7 +319,7 @@
             return o;
         }
 
-        private static int FlagMode(AVOption* option, string flagName) =>
+        private static int FlagSetMode(AVOption* option, string flagName) =>
             option->type == AVOptionType.AV_OPT_TYPE_FLAGS && (flagName.StartsWith('-') || flagName.StartsWith('+'))
                 ? ffmpeg.AV_DICT_APPEND : 0;
 
@@ -355,7 +353,7 @@
                 (o = FindClassOption(&codecClass, optionName.Substring(1), ffmpeg.AV_OPT_SEARCH_FAKE_OBJ)) != null))
             {
                 var codecOptions = CodecOptions;
-                ffmpeg.av_dict_set(&codecOptions, optionName, optionValue, FlagMode(o, optionValue));
+                ffmpeg.av_dict_set(&codecOptions, optionName, optionValue, FlagSetMode(o, optionValue));
                 CodecOptions = codecOptions;
                 isConsumed = true;
             }
@@ -363,7 +361,7 @@
             if ((o = FindClassOption(&formatClass, optionName, SearchFlags)) != null)
             {
                 var formatOptions = FormatOptions;
-                ffmpeg.av_dict_set(&formatOptions, optionName, optionValue, FlagMode(o, optionValue));
+                ffmpeg.av_dict_set(&formatOptions, optionName, optionValue, FlagSetMode(o, optionValue));
                 FormatOptions = formatOptions;
 
                 if (isConsumed)
@@ -374,9 +372,9 @@
 
             if (!isConsumed && (o = FindClassOption(&scalerClass, optionName, SearchFlags)) != null)
             {
-                var dummyContext = ffmpeg.sws_alloc_context();
-                var setResult = ffmpeg.av_opt_set(dummyContext, optionName, optionValue, 0);
-                ffmpeg.sws_freeContext(dummyContext);
+                var dummyScaler = ffmpeg.sws_alloc_context();
+                var setResult = ffmpeg.av_opt_set(dummyScaler, optionName, optionValue, 0);
+                ffmpeg.sws_freeContext(dummyScaler);
 
                 var invalidOptions = new[] { "srcw", "srch", "dstw", "dsth", "src_format", "dst_format" };
 
@@ -393,7 +391,7 @@
                 }
 
                 var scalerOptions = ScalerOptions;
-                ffmpeg.av_dict_set(&scalerOptions, optionName, optionValue, FlagMode(o, optionValue));
+                ffmpeg.av_dict_set(&scalerOptions, optionName, optionValue, FlagSetMode(o, optionValue));
                 ScalerOptions = scalerOptions;
 
                 isConsumed = true;
@@ -411,7 +409,7 @@
                 }
 
                 var resamplerOptions = ResamplerOptions;
-                ffmpeg.av_dict_set(&resamplerOptions, optionName, optionValue, FlagMode(o, optionValue));
+                ffmpeg.av_dict_set(&resamplerOptions, optionName, optionValue, FlagSetMode(o, optionValue));
                 ResamplerOptions = resamplerOptions;
                 isConsumed = true;
             }

@@ -170,18 +170,18 @@
         public void video_image_display(MediaContainer container)
         {
             FrameHolder subtitleFrame = null;
-            var videoFrame = container.Video.Frames.PeekLast();
+            var videoFrame = container.Video.Frames.PeekPrevious();
 
             if (container.HasSubtitles && container.Subtitle.Frames.PendingCount > 0)
             {
-                subtitleFrame = container.Subtitle.Frames.Peek();
+                subtitleFrame = container.Subtitle.Frames.PeekCurrent();
 
                 if (videoFrame.Time >= subtitleFrame.StartDisplayTime)
                 {
                     if (!subtitleFrame.IsUploaded)
                     {
                         if (subtitleFrame.Width <= 0 || subtitleFrame.Height <= 0)
-                            subtitleFrame.UpdateDimensions(videoFrame.Width, videoFrame.Height);
+                            subtitleFrame.UpdateSubtitleArea(videoFrame.Width, videoFrame.Height);
 
                         if (realloc_texture(ref sub_texture, SDL.SDL_PIXELFORMAT_ARGB8888, subtitleFrame.Width, subtitleFrame.Height, SDL.SDL_BlendMode.SDL_BLENDMODE_BLEND, true) < 0)
                             return;
@@ -237,7 +237,6 @@
                 if (upload_texture(ref vid_texture, videoFrame, ref container.Video.ConvertContext) < 0)
                     return;
                 videoFrame.MarkUploaded();
-                videoFrame.FlipVertical = videoFrame.FramePtr->linesize[0] < 0;
             }
 
             var point = new SDL.SDL_Point();
@@ -245,17 +244,20 @@
 
             if (subtitleFrame != null)
             {
-                int i;
-                double xratio = (double)rect.w / (double)subtitleFrame.Width;
-                double yratio = (double)rect.h / (double)subtitleFrame.Height;
+                var i = 0;
+                var xratio = (double)rect.w / subtitleFrame.Width;
+                var yratio = (double)rect.h / subtitleFrame.Height;
+
                 for (i = 0; i < subtitleFrame.SubtitlePtr->num_rects; i++)
                 {
+                    var sourceRect = subtitleFrame.SubtitlePtr->rects[i];
+
                     SDL.SDL_Rect sub_rect = new()
                     {
-                        x = subtitleFrame.SubtitlePtr->rects[i]->x,
-                        y = subtitleFrame.SubtitlePtr->rects[i]->y,
-                        w = subtitleFrame.SubtitlePtr->rects[i]->w,
-                        h = subtitleFrame.SubtitlePtr->rects[i]->h,
+                        x = sourceRect->x,
+                        y = sourceRect->y,
+                        w = sourceRect->w,
+                        h = sourceRect->h,
                     };
 
                     SDL.SDL_Rect target = new()
@@ -437,12 +439,12 @@
                 else
                 {
                     /* dequeue the picture */
-                    var previousPicture = Container.Video.Frames.PeekLast();
-                    var currentPicture = Container.Video.Frames.Peek();
+                    var previousPicture = Container.Video.Frames.PeekPrevious();
+                    var currentPicture = Container.Video.Frames.PeekCurrent();
 
                     if (currentPicture.Serial != Container.Video.Packets.Serial)
                     {
-                        Container.Video.Frames.Next();
+                        Container.Video.Frames.Dequeue();
                         goto retry;
                     }
 
@@ -480,7 +482,7 @@
                             currentTime > Container.PictureDisplayTimer + duration)
                         {
                             DroppedPictureCount++;
-                            Container.Video.Frames.Next();
+                            Container.Video.Frames.Dequeue();
                             goto retry;
                         }
                     }
@@ -489,7 +491,7 @@
                     {
                         while (Container.Subtitle.Frames.PendingCount > 0)
                         {
-                            var sp = Container.Subtitle.Frames.Peek();
+                            var sp = Container.Subtitle.Frames.PeekCurrent();
                             var sp2 = Container.Subtitle.Frames.PendingCount > 1
                                 ? Container.Subtitle.Frames.PeekNext()
                                 : null;
@@ -519,7 +521,7 @@
                                         }
                                     }
                                 }
-                                Container.Subtitle.Frames.Next();
+                                Container.Subtitle.Frames.Dequeue();
                             }
                             else
                             {
@@ -528,7 +530,7 @@
                         }
                     }
 
-                    Container.Video.Frames.Next();
+                    Container.Video.Frames.Dequeue();
                     ForceRefresh = true;
 
                     if (Container.IsInStepMode && !Container.IsPaused)
@@ -546,9 +548,9 @@
                 var currentTime = Clock.SystemTime;
                 if (last_time_status == 0 || (currentTime - last_time_status) >= 0.03)
                 {
-                    var audioQueueSize = Container.HasAudio ? Container.Audio.Packets.Size : 0;
-                    var videoQueueSize = Container.HasVideo ? Container.Video.Packets.Size : 0;
-                    var subtitleQueueSize = Container.HasSubtitles ? Container.Subtitle.Packets.Size : 0;
+                    var audioQueueSize = Container.HasAudio ? Container.Audio.Packets.ByteSize : 0;
+                    var videoQueueSize = Container.HasVideo ? Container.Video.Packets.ByteSize : 0;
+                    var subtitleQueueSize = Container.HasSubtitles ? Container.Subtitle.Packets.ByteSize : 0;
 
                     var audioVideoDelay = Container.ComponentSyncDelay;
 

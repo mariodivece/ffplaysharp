@@ -78,10 +78,10 @@
                 var bytePosition = -1L;
 
                 if (bytePosition < 0 && HasVideo)
-                    bytePosition = Video.Frames.LastPosition;
+                    bytePosition = Video.Frames.ShownBytePosition;
 
                 if (bytePosition < 0 && HasAudio)
-                    bytePosition = Audio.Frames.LastPosition;
+                    bytePosition = Audio.Frames.ShownBytePosition;
 
                 if (bytePosition < 0)
                     bytePosition = ffmpeg.avio_tell(InputContext->pb);
@@ -181,7 +181,7 @@
 
         private bool HasEnoughPacketCount => Components.All(c => c.HasEnoughPackets);
 
-        private bool HasEnoughPacketSize => Components.Sum(c => c.Packets.Size) > Constants.MAX_QUEUE_SIZE;
+        private bool HasEnoughPacketSize => Components.Sum(c => c.Packets.ByteSize) > Constants.MAX_QUEUE_SIZE;
 
         public static MediaContainer Open(ProgramOptions options, IPresenter renderer)
         {
@@ -832,7 +832,7 @@
                                 continue;
 
                             c.Packets.Clear();
-                            c.Packets.PutFlush();
+                            c.Packets.EnqueueFlush();
                         }
 
                         ExternalClock.Set(SeekFlags.HasFlag(ffmpeg.AVSEEK_FLAG_BYTE)
@@ -853,8 +853,8 @@
                     if (Video.IsPictureAttachmentStream)
                     {
                         var copy = ffmpeg.av_packet_clone(&Video.Stream->attached_pic);
-                        Video.Packets.Put(copy);
-                        Video.Packets.PutNull();
+                        Video.Packets.Enqueue(copy);
+                        Video.Packets.EnqueueNull();
                     }
 
                     IsPictureAttachmentPending = false;
@@ -891,7 +891,7 @@
                         foreach (var c in Components)
                         {
                             if (c.StreamIndex >= 0)
-                                c.Packets.PutNull();
+                                c.Packets.EnqueueNull();
                         }
 
                         IsAtEndOfStream = true;
@@ -927,7 +927,7 @@
 
                 var component = FindComponentByStreamIndex(readPacket->stream_index);
                 if (component != null && !component.IsPictureAttachmentStream && isPacketInPlayRange)
-                    component.Packets.Put(readPacket);
+                    component.Packets.Enqueue(readPacket);
                 else
                     ffmpeg.av_packet_unref(readPacket);
             }

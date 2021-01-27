@@ -62,7 +62,7 @@
 
         public FrameHolder PeekWriteable()
         {
-            /* wait until we have space to put a new frame */
+            // wait until we have space to put a new frame
             while (Count >= Capacity && !Packets.IsClosed)
                 ChangedEvent.WaitOne();
 
@@ -75,10 +75,22 @@
             }
         }
 
-        public FrameHolder Peek()
+        public FrameHolder PeekCurrent()
         {
             lock (SyncLock)
                 return Frames[(ReadIndex + (IsReadIndexShown ? 1 : 0)) % Capacity];
+        }
+
+        public FrameHolder PeekWaitCurrent()
+        {
+            // wait until we have a readable a new frame
+            while (Count - (IsReadIndexShown ? 1 : 0) <= 0 && !Packets.IsClosed)
+                ChangedEvent.WaitOne();
+
+            if (Packets.IsClosed)
+                return null;
+
+            return PeekCurrent();
         }
 
         public FrameHolder PeekNext()
@@ -87,26 +99,13 @@
                 return Frames[(ReadIndex + (IsReadIndexShown ? 1 : 0) + 1) % Capacity];
         }
 
-        public FrameHolder PeekLast()
+        public FrameHolder PeekPrevious()
         {
             lock (SyncLock)
                 return Frames[ReadIndex];
         }
 
-        public FrameHolder PeekReadable()
-        {
-            /* wait until we have a readable a new frame */
-            while (Count - (IsReadIndexShown ? 1 : 0) <= 0 && !Packets.IsClosed)
-                ChangedEvent.WaitOne();
-
-            if (Packets.IsClosed)
-                return null;
-
-            lock (SyncLock)
-                return Frames[(ReadIndex + (IsReadIndexShown ? 1 : 0)) % Capacity];
-        }
-
-        public void Push()
+        public void Enqueue()
         {
             lock (SyncLock)
             {
@@ -119,7 +118,7 @@
             ChangedEvent.Set();
         }
 
-        public void Next()
+        public void Dequeue()
         {
             lock (SyncLock)
             {
@@ -139,7 +138,9 @@
             ChangedEvent.Set();
         }
 
-        /* return the number of undisplayed frames in the queue */
+        /// <summary>
+        /// Gets the number the number of undisplayed frames in the queue.
+        /// </summary>
         public int PendingCount
         {
             get
@@ -149,8 +150,10 @@
             }
         }
 
-        /* return last shown position */
-        public long LastPosition
+        /// <summary>
+        /// Gets the last shown byte position within the stream.
+        /// </summary>
+        public long ShownBytePosition
         {
             get
             {

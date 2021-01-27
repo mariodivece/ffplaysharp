@@ -68,10 +68,10 @@
             return result;
         }
 
-        public static unsafe string GetChannelLayoutString(long channelLayout)
+        public static string GetChannelLayoutString(long channelLayout)
             => GetChannelLayoutString(Convert.ToUInt64(channelLayout));
 
-        public static unsafe string GetChannelLayoutString(ulong channelLayout)
+        public static string GetChannelLayoutString(ulong channelLayout)
         {
             const int StringBufferLength = 1024;
             var filterLayoutString = stackalloc byte[StringBufferLength];

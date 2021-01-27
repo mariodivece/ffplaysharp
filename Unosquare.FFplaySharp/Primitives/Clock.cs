@@ -7,15 +7,23 @@
     {
         private readonly ISerialProvider SerialProvider;
 
-        // clock base minus time at which we updated the clock
+        /// <summary>
+        /// clock base minus time at which we updated the clock
+        /// </summary>
         private double Offset;
 
+        /// <summary>
+        /// The ffmpeg time base. Returns the number of microsends per second (i.e. 1,000,000 microseconds = 1 second).
+        /// </summary>
         public static double TimeBaseMicros { get; } = Convert.ToDouble(ffmpeg.AV_TIME_BASE);
 
+        /// <summary>
+        /// Gets the current relative system time in seconds.
+        /// </summary>
         public static double SystemTime => Convert.ToDouble(ffmpeg.av_gettime_relative()) / TimeBaseMicros;
 
         /// <summary>
-        /// Clock base.
+        /// Gets the clock base.
         /// </summary>
         public double BaseTime { get; private set; }
         
@@ -59,6 +67,9 @@
             SpeedRatio = speed;
         }
 
+        /// <summary>
+        /// Gets the current clock value in seconds.
+        /// </summary>
         public double Value
         {
             get
@@ -79,6 +90,10 @@
             }
         }
 
+        /// <summary>
+        /// Synchronizes the clock to a slave reference clock.
+        /// </summary>
+        /// <param name="slaveClock">The clock to synchronize to.</param>
         public void SyncToSlave(Clock slaveClock)
         {
             var currentTime = Value;

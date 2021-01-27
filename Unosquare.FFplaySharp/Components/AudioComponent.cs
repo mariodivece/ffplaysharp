@@ -152,10 +152,10 @@
                     ffmpeg.av_usleep(1000);
                 }
 
-                if ((af = Frames.PeekReadable()) == null)
+                if ((af = Frames.PeekWaitCurrent()) == null)
                     return -1;
 
-                Frames.Next();
+                Frames.Dequeue();
 
             } while (af.Serial != Packets.Serial);
 
@@ -497,7 +497,7 @@
                     var frameTime = decodedFrame->pts.IsValidPts() ? decodedFrame->pts * OutputFilterTimeBase.ToFactor() : double.NaN;
                     var frameDuration = ffmpeg.av_make_q(decodedFrame->nb_samples, decodedFrame->sample_rate).ToFactor();
                     queuedFrame.Update(decodedFrame, PacketSerial, frameTime, frameDuration);
-                    Frames.Push();
+                    Frames.Enqueue();
 
                     if (Packets.Serial != PacketSerial)
                         break;

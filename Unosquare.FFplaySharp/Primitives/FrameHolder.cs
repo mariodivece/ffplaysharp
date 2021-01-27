@@ -2,13 +2,12 @@
 {
     using FFmpeg.AutoGen;
     using System;
-    using System.Collections.Generic;
-    using System.Linq;
-    using System.Text;
-    using System.Threading.Tasks;
 
     public unsafe sealed class FrameHolder : IDisposable
     {
+        /// <summary>
+        /// Initializes a new instance of the <see cref="FrameHolder" /> class.
+        /// </summary>
         public FrameHolder()
         {
             FramePtr = ffmpeg.av_frame_alloc();
@@ -32,18 +31,35 @@
         public double Duration { get; private set; }
 
         /// <summary>
-        /// Gets the byte position of the frame in the input file
+        /// Gets the byte position of the frame in the input file.
+        /// This is extracted from the packet position.
         /// </summary>
         public long Position => FramePtr->pkt_pos;
 
+        /// <summary>
+        /// Gets the video frame width in pixels.
+        /// </summary>
         public int Width { get; private set; }
+
+        /// <summary>
+        /// Gets the video frame height in pixels.
+        /// </summary>
         public int Height { get; private set; }
 
+        /// <summary>
+        /// Gets the sample aspect ratio of the video frame.
+        /// </summary>
         public AVRational Sar => FramePtr->sample_aspect_ratio;
 
+        /// <summary>
+        /// Gets whether the frame has been marked as uploaded to the renderer.
+        /// </summary>
         public bool IsUploaded { get; private set; }
 
-        public bool FlipVertical;
+        /// <summary>
+        /// Gets whether the video frame is flipped vertically.
+        /// </summary>
+        public bool FlipVertical => FramePtr != null && FramePtr->linesize[0] < 0;
 
         public AVSampleFormat SampleFormat => (AVSampleFormat)FramePtr->format;
 
@@ -96,7 +112,7 @@
             Height = codec->height;
         }
 
-        public void UpdateDimensions(int width, int height)
+        public void UpdateSubtitleArea(int width, int height)
         {
             Width = width;
             Height = height;

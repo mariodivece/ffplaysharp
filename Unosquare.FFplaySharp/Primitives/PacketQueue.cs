@@ -14,7 +14,7 @@
         private PacketHolder Last;
 
         private int m_Count;
-        private int m_Size;
+        private int m_ByteSize;
         private long m_DurationUnits;
         private int m_Serial;
 
@@ -31,18 +31,24 @@
             private set { lock (SyncLock) m_Count = value; }
         }
 
-        public int Size
+        public int ByteSize
         {
-            get { lock (SyncLock) return m_Size; }
-            private set { lock (SyncLock) m_Size = value; }
+            get { lock (SyncLock) return m_ByteSize; }
+            private set { lock (SyncLock) m_ByteSize = value; }
         }
 
+        /// <summary>
+        /// Gets the packet queue duration in stream time base units.
+        /// </summary>
         public long DurationUnits
         {
             get { lock (SyncLock) return m_DurationUnits; }
             private set { lock (SyncLock) m_DurationUnits = value; }
         }
 
+        /// <summary>
+        /// The serial is the group (serial) the packet queue belongs to.
+        /// </summary>
         public int Serial
         {
             get { lock (SyncLock) return m_Serial; }
@@ -54,18 +60,16 @@
             get { lock (SyncLock) return m_IsClosed; }
         }
 
-        public bool PutFlush() => Put(PacketHolder.CreateFlushPacket());
-
-        public bool PutNull()
+        public void Open()
         {
-            var packet = ffmpeg.av_packet_alloc();
-            packet->data = null;
-            packet->size = 0;
-            packet->stream_index = Component.StreamIndex;
-            return Put(packet);
+            lock (SyncLock)
+            {
+                m_IsClosed = false;
+                EnqueueFlush();
+            }
         }
 
-        public bool Put(AVPacket* packetPtr)
+        public bool Enqueue(AVPacket* packetPtr)
         {
             var result = true;
             lock (SyncLock)
@@ -90,7 +94,7 @@
 
                     Last = newPacket;
                     Count++;
-                    Size += newPacket.PacketPtr->size + PacketHolder.PacketStructureSize;
+                    ByteSize += newPacket.PacketPtr->size + PacketHolder.PacketStructureSize;
                     DurationUnits += newPacket.PacketPtr->duration;
                     IsAvailableEvent.Set();
                 }
@@ -102,51 +106,18 @@
             return result;
         }
 
-        public void Clear()
-        {
-            lock (SyncLock)
-            {
-                for (var currentPacket = First; currentPacket != null; currentPacket = currentPacket?.Next)
-                    currentPacket?.Dispose();
+        public bool EnqueueFlush() => Enqueue(PacketHolder.CreateFlushPacket());
 
-                Last = null;
-                First = null;
-                Count = 0;
-                Size = 0;
-                DurationUnits = 0;
-            }
+        public bool EnqueueNull()
+        {
+            var packet = ffmpeg.av_packet_alloc();
+            packet->data = null;
+            packet->size = 0;
+            packet->stream_index = Component.StreamIndex;
+            return Enqueue(packet);
         }
 
-        public void Dispose()
-        {
-            lock (SyncLock)
-            {
-                Close();
-                Clear();
-            }
-
-            IsAvailableEvent.Set();
-            IsAvailableEvent.Dispose();
-        }
-
-        public void Close()
-        {
-            lock (SyncLock)
-                m_IsClosed = true;
-
-            IsAvailableEvent.Set();
-        }
-
-        public void Open()
-        {
-            lock (SyncLock)
-            {
-                m_IsClosed = false;
-                PutFlush();
-            }
-        }
-
-        public PacketHolder Get(bool block)
+        public PacketHolder Dequeue(bool blockWait)
         {
             while (true)
             {
@@ -163,17 +134,52 @@
                             Last = null;
 
                         Count--;
-                        Size -= item.PacketPtr->size + PacketHolder.PacketStructureSize;
+                        ByteSize -= item.PacketPtr->size + PacketHolder.PacketStructureSize;
                         DurationUnits -= item.PacketPtr->duration;
                         return item;
                     }
                 }
 
-                if (!block)
+                if (!blockWait)
                     return null;
                 else
                     IsAvailableEvent.WaitOne();
             }
+        }
+
+        public void Clear()
+        {
+            lock (SyncLock)
+            {
+                for (var currentPacket = First; currentPacket != null; currentPacket = currentPacket?.Next)
+                    currentPacket?.Dispose();
+
+                Last = null;
+                First = null;
+                Count = 0;
+                ByteSize = 0;
+                DurationUnits = 0;
+            }
+        }
+
+        public void Close()
+        {
+            lock (SyncLock)
+                m_IsClosed = true;
+
+            IsAvailableEvent.Set();
+        }
+
+        public void Dispose()
+        {
+            lock (SyncLock)
+            {
+                Close();
+                Clear();
+            }
+
+            IsAvailableEvent.Set();
+            IsAvailableEvent.Dispose();
         }
     }
 }

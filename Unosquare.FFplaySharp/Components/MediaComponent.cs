@@ -149,7 +149,7 @@
                     }
                     else
                     {
-                        currentPacket = Packets.Get(true);
+                        currentPacket = Packets.Dequeue(true);
                         if (Packets.IsClosed)
                             return -1;
 

@@ -54,9 +54,9 @@
             Volume = Container.Options.StartupVolume;
 
             audioDeviceSpec = new AudioParams();
-            var next_nb_channels = new[] { 0, 0, 1, 6, 2, 6, 4, 6 };
-            var next_sample_rates = new[] { 0, 44100, 48000, 96000, 192000 };
-            int next_sample_rate_idx = next_sample_rates.Length - 1;
+            var probeChannelCount = new[] { 0, 0, 1, 6, 2, 6, 4, 6 };
+            var probeSampleRates = new[] { 0, 44100, 48000, 96000, 192000 };
+            var probeSampleRateIndex = probeSampleRates.Length - 1;
 
             const string ChannelCountEnvVariable = "SDL_AUDIO_CHANNELS";
             var env = Environment.GetEnvironmentVariable(ChannelCountEnvVariable);
@@ -86,8 +86,8 @@
                 return -1;
             }
 
-            while (next_sample_rate_idx != 0 && next_sample_rates[next_sample_rate_idx] >= wantedSpec.freq)
-                next_sample_rate_idx--;
+            while (probeSampleRateIndex != 0 && probeSampleRates[probeSampleRateIndex] >= wantedSpec.freq)
+                probeSampleRateIndex--;
 
             wantedSpec.format = SDL.AUDIO_S16SYS;
             wantedSpec.silence = 0;
@@ -100,10 +100,10 @@
             while ((AudioDeviceId = SDL.SDL_OpenAudioDevice(null, 0, ref wantedSpec, out deviceSpec, AudioDeviceFlags)) == 0)
             {
                 Helpers.LogWarning($"SDL_OpenAudio ({wantedSpec.channels} channels, {wantedSpec.freq} Hz): {SDL.SDL_GetError()}\n");
-                wantedSpec.channels = (byte)next_nb_channels[Math.Min(7, (int)wantedSpec.channels)];
+                wantedSpec.channels = (byte)probeChannelCount[Math.Min(7, (int)wantedSpec.channels)];
                 if (wantedSpec.channels == 0)
                 {
-                    wantedSpec.freq = next_sample_rates[next_sample_rate_idx--];
+                    wantedSpec.freq = probeSampleRates[probeSampleRateIndex--];
                     wantedSpec.channels = (byte)wantedChannelCount;
                     if (wantedSpec.freq == 0)
                     {

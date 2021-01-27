@@ -136,15 +136,15 @@
 
         private int EnqueueFrame(AVFrame* sourceFrame, double frameTime, double duration, int serial)
         {
-            var frameSlot = Frames.PeekWriteable();
+            var queuedFrame = Frames.PeekWriteable();
 
-            if (frameSlot == null)
+            if (queuedFrame == null)
                 return -1;
 
-            frameSlot.Update(sourceFrame, serial, frameTime, duration);
-            Frames.Push();
+            queuedFrame.Update(sourceFrame, serial, frameTime, duration);
+            Frames.Enqueue();
 
-            Container.Renderer.Video.set_default_window_size(frameSlot.Width, frameSlot.Height, frameSlot.Sar);
+            Container.Renderer.Video.set_default_window_size(queuedFrame.Width, queuedFrame.Height, queuedFrame.Sar);
             return 0;
         }
 
