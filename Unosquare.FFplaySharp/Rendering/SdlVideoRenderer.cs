@@ -9,6 +9,30 @@
 
     public unsafe class SdlVideoRenderer : IVideoRenderer
     {
+        private static readonly Dictionary<AVPixelFormat, uint> SdlTextureMap = new()
+        {
+            { AVPixelFormat.AV_PIX_FMT_RGB8, SDL.SDL_PIXELFORMAT_RGB332 },
+            { Constants.AV_PIX_FMT_RGB444, SDL.SDL_PIXELFORMAT_RGB444 },
+            { Constants.AV_PIX_FMT_RGB555, SDL.SDL_PIXELFORMAT_RGB555 },
+            { Constants.AV_PIX_FMT_BGR555, SDL.SDL_PIXELFORMAT_BGR555 },
+            { Constants.AV_PIX_FMT_RGB565, SDL.SDL_PIXELFORMAT_RGB565 },
+            { Constants.AV_PIX_FMT_BGR565, SDL.SDL_PIXELFORMAT_BGR565 },
+            { AVPixelFormat.AV_PIX_FMT_RGB24, SDL.SDL_PIXELFORMAT_RGB24 },
+            { AVPixelFormat.AV_PIX_FMT_BGR24, SDL.SDL_PIXELFORMAT_BGR24 },
+            { Constants.AV_PIX_FMT_0RGB32, SDL.SDL_PIXELFORMAT_RGB888 },
+            { Constants.AV_PIX_FMT_0BGR32, SDL.SDL_PIXELFORMAT_BGR888 },
+            { Constants.AV_PIX_FMT_0BGRLE, SDL.SDL_PIXELFORMAT_RGBX8888 },
+            { Constants.AV_PIX_FMT_0RGBLE, SDL.SDL_PIXELFORMAT_BGRX8888 },
+            { Constants.AV_PIX_FMT_RGB32, SDL.SDL_PIXELFORMAT_ARGB8888 },
+            { Constants.AV_PIX_FMT_RGB32_1, SDL.SDL_PIXELFORMAT_RGBA8888 },
+            { Constants.AV_PIX_FMT_BGR32, SDL.SDL_PIXELFORMAT_ABGR8888 },
+            { Constants.AV_PIX_FMT_BGR32_1, SDL.SDL_PIXELFORMAT_BGRA8888 },
+            { AVPixelFormat.AV_PIX_FMT_YUV420P, SDL.SDL_PIXELFORMAT_IYUV },
+            { AVPixelFormat.AV_PIX_FMT_YUYV422, SDL.SDL_PIXELFORMAT_YUY2 },
+            { AVPixelFormat.AV_PIX_FMT_UYVY422, SDL.SDL_PIXELFORMAT_UYVY },
+            { AVPixelFormat.AV_PIX_FMT_NONE, SDL.SDL_PIXELFORMAT_UNKNOWN },
+        };
+
         private int DroppedPictureCount;
         private int default_width = 640;
         private int default_height = 480;
@@ -38,47 +62,23 @@
 
         public IPresenter Presenter { get; private set; }
 
-        public static readonly Dictionary<AVPixelFormat, uint> sdl_texture_map = new()
-        {
-            { AVPixelFormat.AV_PIX_FMT_RGB8, SDL.SDL_PIXELFORMAT_RGB332 },
-            { Constants.AV_PIX_FMT_RGB444, SDL.SDL_PIXELFORMAT_RGB444 },
-            { Constants.AV_PIX_FMT_RGB555, SDL.SDL_PIXELFORMAT_RGB555 },
-            { Constants.AV_PIX_FMT_BGR555, SDL.SDL_PIXELFORMAT_BGR555 },
-            { Constants.AV_PIX_FMT_RGB565, SDL.SDL_PIXELFORMAT_RGB565 },
-            { Constants.AV_PIX_FMT_BGR565, SDL.SDL_PIXELFORMAT_BGR565 },
-            { AVPixelFormat.AV_PIX_FMT_RGB24, SDL.SDL_PIXELFORMAT_RGB24 },
-            { AVPixelFormat.AV_PIX_FMT_BGR24, SDL.SDL_PIXELFORMAT_BGR24 },
-            { Constants.AV_PIX_FMT_0RGB32, SDL.SDL_PIXELFORMAT_RGB888 },
-            { Constants.AV_PIX_FMT_0BGR32, SDL.SDL_PIXELFORMAT_BGR888 },
-            { Constants.AV_PIX_FMT_0BGRLE, SDL.SDL_PIXELFORMAT_RGBX8888 },
-            { Constants.AV_PIX_FMT_0RGBLE, SDL.SDL_PIXELFORMAT_BGRX8888 },
-            { Constants.AV_PIX_FMT_RGB32, SDL.SDL_PIXELFORMAT_ARGB8888 },
-            { Constants.AV_PIX_FMT_RGB32_1, SDL.SDL_PIXELFORMAT_RGBA8888 },
-            { Constants.AV_PIX_FMT_BGR32, SDL.SDL_PIXELFORMAT_ABGR8888 },
-            { Constants.AV_PIX_FMT_BGR32_1, SDL.SDL_PIXELFORMAT_BGRA8888 },
-            { AVPixelFormat.AV_PIX_FMT_YUV420P, SDL.SDL_PIXELFORMAT_IYUV },
-            { AVPixelFormat.AV_PIX_FMT_YUYV422, SDL.SDL_PIXELFORMAT_YUY2 },
-            { AVPixelFormat.AV_PIX_FMT_UYVY422, SDL.SDL_PIXELFORMAT_UYVY },
-            { AVPixelFormat.AV_PIX_FMT_NONE, SDL.SDL_PIXELFORMAT_UNKNOWN },
-        };
-
         public void Initialize(IPresenter presenter)
         {
             Presenter = presenter;
 
-            var parent = Presenter as SdlPresenter;
-            var o = Presenter.Container.Options;
-
             // Initialize renderer values based on user options
+            var o = Presenter.Container.Options;
             screen_width = o.WindowWidth;
             screen_height = o.WindowHeight;
             is_full_screen = o.IsFullScreen;
             WindowTitle = o.WindowTitle;
-            screen_left = o.WindowLeft.HasValue ? o.WindowLeft.Value : screen_left;
-            screen_top = o.WindowTop.HasValue ? o.WindowTop.Value : screen_top;
+            screen_left = o.WindowLeft ?? screen_left;
+            screen_top = o.WindowTop ?? screen_top;
 
-            if (o.IsDisplayDisabled) return;
+            if (o.IsDisplayDisabled)
+                return;
 
+            var parent = Presenter as SdlPresenter;
             parent.SdlInitFlags = (uint)SDL.SDL_WindowFlags.SDL_WINDOW_HIDDEN;
             if (o.IsWindowAlwaysOnTop)
                 parent.SdlInitFlags |= (uint)SDL.SDL_WindowFlags.SDL_WINDOW_ALWAYS_ON_TOP;
@@ -108,6 +108,7 @@
                         Helpers.LogVerbose($"Initialized {Helpers.PtrToString(SdlRendererInfo.name)} renderer.\n");
                 }
             }
+
             if (RenderingWindow.IsNull() || SdlRenderer.IsNull() || SdlRendererInfo.num_texture_formats <= 0)
             {
                 var errorMessage = $"Failed to create window or renderer: {SDL.SDL_GetError()}";
@@ -118,10 +119,10 @@
 
         public IEnumerable<AVPixelFormat> RetrieveSupportedPixelFormats()
         {
-            var outputPixelFormats = new List<AVPixelFormat>(sdl_texture_map.Count);
+            var outputPixelFormats = new List<AVPixelFormat>(SdlTextureMap.Count);
             for (var i = 0; i < SdlRendererInfo.num_texture_formats; i++)
             {
-                foreach (var kvp in sdl_texture_map)
+                foreach (var kvp in SdlTextureMap)
                 {
                     if (kvp.Value == SdlRendererInfo.texture_formats[i])
                         outputPixelFormats.Add(kvp.Key);
@@ -131,7 +132,17 @@
             return outputPixelFormats;
         }
 
-        public int realloc_texture(ref IntPtr texture, uint new_format, int new_width, int new_height, SDL.SDL_BlendMode blendmode, bool init_texture)
+        /// <summary>
+        /// Port of realloc_texture.
+        /// </summary>
+        /// <param name="texture"></param>
+        /// <param name="new_format"></param>
+        /// <param name="new_width"></param>
+        /// <param name="new_height"></param>
+        /// <param name="blendmode"></param>
+        /// <param name="init_texture"></param>
+        /// <returns></returns>
+        private int ReallocateTexture(ref IntPtr texture, uint new_format, int new_width, int new_height, SDL.SDL_BlendMode blendmode, bool init_texture)
         {
             if (texture.IsNull() || SDL.SDL_QueryTexture(texture, out var format, out var _, out var w, out var h) < 0 || new_width != w || new_height != h || new_format != format)
             {
@@ -167,14 +178,18 @@
             return 0;
         }
 
-        public void video_image_display(MediaContainer container)
+        /// <summary>
+        /// Port of video_image_display.
+        /// </summary>
+        /// <param name="container"></param>
+        private void ComposePicture()
         {
             FrameHolder subtitleFrame = null;
-            var videoFrame = container.Video.Frames.PeekPrevious();
+            var videoFrame = Container.Video.Frames.PeekPrevious();
 
-            if (container.HasSubtitles && container.Subtitle.Frames.PendingCount > 0)
+            if (Container.HasSubtitles && Container.Subtitle.Frames.PendingCount > 0)
             {
-                subtitleFrame = container.Subtitle.Frames.PeekCurrent();
+                subtitleFrame = Container.Subtitle.Frames.PeekCurrent();
 
                 if (videoFrame.Time >= subtitleFrame.StartDisplayTime)
                 {
@@ -183,20 +198,20 @@
                         if (subtitleFrame.Width <= 0 || subtitleFrame.Height <= 0)
                             subtitleFrame.UpdateSubtitleArea(videoFrame.Width, videoFrame.Height);
 
-                        if (realloc_texture(ref sub_texture, SDL.SDL_PIXELFORMAT_ARGB8888, subtitleFrame.Width, subtitleFrame.Height, SDL.SDL_BlendMode.SDL_BLENDMODE_BLEND, true) < 0)
+                        if (ReallocateTexture(ref sub_texture, SDL.SDL_PIXELFORMAT_ARGB8888, subtitleFrame.Width, subtitleFrame.Height, SDL.SDL_BlendMode.SDL_BLENDMODE_BLEND, true) < 0)
                             return;
 
                         for (var i = 0; i < subtitleFrame.SubtitlePtr->num_rects; i++)
                         {
                             var targetRect = CreateRect(subtitleFrame.SubtitlePtr->rects[i], subtitleFrame);
 
-                            container.Subtitle.ConvertContext = ffmpeg.sws_getCachedContext(
-                                container.Subtitle.ConvertContext,
+                            Container.Subtitle.ConvertContext = ffmpeg.sws_getCachedContext(
+                                Container.Subtitle.ConvertContext,
                                 targetRect.w, targetRect.h, AVPixelFormat.AV_PIX_FMT_PAL8,
                                 targetRect.w, targetRect.h, AVPixelFormat.AV_PIX_FMT_BGRA,
                                 0, null, null, null);
 
-                            if (container.Subtitle.ConvertContext == null)
+                            if (Container.Subtitle.ConvertContext == null)
                             {
                                 Helpers.LogFatal("Cannot initialize the conversion context\n");
                                 return;
@@ -208,7 +223,7 @@
                                 var targetScan = default(byte_ptrArray8);
                                 targetScan[0] = (byte*)pixels;
 
-                                ffmpeg.sws_scale(container.Subtitle.ConvertContext,
+                                ffmpeg.sws_scale(Container.Subtitle.ConvertContext,
                                     subtitleFrame.SubtitlePtr->rects[i]->data,
                                     subtitleFrame.SubtitlePtr->rects[i]->linesize,
                                     0,
@@ -230,11 +245,11 @@
 
             }
 
-            var rect = CalculateDisplayRect(container.xleft, container.ytop, container.width, container.height, videoFrame.Width, videoFrame.Height, videoFrame.Sar);
+            var rect = CalculateDisplayRect(Container.xleft, Container.ytop, Container.width, Container.height, videoFrame.Width, videoFrame.Height, videoFrame.Sar);
 
             if (!videoFrame.IsUploaded)
             {
-                if (upload_texture(ref vid_texture, videoFrame, ref container.Video.ConvertContext) < 0)
+                if (WriteTexture(ref vid_texture, videoFrame, ref Container.Video.ConvertContext) < 0)
                     return;
                 videoFrame.MarkUploaded();
             }
@@ -288,8 +303,7 @@
                 SDL.SDL_DestroyTexture(sub_texture);
         }
 
-
-        public void video_display()
+        private void Render()
         {
             if (Container.width <= 0)
                 video_open();
@@ -298,7 +312,7 @@
             _ = SDL.SDL_RenderClear(SdlRenderer);
 
             if (Container.HasVideo)
-                video_image_display(Container);
+                ComposePicture();
 
             SDL.SDL_RenderPresent(SdlRenderer);
         }
@@ -330,13 +344,20 @@
             return new SDL.SDL_Rect { w = frame.Width, h = frame.Height, x = 0, y = 0 };
         }
 
-        private int upload_texture(ref IntPtr texture, FrameHolder frame, ref SwsContext* convertContext)
+        /// <summary>
+        /// Port of upload_texture.
+        /// </summary>
+        /// <param name="texture"></param>
+        /// <param name="frame"></param>
+        /// <param name="convertContext"></param>
+        /// <returns></returns>
+        private int WriteTexture(ref IntPtr texture, FrameHolder frame, ref SwsContext* convertContext)
         {
             var resultCode = 0;
             (var sdlPixelFormat, var sdlBlendMode) = TranslateToSdlFormat(frame.PixelFormat);
             var textureFormat = sdlPixelFormat == SDL.SDL_PIXELFORMAT_UNKNOWN ? SDL.SDL_PIXELFORMAT_ARGB8888 : sdlPixelFormat;
 
-            if (realloc_texture(ref texture, textureFormat, frame.Width, frame.Height, sdlBlendMode, false) < 0)
+            if (ReallocateTexture(ref texture, textureFormat, frame.Width, frame.Height, sdlBlendMode, false) < 0)
                 return -1;
 
             var textureRect = CreateRect(frame);
@@ -539,7 +560,7 @@
             display:
                 /* display picture */
                 if (!Container.Options.IsDisplayDisabled && ForceRefresh && Container.ShowMode == ShowMode.Video && Container.Video.Frames.IsReadIndexShown)
-                    video_display();
+                    Render();
             }
 
             ForceRefresh = false;
@@ -624,8 +645,8 @@
                 pixelFormat == AVPixelFormat.AV_PIX_FMT_ABGR)
                 sdlBlendMode = SDL.SDL_BlendMode.SDL_BLENDMODE_BLEND;
 
-            if (sdl_texture_map.ContainsKey(pixelFormat))
-                sdlPixelFormat = sdl_texture_map[pixelFormat];
+            if (SdlTextureMap.ContainsKey(pixelFormat))
+                sdlPixelFormat = SdlTextureMap[pixelFormat];
 
             return (sdlPixelFormat, sdlBlendMode);
         }
