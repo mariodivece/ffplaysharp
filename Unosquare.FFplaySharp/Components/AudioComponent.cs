@@ -3,6 +3,7 @@
     using FFmpeg.AutoGen;
     using System;
     using System.Diagnostics;
+    using System.Linq;
     using System.Threading;
     using Unosquare.FFplaySharp.Primitives;
 
@@ -388,19 +389,9 @@
 
         private string RetrieveResamplerOptions()
         {
-            var resamplerOptions = string.Empty;
-            AVDictionaryEntry* entry = null;
-            while ((entry = ffmpeg.av_dict_get(Container.Options.ResamplerOptions, "", entry, ffmpeg.AV_DICT_IGNORE_SUFFIX)) != null)
-            {
-                var key = Helpers.PtrToString(entry->key);
-                var value = Helpers.PtrToString(entry->value);
-                resamplerOptions = $"{key}={value}:{resamplerOptions}";
-            }
-
-            if (string.IsNullOrWhiteSpace(resamplerOptions))
-                resamplerOptions = null;
-
-            return resamplerOptions;
+            var options = Helpers.ExtractDictionary(Container.Options.ResamplerOptions);
+            var result = string.Join(":", options.Select(kvp => $"{kvp.Key}={kvp.Value}").ToArray());
+            return string.IsNullOrWhiteSpace(result) ? null : result;
         }
 
         private void ReleaseConvertContext()

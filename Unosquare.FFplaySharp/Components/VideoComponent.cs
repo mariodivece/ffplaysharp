@@ -225,17 +225,14 @@
             var codecParameters = Stream->codecpar;
             var frameRate = GuessFrameRate();
             var outputPixelFormats = Container.Renderer.Video.RetrieveSupportedPixelFormats().Cast<int>();
+            var softwareScalerOptions = Helpers.ExtractDictionary(Container.Options.ScalerOptions);
             var softwareScalerFlags = string.Empty;
-            AVDictionaryEntry* optionEntry = null;
 
-            while ((optionEntry = ffmpeg.av_dict_get(Container.Options.ScalerOptions, "", optionEntry, ffmpeg.AV_DICT_IGNORE_SUFFIX)) != null)
+            foreach (var kvp in softwareScalerOptions)
             {
-                var key = Helpers.PtrToString(optionEntry->key);
-                var value = Helpers.PtrToString(optionEntry->value);
-
-                softwareScalerFlags = (key == "sws_flags")
-                    ? $"flags={value}:{softwareScalerFlags}"
-                    : $"{key}={value}:{softwareScalerFlags}";
+                softwareScalerFlags = (kvp.Key == "sws_flags")
+                    ? $"flags={kvp.Value}:{softwareScalerFlags}"
+                    : $"{kvp.Key}={kvp.Value}:{softwareScalerFlags}";
             }
 
             if (string.IsNullOrWhiteSpace(softwareScalerFlags))

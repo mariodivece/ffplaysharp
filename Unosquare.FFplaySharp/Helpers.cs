@@ -2,6 +2,7 @@
 {
     using FFmpeg.AutoGen;
     using System;
+    using System.Collections.Generic;
     using System.Linq;
     using System.Runtime.InteropServices;
 
@@ -9,50 +10,50 @@
     {
         private const string FFmpegDirectory = @"c:\ffmpeg\x64";
 
-        public static void SetFFmpegRootPath(string path = FFmpegDirectory)
-        {
-            ffmpeg.RootPath = path;
-        }
-
+        public static void SetFFmpegRootPath(string path = FFmpegDirectory) => ffmpeg.RootPath = path;
+        
         public static bool HasFlag(this int flagsVariable, int flagValue) => (flagsVariable & flagValue) != 0;
 
         public static int AV_CEIL_RSHIFT(int a, int b) => ((a) + (1 << (b)) - 1) >> (b);
 
 
         /// <summary>
-        /// Parses a hexagesimal or simple second and decimal string representing time
-        /// and returns total microseconds.
+        /// Parses a hexagesimal (HOURS:MM:SS.MILLISECONDS) or simple second
+        /// and decimal string representing time and returns total microseconds.
         /// </summary>
-        /// <param name="timeStr"></param>
-        /// <returns></returns>
-        public static long ParseTime(this string timeStr)
+        /// <param name="timeString">The time represented as a string.</param>
+        /// <returns>Total microseconds.</returns>
+        public static long ParseTime(this string timeString)
         {
             // HOURS:MM:SS.MILLISECONDS
-            timeStr = timeStr.Trim();
+            var timeStr = timeString.Trim();
             var segments = timeStr.Split(':', StringSplitOptions.TrimEntries).Reverse().ToArray();
-            var span = (Hours: 0d, Minutes: 0d, Seconds: 0d);
-            for (var i = 0; i < segments.Length; i++)
+            var spanParts = (Hours: 0M, Minutes: 0M, Seconds: 0M);
+            for (var segmentIndex = 0; segmentIndex < segments.Length; segmentIndex++)
             {
-                var value = double.TryParse(segments[i], out var parsedValue) ? parsedValue : 0;
-                switch (i)
+                var value = decimal.TryParse(segments[segmentIndex], out var parsedValue) ? parsedValue : 0;
+                switch (segmentIndex)
                 {
                     case 0:
-                        span.Seconds = value;
+                        spanParts.Seconds = value;
                         break;
                     case 1:
-                        span.Minutes = value;
+                        spanParts.Minutes = value;
                         break;
                     case 2:
-                        span.Hours = value;
+                        spanParts.Hours = value;
                         break;
                     default:
                         break;
                 }
             }
 
-            var isNegative = span.Seconds < 0 || span.Hours < 0;
-            var secondsSum = Math.Abs(span.Hours * 60 * 60) + Math.Abs(span.Minutes * 60) + Math.Abs(span.Seconds);
-            var totalSeconds = secondsSum * (isNegative ? -1d : 1d);
+            var isNegative = spanParts.Seconds < 0 || spanParts.Hours < 0;
+            var secondsSum = Math.Abs(spanParts.Hours * 60 * 60)
+                + Math.Abs(spanParts.Minutes * 60)
+                + Math.Abs(spanParts.Seconds);
+
+            var totalSeconds = secondsSum * (isNegative ? -1M : 1M);
             return Convert.ToInt64(totalSeconds) * ffmpeg.AV_TIME_BASE;
         }
 
@@ -63,7 +64,7 @@
 
         public static double ToDouble(this int m) => Convert.ToDouble(m);
 
-        public static double hypot(double s1, double s2) => Math.Sqrt((s1 * s1) + (s2 * s2));
+        public static double ComputeHypotenuse(double s1, double s2) => Math.Sqrt((s1 * s1) + (s2 * s2));
 
         /// <summary>
         /// Port of av_display_rotation_get.
@@ -73,8 +74,8 @@
         public static unsafe double ComputeMatrixRotation(int* matrix)
         {
             var scale = new double[2];
-            scale[0] = hypot(matrix[0].ToDouble(), matrix[3].ToDouble());
-            scale[1] = hypot(matrix[1].ToDouble(), matrix[4].ToDouble());
+            scale[0] = ComputeHypotenuse(matrix[0].ToDouble(), matrix[3].ToDouble());
+            scale[1] = ComputeHypotenuse(matrix[1].ToDouble(), matrix[4].ToDouble());
 
             if (scale[0] == 0.0 || scale[1] == 0.0)
                 return double.NaN;
@@ -96,10 +97,10 @@
             theta -= 360 * Math.Floor(theta / 360 + 0.9 / 360);
 
             if (Math.Abs(theta - 90 * Math.Round(theta / 90, 0)) > 2)
-                Helpers.LogWarning("Odd rotation angle.\n" +
-                       "If you want to help, upload a sample " +
-                       "of this file to https://streams.videolan.org/upload/ " +
-                       "and contact the ffmpeg-devel mailing list. (ffmpeg-devel@ffmpeg.org)");
+                LogWarning("Odd rotation angle.\n" +
+                    "If you want to help, upload a sample " +
+                    "of this file to https://streams.videolan.org/upload/ " +
+                    "and contact the ffmpeg-devel mailing list. (ffmpeg-devel@ffmpeg.org)");
 
             return theta;
         }
@@ -136,13 +137,20 @@
             }
         }
 
-        public static unsafe int check_stream_specifier(AVFormatContext* s, AVStream* st, string spec)
+        /// <summary>
+        /// Port of check_stream_specifier
+        /// </summary>
+        /// <param name="formatContext">The format context.</param>
+        /// <param name="stream">The associated stream.</param>
+        /// <param name="specifier">The specifier string.</param>
+        /// <returns>A non-negative number on success. A negative error code on failure.</returns>
+        public static unsafe int CheckStreamSpecifier(AVFormatContext* formatContext, AVStream* stream, string specifier)
         {
-            int ret = ffmpeg.avformat_match_stream_specifier(s, st, spec);
-            if (ret < 0)
-                Log(s, ffmpeg.AV_LOG_ERROR, $"Invalid stream specifier: {spec}.\n");
+            var resultCode = ffmpeg.avformat_match_stream_specifier(formatContext, stream, specifier);
+            if (resultCode < 0)
+                Log(formatContext, ffmpeg.AV_LOG_ERROR, $"Invalid stream specifier: {specifier}.\n");
 
-            return ret;
+            return resultCode;
         }
 
         public static unsafe string PtrToString(byte* ptr) => PtrToString((IntPtr)ptr);
@@ -183,7 +191,7 @@
 
                 /* check stream specification in opt name */
                 if (p != null)
-                    switch (check_stream_specifier(s, st, PtrToString(p + 1)))
+                    switch (CheckStreamSpecifier(s, st, PtrToString(p + 1)))
                     {
                         case 1: *p = 0; break;
                         default: continue;
@@ -205,29 +213,58 @@
             return ret;
         }
 
-        public static unsafe void Log(void* opaque, int logLevel, string message)
-            => ffmpeg.av_log(opaque, logLevel, message);
+        public static unsafe Dictionary<string, string> ExtractDictionary(AVDictionary* avDitionary)
+        {
+            var result = new Dictionary<string, string>(64);
+            AVDictionaryEntry* entry = null;
+            while ((entry = ffmpeg.av_dict_get(avDitionary, string.Empty, entry, ffmpeg.AV_DICT_IGNORE_SUFFIX)) != null)
+            {
+                var key = PtrToString(entry->key);
+                var value = PtrToString(entry->value);
+                result[key] = value;
+            }
 
-        public static unsafe void LogError(string message) => Log(null, ffmpeg.AV_LOG_ERROR, message);
+            return result;
+        }
 
-        public static unsafe void LogError(AVCodecContext* context, string message) => Log(context, ffmpeg.AV_LOG_ERROR, message);
+        public static unsafe void Log(void* opaque, int logLevel, string message) =>
+            ffmpeg.av_log(opaque, logLevel, message);
 
-        public static unsafe void LogWarning(string message) => Log(null, ffmpeg.AV_LOG_WARNING, message);
+        public static unsafe void LogError(string message) =>
+            Log(null, ffmpeg.AV_LOG_ERROR, message);
 
-        public static unsafe void LogWarning(AVCodecContext* context, string message) => Log(context, ffmpeg.AV_LOG_WARNING, message);
+        public static unsafe void LogError(AVCodecContext* context, string message) =>
+            Log(context, ffmpeg.AV_LOG_ERROR, message);
 
-        public static unsafe void LogFatal(string message) => Log(null, ffmpeg.AV_LOG_FATAL, message);
+        public static unsafe void LogWarning(string message) =>
+            Log(null, ffmpeg.AV_LOG_WARNING, message);
 
-        public static unsafe void LogDebug(string message) => Log(null, ffmpeg.AV_LOG_DEBUG, message);
+        public static unsafe void LogWarning(AVCodecContext* context, string message) =>
+            Log(context, ffmpeg.AV_LOG_WARNING, message);
 
-        public static unsafe void LogInfo(string message) => Log(null, ffmpeg.AV_LOG_INFO, message);
+        public static unsafe void LogFatal(string message) =>
+            Log(null, ffmpeg.AV_LOG_FATAL, message);
 
-        public static unsafe void LogVerbose(string message) => Log(null, ffmpeg.AV_LOG_VERBOSE, message);
+        public static unsafe void LogDebug(string message) =>
+            Log(null, ffmpeg.AV_LOG_DEBUG, message);
 
-        public static unsafe void LogTrace(string message) => Log(null, ffmpeg.AV_LOG_TRACE, message);
+        public static unsafe void LogInfo(string message) =>
+            Log(null, ffmpeg.AV_LOG_INFO, message);
 
-        public static unsafe void LogQuiet(string message) => Log(null, ffmpeg.AV_LOG_QUIET, message);
+        public static unsafe void LogVerbose(string message) =>
+            Log(null, ffmpeg.AV_LOG_VERBOSE, message);
 
+        public static unsafe void LogTrace(string message) =>
+            Log(null, ffmpeg.AV_LOG_TRACE, message);
+
+        public static unsafe void LogQuiet(string message) =>
+            Log(null, ffmpeg.AV_LOG_QUIET, message);
+
+        /// <summary>
+        /// Port of print_error. Gets a string representation of an FFmpeg error code.
+        /// </summary>
+        /// <param name="errorCode">The FFmpeg error code.</param>
+        /// <returns>The text representation of the rror code.</returns>
         public static unsafe string print_error(int errorCode)
         {
             var bufferSize = 1024;
@@ -237,7 +274,14 @@
             return message;
         }
 
-        public static unsafe AVDictionary** setup_find_stream_info_opts(AVFormatContext* s, AVDictionary* codec_opts)
+        /// <summary>
+        /// Port of setup_find_stream_info_opts.
+        /// Gets an array of dictionaries, each associated with a stream.
+        /// </summary>
+        /// <param name="s"></param>
+        /// <param name="codecOptions"></param>
+        /// <returns></returns>
+        public static unsafe AVDictionary** setup_find_stream_info_opts(AVFormatContext* s, AVDictionary* codecOptions)
         {
             if (s->nb_streams == 0)
                 return null;
@@ -250,7 +294,7 @@
             }
 
             for (var i = 0; i < s->nb_streams; i++)
-                opts[i] = filter_codec_opts(codec_opts, s->streams[i]->codecpar->codec_id, s, s->streams[i], null);
+                opts[i] = filter_codec_opts(codecOptions, s->streams[i]->codecpar->codec_id, s, s->streams[i], null);
 
             return opts;
         }

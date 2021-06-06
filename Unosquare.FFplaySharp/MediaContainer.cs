@@ -663,7 +663,7 @@
             if (o.IsStreamInfoEnabled)
             {
                 var opts = Helpers.setup_find_stream_info_opts(ic, o.CodecOptions);
-                int orig_nb_streams = (int)ic->nb_streams;
+                var orig_nb_streams = (int)ic->nb_streams;
 
                 err = ffmpeg.avformat_find_stream_info(ic, opts);
 
