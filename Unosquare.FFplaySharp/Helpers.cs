@@ -2,49 +2,16 @@
 {
     using FFmpeg.AutoGen;
     using System;
-    using System.Collections.Generic;
-    using System.IO;
     using System.Linq;
     using System.Runtime.InteropServices;
-    using Unosquare.FFplaySharp.Primitives;
 
     public static class Helpers
     {
-        private const string Kernel32 = "kernel32";
         private const string FFmpegDirectory = @"c:\ffmpeg\x64";
-        private const string SdlDirectory = @"c:\ffmpeg\x64";
 
-        private static readonly IList<string> NativeLibraryPaths = new List<string>()
+        public static void SetFFmpegRootPath(string path = FFmpegDirectory)
         {
-            Path.Combine(SdlDirectory, "SDL2.dll"),
-            Path.Combine(FFmpegDirectory, "avutil-56.dll"),
-            Path.Combine(FFmpegDirectory, "swresample-3.dll"),
-            Path.Combine(FFmpegDirectory, "swscale-5.dll"),
-            Path.Combine(FFmpegDirectory, "avcodec-58.dll"),
-            Path.Combine(FFmpegDirectory, "avformat-58.dll"),
-            Path.Combine(FFmpegDirectory, "postproc-55.dll"),
-            Path.Combine(FFmpegDirectory, "avfilter-7.dll"),
-            Path.Combine(FFmpegDirectory, "avdevice-58.dll"),
-        };
-
-        private static Dictionary<string, IntPtr> AvailableLibraries = new(16);
-
-        public static void LoadNativeLibraries()
-        {
-            foreach (var p in NativeLibraryPaths)
-            {
-                var loadResult = NativeMethods.LoadLibrary(p);
-                if (!loadResult.IsNull())
-                {
-                    AvailableLibraries.Add(p, loadResult);
-                }
-            }
-        }
-
-        private static class NativeMethods
-        {
-            [DllImport(Kernel32, SetLastError = true, CharSet = CharSet.Unicode)]
-            public static extern IntPtr LoadLibrary(string dllToLoad);
+            ffmpeg.RootPath = path;
         }
 
         public static bool HasFlag(this int flagsVariable, int flagValue) => (flagsVariable & flagValue) != 0;
@@ -210,7 +177,7 @@
                     break;
             }
 
-            while ((t = ffmpeg.av_dict_get(opts, "", t, ffmpeg.AV_DICT_IGNORE_SUFFIX)) != null)
+            while ((t = ffmpeg.av_dict_get(opts, string.Empty, t, ffmpeg.AV_DICT_IGNORE_SUFFIX)) != null)
             {
                 var p = strchr(t->key, ':');
 

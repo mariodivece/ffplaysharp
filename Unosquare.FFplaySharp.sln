@@ -3,7 +3,12 @@ Microsoft Visual Studio Solution File, Format Version 12.00
 # Visual Studio Version 16
 VisualStudioVersion = 16.0.30717.126
 MinimumVisualStudioVersion = 10.0.40219.1
-Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "Unosquare.FFplaySharp", "Unosquare.FFplaySharp\Unosquare.FFplaySharp.csproj", "{4C1E5ECC-55F0-4689-8077-03AF011C40A2}"
+Project("{9A19103F-16F7-4668-BE54-9A1E7A4F7556}") = "Unosquare.FFplaySharp", "Unosquare.FFplaySharp\Unosquare.FFplaySharp.csproj", "{4C1E5ECC-55F0-4689-8077-03AF011C40A2}"
+EndProject
+Project("{2150E333-8FDC-42A3-9474-1A3956D46DE8}") = "Support", "Support", "{B5524060-77D7-4D38-850C-08F9E5682F18}"
+	ProjectSection(SolutionItems) = preProject
+		Support\README-SDL.txt = Support\README-SDL.txt
+	EndProjectSection
 EndProject
 Global
 	GlobalSection(SolutionConfigurationPlatforms) = preSolution

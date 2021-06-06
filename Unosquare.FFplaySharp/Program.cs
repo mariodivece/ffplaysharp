@@ -2,7 +2,6 @@
 {
     using FFmpeg.AutoGen;
     using System;
-    using Unosquare.FFplaySharp.Primitives;
     using Unosquare.FFplaySharp.Rendering;
 
     class Program
@@ -13,7 +12,7 @@
         static void Main(string[] args)
         {
 
-            Helpers.LoadNativeLibraries();
+            Helpers.SetFFmpegRootPath(@"C:\ffmpeg\x64");
             ffmpeg.av_log_set_flags(ffmpeg.AV_LOG_SKIP_REPEATED);
             ffmpeg.av_log_set_level(ffmpeg.AV_LOG_VERBOSE);
 

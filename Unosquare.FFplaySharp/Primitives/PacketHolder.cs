@@ -15,7 +15,6 @@
         public static AVPacket* CreateFlushPacket()
         {
             var flushPacket = ffmpeg.av_packet_alloc();
-            ffmpeg.av_init_packet(flushPacket);
             flushPacket->data = (byte*)flushPacket;
             return flushPacket;
         }
