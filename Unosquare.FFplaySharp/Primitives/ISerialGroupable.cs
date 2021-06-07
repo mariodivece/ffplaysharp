@@ -12,7 +12,5 @@
         /// that belong to an now outdated group.
         /// </summary>
         public int GroupIndex { get; }
-
-        public bool HasSameGroup(ISerialGroupable other) => GroupIndex == other.GroupIndex;
     }
 }
