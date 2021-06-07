@@ -12,35 +12,53 @@
             IsFlushPacket = HasFlushData(pointer);
         }
 
+        public Packet()
+            : this(ffmpeg.av_packet_alloc())
+        {
+            // placeholder
+        }
+
         public static int StructureSize { get; } = Marshal.SizeOf<AVPacket>();
 
         public int Serial { get; set; }
 
         public bool IsFlushPacket { get; }
 
+        public int StreamIndex => Pointer->stream_index;
+
+        public long Pts => Pointer->pts.IsValidPts()
+            ? Pointer->pts
+            : Pointer->dts;
+
         public Packet Next { get; set; }
 
         public Packet Clone() =>
             new(ffmpeg.av_packet_clone(Pointer));
 
+        public static Packet Clone(AVPacket* packet)
+        {
+            var copy = ffmpeg.av_packet_clone(packet);
+            return new Packet(copy);
+        }
+
         private static bool HasFlushData(AVPacket* packet)
             => packet != null && packet->data == (byte*)packet;
 
-        public static AVPacket* CreateFlushPacket()
+        public static Packet CreateFlushPacket()
         {
-            var flushPacket = ffmpeg.av_packet_alloc();
-            flushPacket->data = (byte*)flushPacket;
-            return flushPacket;
+            var packet = ffmpeg.av_packet_alloc();
+            packet->data = (byte*)packet;
+            return new(packet);
         }
 
-        public static AVPacket* CreateNullPacket(int streamIndex)
+        public static Packet CreateNullPacket(int streamIndex)
         {
             var packet = ffmpeg.av_packet_alloc();
             packet->data = null;
             packet->size = 0;
             packet->stream_index = streamIndex;
 
-            return packet;
+            return new(packet);
         }
 
         protected override void ReleaseInternal(AVPacket* pointer) =>

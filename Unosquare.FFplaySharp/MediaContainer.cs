@@ -852,7 +852,7 @@
                 {
                     if (Video.IsPictureAttachmentStream)
                     {
-                        var copy = ffmpeg.av_packet_clone(&Video.Stream->attached_pic);
+                        var copy = Packet.Clone(&Video.Stream->attached_pic);
                         Video.Packets.Enqueue(copy);
                         Video.Packets.EnqueueNull();
                     }
@@ -881,8 +881,8 @@
                     }
                 }
 
-                var readPacket = ffmpeg.av_packet_alloc();
-                ret = ffmpeg.av_read_frame(ic, readPacket);
+                var readPacket = new Packet();
+                ret = ffmpeg.av_read_frame(ic, readPacket.Pointer);
 
                 if (ret < 0)
                 {
@@ -914,22 +914,19 @@
                 }
 
                 // check if packet is in play range specified by user, then queue, otherwise discard.
-                var streamStartPts = ic->streams[readPacket->stream_index]->start_time;
-                var packetPts = readPacket->pts.IsValidPts()
-                    ? readPacket->pts
-                    : readPacket->dts;
+                var streamStartPts = ic->streams[readPacket.StreamIndex]->start_time;
 
                 var isPacketInPlayRange = !o.Duration.IsValidPts() ||
-                        (packetPts - (streamStartPts.IsValidPts() ? streamStartPts : 0)) *
-                        ic->streams[readPacket->stream_index]->time_base.ToFactor() -
+                        (readPacket.Pts - (streamStartPts.IsValidPts() ? streamStartPts : 0)) *
+                        ic->streams[readPacket.StreamIndex]->time_base.ToFactor() -
                         (o.StartOffset.IsValidPts() ? o.StartOffset : 0) / Clock.TimeBaseMicros
                         <= (o.Duration / Clock.TimeBaseMicros);
 
-                var component = FindComponentByStreamIndex(readPacket->stream_index);
+                var component = FindComponentByStreamIndex(readPacket.StreamIndex);
                 if (component != null && !component.IsPictureAttachmentStream && isPacketInPlayRange)
                     component.Packets.Enqueue(readPacket);
                 else
-                    ffmpeg.av_packet_unref(readPacket);
+                    readPacket.Release();
             }
 
             ret = 0;

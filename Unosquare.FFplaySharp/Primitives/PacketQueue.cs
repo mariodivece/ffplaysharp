@@ -69,12 +69,12 @@
             }
         }
 
-        public bool Enqueue(AVPacket* packetPtr)
+        public bool Enqueue(Packet packet)
         {
             var result = true;
             lock (SyncLock)
             {
-                var newPacket = new Packet(packetPtr) { Next = null };
+                packet.Next = null;
 
                 if (m_IsClosed)
                 {
@@ -82,25 +82,25 @@
                 }
                 else
                 {
-                    if (newPacket.IsFlushPacket)
+                    if (packet.IsFlushPacket)
                         Serial++;
 
-                    newPacket.Serial = Serial;
+                    packet.Serial = Serial;
 
                     if (Last == null)
-                        First = newPacket;
+                        First = packet;
                     else
-                        Last.Next = newPacket;
+                        Last.Next = packet;
 
-                    Last = newPacket;
+                    Last = packet;
                     Count++;
-                    ByteSize += newPacket.Value.size + Packet.StructureSize;
-                    DurationUnits += newPacket.Value.duration;
+                    ByteSize += packet.Value.size + Packet.StructureSize;
+                    DurationUnits += packet.Value.duration;
                     IsAvailableEvent.Set();
                 }
 
                 if (!result)
-                    newPacket.Release();
+                    packet.Release();
             }
 
             return result;
