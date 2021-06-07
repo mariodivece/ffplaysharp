@@ -3,14 +3,30 @@
     using FFmpeg.AutoGen;
     using System;
 
-    public class Clock : ISerialProvider
+    public class Clock : ISerialGroupable
     {
-        private readonly ISerialProvider SerialProvider;
+        /// <summary>
+        /// Typically a packet queue to read the group index from.
+        /// But it could also hold a reference to itself in case of external clocks.
+        /// </summary>
+        private readonly ISerialGroupable GroupIndexProvider;
 
         /// <summary>
-        /// clock base minus time at which we updated the clock
+        /// Clock base minus time at which we updated the clock.
         /// </summary>
         private double Offset;
+        
+        /// <summary>
+        /// Creates a new instance of the <see cref="Clock"/> class.
+        /// </summary>
+        /// <param name="packetQueue">The related group index provider.</param>
+        public Clock(ISerialGroupable packetQueue)
+        {
+            SpeedRatio = 1.0;
+            IsPaused = false;
+            GroupIndexProvider = packetQueue ?? this;
+            Set(double.NaN, -1);
+        }
 
         /// <summary>
         /// The ffmpeg time base. Returns the number of microsends per second (i.e. 1,000,000 microseconds = 1 second).
@@ -26,45 +42,26 @@
         /// Gets the clock base.
         /// </summary>
         public double BaseTime { get; private set; }
-        
+
         public double LastUpdated { get; private set; }
-        
+
         public double SpeedRatio { get; private set; }
 
         /// <summary>
-        /// Clock is based on a packet with this serial.
+        /// Clock is based on a packet with this group index (serial).
         /// </summary>
-        public int Serial { get; private set; }
-        
+        public int GroupIndex { get; private set; }
+
         public bool IsPaused { get; set; }
 
         /// <summary>
         /// Pointer to the current packet queue serial, used for obsolete clock detection.
         /// </summary>
-        public int RelatedSerial { get => SerialProvider != null ? SerialProvider.Serial : 0; }
-        
-        public Clock(ISerialProvider serialProvider)
+        public int QueueGroupIndex
         {
-            SpeedRatio = 1.0;
-            IsPaused = false;
-            SerialProvider = serialProvider ?? this;
-            Set(double.NaN, -1);
-        }
-
-        public void Set(double baseTime, int serial, double systemTime)
-        {
-            BaseTime = baseTime;
-            LastUpdated = systemTime;
-            Offset = BaseTime - systemTime;
-            Serial = serial;
-        }
-
-        public void Set(double baseTime, int serial) => Set(baseTime, serial, SystemTime);
-
-        public void SetSpeed(double speed)
-        {
-            Set(Value, Serial);
-            SpeedRatio = speed;
+            get => GroupIndexProvider != null
+                ? GroupIndexProvider.GroupIndex
+                : 0;
         }
 
         /// <summary>
@@ -74,20 +71,33 @@
         {
             get
             {
-                if (RelatedSerial != Serial)
+                if (QueueGroupIndex != GroupIndex)
                     return double.NaN;
 
                 if (IsPaused)
-                {
                     return BaseTime;
-                }
-                else
-                {
-                    var systemTime = SystemTime;
-                    var elapsedTime = systemTime - LastUpdated;
-                    return Offset + systemTime - elapsedTime * (1.0 - SpeedRatio);
-                }
+
+                var systemTime = SystemTime;
+                var elapsedTime = systemTime - LastUpdated;
+                return Offset + systemTime - elapsedTime * (1.0 - SpeedRatio);
             }
+        }
+
+        public void Set(double baseTime, int groupIndex, double systemTime)
+        {
+            BaseTime = baseTime;
+            LastUpdated = systemTime;
+            Offset = BaseTime - systemTime;
+            GroupIndex = groupIndex;
+        }
+
+        public void Set(double baseTime, int groupIndex) =>
+            Set(baseTime, groupIndex, SystemTime);
+
+        public void SetSpeed(double speed)
+        {
+            Set(Value, GroupIndex);
+            SpeedRatio = speed;
         }
 
         /// <summary>
@@ -99,7 +109,7 @@
             var currentTime = Value;
             var slaveTime = slaveClock.Value;
             if (!slaveTime.IsNaN() && (currentTime.IsNaN() || Math.Abs(currentTime - slaveTime) > Constants.AV_NOSYNC_THRESHOLD))
-                Set(slaveTime, slaveClock.Serial);
+                Set(slaveTime, slaveClock.GroupIndex);
         }
     }
 }

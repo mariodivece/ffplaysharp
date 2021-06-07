@@ -3,13 +3,12 @@
     using FFmpeg.AutoGen;
     using System.Runtime.InteropServices;
 
-    public unsafe sealed class Packet : UnmanagedReference<AVPacket>, ISerialProvider
+    public unsafe sealed class Packet : UnmanagedReference<AVPacket>, ISerialGroupable
     {
         public Packet(AVPacket* pointer)
             : base()
         {
             Update(pointer);
-            IsFlushPacket = HasFlushData(pointer);
         }
 
         public Packet()
@@ -20,46 +19,66 @@
 
         public static int StructureSize { get; } = Marshal.SizeOf<AVPacket>();
 
-        public int Serial { get; set; }
+        public Packet Next { get; set; }
 
-        public bool IsFlushPacket { get; }
+        public int GroupIndex { get; set; }
 
-        public int StreamIndex => Pointer->stream_index;
+        public bool IsFlushPacket { get; private set; }
+
+        public int StreamIndex
+        {
+            get => Pointer->stream_index;
+            set => Pointer->stream_index = value;
+        }
+
+        public int Size
+        {
+            get => Pointer->size;
+            set => Pointer->size = value;
+        }
+
+        public long DurationUnits
+        {
+            get => Pointer->duration;
+            set => Pointer->duration = value;
+        }
+
+        public byte* Data
+        {
+            get => Pointer->data;
+            set => Pointer->data = value;
+        }
 
         public long Pts => Pointer->pts.IsValidPts()
             ? Pointer->pts
             : Pointer->dts;
-
-        public Packet Next { get; set; }
-
-        public Packet Clone() =>
-            new(ffmpeg.av_packet_clone(Pointer));
 
         public static Packet Clone(AVPacket* packet)
         {
             var copy = ffmpeg.av_packet_clone(packet);
             return new Packet(copy);
         }
-
-        private static bool HasFlushData(AVPacket* packet)
-            => packet != null && packet->data == (byte*)packet;
+        public Packet Clone() =>
+            new(ffmpeg.av_packet_clone(Pointer));
 
         public static Packet CreateFlushPacket()
         {
-            var packet = ffmpeg.av_packet_alloc();
-            packet->data = (byte*)packet;
-            return new(packet);
+            var packet = new Packet()
+            {
+                Size = 0,
+                IsFlushPacket = true
+            };
+
+            packet.Data = (byte*)packet.Pointer;
+            return packet;
         }
 
-        public static Packet CreateNullPacket(int streamIndex)
+        public static Packet CreateNullPacket(int streamIndex) => new()
         {
-            var packet = ffmpeg.av_packet_alloc();
-            packet->data = null;
-            packet->size = 0;
-            packet->stream_index = streamIndex;
-
-            return new(packet);
-        }
+            Data = null,
+            Size = 0,
+            StreamIndex = streamIndex
+        };
 
         protected override void ReleaseInternal(AVPacket* pointer) =>
             ffmpeg.av_packet_free(&pointer);

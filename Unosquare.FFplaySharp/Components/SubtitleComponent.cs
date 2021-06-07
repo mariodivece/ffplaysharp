@@ -37,7 +37,7 @@
                         ? decodedFrame->pts / Clock.TimeBaseMicros : 0;
 
                     // now we can update the picture count
-                    queuedFrame.Update(decodedFrame, CodecContext, PacketSerial, frameTime);
+                    queuedFrame.Update(decodedFrame, CodecContext, PacketGroupIndex, frameTime);
                     Frames.Enqueue();
                 }
                 else if (gotSubtitle != 0)

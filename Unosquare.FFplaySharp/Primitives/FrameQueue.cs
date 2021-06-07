@@ -160,7 +160,7 @@
                 lock (SyncLock)
                 {
                     var currentFrame = Frames[ReadIndex];
-                    if (IsReadIndexShown && currentFrame.Serial == Packets.Serial)
+                    if (IsReadIndexShown && currentFrame.GroupIndex == Packets.GroupIndex)
                         return currentFrame.Position;
                     else
                         return -1;

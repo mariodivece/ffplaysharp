@@ -66,11 +66,11 @@
             }
         }
 
-        public int PacketSerial { get; private set; }
+        public int PacketGroupIndex { get; private set; }
 
-        public int FinalSerial { get; protected set; }
+        public int FinalPacketGroupIndex { get; protected set; }
 
-        public bool HasFinishedDecoding => Stream == null || (FinalSerial == Packets.Serial && Frames.PendingCount == 0);
+        public bool HasFinishedDecoding => Stream == null || (FinalPacketGroupIndex == Packets.GroupIndex && Frames.PendingCount == 0);
 
         public virtual void Close()
         {
@@ -94,7 +94,7 @@
             {
                 Packet currentPacket = null;
 
-                if (Packets.Serial == PacketSerial)
+                if (Packets.GroupIndex == PacketGroupIndex)
                 {
                     do
                     {
@@ -126,7 +126,7 @@
 
                         if (resultCode == ffmpeg.AVERROR_EOF)
                         {
-                            FinalSerial = PacketSerial;
+                            FinalPacketGroupIndex = PacketGroupIndex;
                             ffmpeg.avcodec_flush_buffers(CodecContext);
                             return 0;
                         }
@@ -154,10 +154,10 @@
                             return -1;
 
                         if (currentPacket != null)
-                            PacketSerial = currentPacket.Serial;
+                            PacketGroupIndex = currentPacket.GroupIndex;
                     }
 
-                    if (Packets.Serial == PacketSerial)
+                    if (Packets.GroupIndex == PacketGroupIndex)
                         break;
 
                     currentPacket?.Release();
@@ -187,7 +187,7 @@
                         }
                         else
                         {
-                            if (gotSubtitle != 0 && currentPacket.Value.data == null)
+                            if (gotSubtitle != 0 && currentPacket.Data == null)
                             {
                                 IsPacketPending = true;
                                 PendingPacket = currentPacket.Clone();
@@ -195,7 +195,7 @@
 
                             resultCode = gotSubtitle != 0
                                 ? 0
-                                : currentPacket.Value.data != null
+                                : currentPacket.Data != null
                                 ? ffmpeg.AVERROR(ffmpeg.EAGAIN)
                                 : ffmpeg.AVERROR_EOF;
                         }
@@ -218,7 +218,7 @@
         protected virtual void FlushCodecBuffers()
         {
             ffmpeg.avcodec_flush_buffers(CodecContext);
-            FinalSerial = 0;
+            FinalPacketGroupIndex = 0;
         }
 
         public virtual int InitializeDecoder(AVCodecContext* codecContext, int streamIndex)
@@ -226,7 +226,7 @@
             StreamIndex = streamIndex;
             Stream = Container.InputContext->streams[streamIndex];
             CodecContext = codecContext;
-            PacketSerial = -1;
+            PacketGroupIndex = -1;
             return 0;
         }
 

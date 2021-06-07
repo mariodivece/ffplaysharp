@@ -1,11 +1,10 @@
 ﻿namespace Unosquare.FFplaySharp.Primitives
 {
-    using FFmpeg.AutoGen;
     using System;
     using System.Threading;
     using Unosquare.FFplaySharp.Components;
 
-    public unsafe sealed class PacketQueue : ISerialProvider, IDisposable
+    public unsafe sealed class PacketQueue : ISerialGroupable, IDisposable
     {
         private readonly object SyncLock = new();
         private readonly AutoResetEvent IsAvailableEvent = new(false);
@@ -16,7 +15,7 @@
         private int m_Count;
         private int m_ByteSize;
         private long m_DurationUnits;
-        private int m_Serial;
+        private int m_GroupIndex;
 
         public PacketQueue(MediaComponent component)
         {
@@ -49,10 +48,10 @@
         /// <summary>
         /// The serial is the group (serial) the packet queue belongs to.
         /// </summary>
-        public int Serial
+        public int GroupIndex
         {
-            get { lock (SyncLock) return m_Serial; }
-            private set { lock (SyncLock) m_Serial = value; }
+            get { lock (SyncLock) return m_GroupIndex; }
+            private set { lock (SyncLock) m_GroupIndex = value; }
         }
 
         public bool IsClosed
@@ -83,9 +82,9 @@
                 else
                 {
                     if (packet.IsFlushPacket)
-                        Serial++;
+                        GroupIndex++;
 
-                    packet.Serial = Serial;
+                    packet.GroupIndex = GroupIndex;
 
                     if (Last == null)
                         First = packet;
@@ -94,8 +93,8 @@
 
                     Last = packet;
                     Count++;
-                    ByteSize += packet.Value.size + Packet.StructureSize;
-                    DurationUnits += packet.Value.duration;
+                    ByteSize += packet.Size + Packet.StructureSize;
+                    DurationUnits += packet.DurationUnits;
                     IsAvailableEvent.Set();
                 }
 
@@ -129,8 +128,8 @@
                             Last = null;
 
                         Count--;
-                        ByteSize -= item.Value.size + Packet.StructureSize;
-                        DurationUnits -= item.Value.duration;
+                        ByteSize -= item.Size + Packet.StructureSize;
+                        DurationUnits -= item.DurationUnits;
                         return item;
                     }
                 }

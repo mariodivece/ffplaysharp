@@ -4,10 +4,9 @@
     using System;
     using System.Diagnostics;
     using System.Linq;
-    using System.Threading;
     using Unosquare.FFplaySharp.Primitives;
 
-    public unsafe sealed class AudioComponent : FilteringMediaComponent
+    public unsafe sealed class AudioComponent : FilteringMediaComponent, ISerialGroupable
     {
         private readonly double SyncDiffAverageCoffiecient = Math.Exp(Math.Log(0.01) / Constants.AUDIO_DIFF_AVG_NB);
 
@@ -33,7 +32,7 @@
         /// </summary>
         public double FrameTime { get; private set; }
 
-        public int FrameSerial { get; private set; } = -1;
+        public int GroupIndex { get; private set; } = -1;
 
         public byte* OutputBuffer { get; set; }
 
@@ -158,7 +157,7 @@
 
                 Frames.Dequeue();
 
-            } while (af.Serial != Packets.Serial);
+            } while (af.GroupIndex != Packets.GroupIndex);
 
             var frameBufferSize = ffmpeg.av_samples_get_buffer_size(null, af.Channels, af.SampleCount, af.SampleFormat, 1);
             var frameChannelLayout = AudioParams.ComputeChannelLayout(af.FramePtr);
@@ -259,7 +258,7 @@
             // update the audio clock with the pts
             FrameTime = af.HasValidTime ? af.Time + (double)af.SampleCount / af.Frequency : double.NaN;
 
-            FrameSerial = af.Serial;
+            GroupIndex = af.GroupIndex;
             if (Debugger.IsAttached)
             {
                 // Console.WriteLine($"audio: delay={(FrameTime - LastFrameTime),-8:0.####} clock={FrameTime,-8:0.####} clock0={currentFrameTime,-8:0.####}");
@@ -432,7 +431,7 @@
 
         protected override void DecodingThreadMethod()
         {
-            var lastPacketSerial = -1;
+            var lastPacketGroupIndex = -1;
             var gotSamples = 0;
             var resultCode = 0;
 
@@ -449,10 +448,10 @@
                     continue;
 
                 var decoderChannelLayout = AudioParams.ValidateChannelLayout(decodedFrame->channel_layout, decodedFrame->channels);
-                var needsDifferentSpec = FilterSpec.IsDifferent(decodedFrame) ||
+                var needsDifferentSpec = FilterSpec.IsDifferentTo(decodedFrame) ||
                     FilterSpec.Layout != decoderChannelLayout ||
                     FilterSpec.Frequency != decodedFrame->sample_rate ||
-                    PacketSerial != lastPacketSerial;
+                    PacketGroupIndex != lastPacketGroupIndex;
 
                 if (needsDifferentSpec)
                 {
@@ -460,11 +459,11 @@
 
                     Helpers.LogDebug(
                        $"Audio frame changed from " +
-                       $"rate:{FilterSpec.Frequency} ch:{FilterSpec.Channels} fmt:{FilterSpec.SampleFormatName} layout:{FilterSpec.LayoutString} serial:{lastPacketSerial} to " +
-                       $"rate:{decodedFrame->sample_rate} ch:{decodedFrame->channels} fmt:{AudioParams.GetSampleFormatName(decodedFrame->format)} layout:{decoderLayoutString} serial:{PacketSerial}\n");
+                       $"rate:{FilterSpec.Frequency} ch:{FilterSpec.Channels} fmt:{FilterSpec.SampleFormatName} layout:{FilterSpec.LayoutString} serial:{lastPacketGroupIndex} to " +
+                       $"rate:{decodedFrame->sample_rate} ch:{decodedFrame->channels} fmt:{AudioParams.GetSampleFormatName(decodedFrame->format)} layout:{decoderLayoutString} serial:{PacketGroupIndex}\n");
 
                     FilterSpec.ImportFrom(decodedFrame);
-                    lastPacketSerial = PacketSerial;
+                    lastPacketGroupIndex = PacketGroupIndex;
                     resultCode = ConfigureFilters(true);
 
                     if (resultCode < 0)
@@ -487,10 +486,10 @@
 
                     var frameTime = decodedFrame->pts.IsValidPts() ? decodedFrame->pts * OutputFilterTimeBase.ToFactor() : double.NaN;
                     var frameDuration = ffmpeg.av_make_q(decodedFrame->nb_samples, decodedFrame->sample_rate).ToFactor();
-                    queuedFrame.Update(decodedFrame, PacketSerial, frameTime, frameDuration);
+                    queuedFrame.Update(decodedFrame, PacketGroupIndex, frameTime, frameDuration);
                     Frames.Enqueue();
 
-                    if (Packets.Serial != PacketSerial)
+                    if (Packets.GroupIndex != PacketGroupIndex)
                         break;
                 }
 
@@ -498,7 +497,7 @@
                     break;
 
                 if (resultCode == ffmpeg.AVERROR_EOF)
-                    FinalSerial = PacketSerial;
+                    FinalPacketGroupIndex = PacketGroupIndex;
 
             } while (resultCode >= 0 || resultCode == ffmpeg.AVERROR(ffmpeg.EAGAIN) || resultCode == ffmpeg.AVERROR_EOF);
 

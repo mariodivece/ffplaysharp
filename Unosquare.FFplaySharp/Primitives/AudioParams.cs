@@ -52,7 +52,7 @@
             return result;
         }
 
-        public bool IsDifferent(AVFrame* audioFrame) =>
+        public bool IsDifferentTo(AVFrame* audioFrame) =>
             AreDifferent(SampleFormat, Channels, (AVSampleFormat)audioFrame->format, audioFrame->channels);
 
         public static AudioParams FromFilterContext(AVFilterContext* filter)
@@ -89,7 +89,7 @@
         {
             return frame->channel_layout != 0 && frame->channels == AudioParams.ChannelCountFor(frame->channel_layout)
                 ? (long)frame->channel_layout
-                : AudioParams.DefaultChannelLayoutFor(frame->channels);
+                : DefaultChannelLayoutFor(frame->channels);
         }
 
         public static int ChannelCountFor(ulong channelLayout) => ffmpeg.av_get_channel_layout_nb_channels(channelLayout);

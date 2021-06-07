@@ -39,7 +39,7 @@
             var lastWidth = 0;
             var lastHeight = 0;
             var lastFormat = -2;
-            var lastSerial = -1;
+            var lastGroupIndex = -1;
             var lastFilterIndex = 0;
 
             while (true)
@@ -53,7 +53,7 @@
                     continue;
 
                 var isReconfigNeeded = lastWidth != decodedFrame->width || lastHeight != decodedFrame->height || lastFormat != decodedFrame->format ||
-                    lastSerial != PacketSerial || lastFilterIndex != CurrentFilterIndex;
+                    lastGroupIndex != PacketGroupIndex || lastFilterIndex != CurrentFilterIndex;
 
                 if (isReconfigNeeded)
                 {
@@ -61,8 +61,8 @@
                     var frameFormatName = ffmpeg.av_get_pix_fmt_name((AVPixelFormat)decodedFrame->format) ?? "none";
 
                     Helpers.LogDebug(
-                           $"Video frame changed from size:{lastWidth}x%{lastHeight} format:{lastFormatName} serial:{lastSerial} to " +
-                           $"size:{decodedFrame->width}x{decodedFrame->height} format:{frameFormatName} serial:{PacketSerial}\n");
+                           $"Video frame changed from size:{lastWidth}x%{lastHeight} format:{lastFormatName} serial:{lastGroupIndex} to " +
+                           $"size:{decodedFrame->width}x{decodedFrame->height} format:{frameFormatName} serial:{PacketGroupIndex}\n");
 
                     ReallocateFilterGraph();
 
@@ -81,7 +81,7 @@
                     lastWidth = decodedFrame->width;
                     lastHeight = decodedFrame->height;
                     lastFormat = decodedFrame->format;
-                    lastSerial = PacketSerial;
+                    lastGroupIndex = PacketGroupIndex;
                     lastFilterIndex = CurrentFilterIndex;
                     frameRate = ffmpeg.av_buffersink_get_frame_rate(OutputFilter);
                 }
@@ -98,7 +98,7 @@
                     if (resultCode < 0)
                     {
                         if (resultCode == ffmpeg.AVERROR_EOF)
-                            FinalSerial = PacketSerial;
+                            FinalPacketGroupIndex = PacketGroupIndex;
 
                         resultCode = 0;
                         break;
@@ -116,10 +116,10 @@
                         ? decodedFrame->pts * OutputFilterTimeBase.ToFactor()
                         : double.NaN;
 
-                    resultCode = EnqueueFrame(decodedFrame, frameTime, duration, PacketSerial);
+                    resultCode = EnqueueFrame(decodedFrame, frameTime, duration, PacketGroupIndex);
                     ffmpeg.av_frame_unref(decodedFrame);
 
-                    if (Packets.Serial != PacketSerial)
+                    if (Packets.GroupIndex != PacketGroupIndex)
                         break;
                 }
 
@@ -134,14 +134,14 @@
 
         private AVRational GuessFrameRate() => ffmpeg.av_guess_frame_rate(Container.InputContext, Stream, null);
 
-        private int EnqueueFrame(AVFrame* sourceFrame, double frameTime, double duration, int serial)
+        private int EnqueueFrame(AVFrame* sourceFrame, double frameTime, double duration, int groupIndex)
         {
             var queuedFrame = Frames.PeekWriteable();
 
             if (queuedFrame == null)
                 return -1;
 
-            queuedFrame.Update(sourceFrame, serial, frameTime, duration);
+            queuedFrame.Update(sourceFrame, groupIndex, frameTime, duration);
             Frames.Enqueue();
 
             Container.Renderer.Video.set_default_window_size(queuedFrame.Width, queuedFrame.Height, queuedFrame.Sar);
@@ -170,7 +170,7 @@
 
                     if (!frameDelay.IsNaN() && Math.Abs(frameDelay) < Constants.AV_NOSYNC_THRESHOLD &&
                         frameDelay - FilterDelay < 0 &&
-                        PacketSerial == Container.VideoClock.Serial &&
+                        PacketGroupIndex == Container.VideoClock.GroupIndex &&
                         Packets.Count != 0)
                     {
                         DroppedFrameCount++;

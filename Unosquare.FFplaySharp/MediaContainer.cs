@@ -262,11 +262,11 @@
                 if (ReadPauseResultCode != ffmpeg.AVERROR(38))
                     VideoClock.IsPaused = false;
 
-                VideoClock.Set(VideoClock.Value, VideoClock.Serial);
+                VideoClock.Set(VideoClock.Value, VideoClock.GroupIndex);
             }
 
             IsPaused = AudioClock.IsPaused = VideoClock.IsPaused = ExternalClock.IsPaused = !IsPaused;
-            ExternalClock.Set(ExternalClock.Value, ExternalClock.Serial);
+            ExternalClock.Set(ExternalClock.Value, ExternalClock.GroupIndex);
         }
 
         public void StreamCycleChannel(AVMediaType codecType)
@@ -714,7 +714,7 @@
                 var st = ic->streams[i];
                 var type = st->codecpar->codec_type;
                 st->discard = AVDiscard.AVDISCARD_ALL;
-                if (type >= 0 && o.WantedStreams[type] != null && streamIndexes[type] == -1)
+                if (type >= 0 && o.WantedStreams.ContainsKey(type) && o.WantedStreams[type] != null && streamIndexes[type] == -1)
                     if (ffmpeg.avformat_match_stream_specifier(ic, st, o.WantedStreams[type]) > 0)
                         streamIndexes[type] = i;
             }

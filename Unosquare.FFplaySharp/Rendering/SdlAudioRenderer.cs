@@ -213,7 +213,7 @@
             {
                 var readBufferAvailable = ReadBufferSize - ReadBufferIndex;
                 var bufferDuration = (2d * Container.Audio.HardwareBufferSize + readBufferAvailable) / Container.Audio.HardwareSpec.BytesPerSecond;
-                Container.AudioClock.Set(Container.Audio.FrameTime - bufferDuration, Container.Audio.FrameSerial, AudioCallbackTime);
+                Container.AudioClock.Set(Container.Audio.FrameTime - bufferDuration, Container.Audio.GroupIndex, AudioCallbackTime);
                 Container.ExternalClock.SyncToSlave(Container.AudioClock);
             }
         }

@@ -51,6 +51,7 @@
         private bool is_full_screen;
 
         public int screen_width { get; set; } = 0;
+
         public int screen_height { get; set; } = 0;
 
         public bool ForceRefresh { get; set; }
@@ -463,19 +464,19 @@
                     var previousPicture = Container.Video.Frames.PeekPrevious();
                     var currentPicture = Container.Video.Frames.PeekCurrent();
 
-                    if (currentPicture.Serial != Container.Video.Packets.Serial)
+                    if (currentPicture.GroupIndex != Container.Video.Packets.GroupIndex)
                     {
                         Container.Video.Frames.Dequeue();
                         goto retry;
                     }
 
-                    if (previousPicture.Serial != currentPicture.Serial)
+                    if (previousPicture.GroupIndex != currentPicture.GroupIndex)
                         Container.PictureDisplayTimer = Clock.SystemTime;
 
                     if (Container.IsPaused)
                         goto display;
 
-                    /* compute nominal last_duration */
+                    // compute nominal last_duration
                     var pictureDuration = ComputePictureDuration(Container, previousPicture, currentPicture);
                     var pictureDisplayDuration = ComputePictureDisplayDuration(pictureDuration, Container);
 
@@ -491,7 +492,7 @@
                         Container.PictureDisplayTimer = currentTime;
 
                     if (currentPicture.HasValidTime)
-                        update_video_pts(Container, currentPicture.Time, currentPicture.Serial);
+                        update_video_pts(Container, currentPicture.Time, currentPicture.GroupIndex);
 
                     if (Container.Video.Frames.PendingCount > 1)
                     {
@@ -517,7 +518,7 @@
                                 ? Container.Subtitle.Frames.PeekNext()
                                 : null;
 
-                            if (sp.Serial != Container.Subtitle.Packets.Serial
+                            if (sp.GroupIndex != Container.Subtitle.Packets.GroupIndex
                                     || (Container.VideoClock.BaseTime > sp.EndDisplayTime)
                                     || (sp2 != null && Container.VideoClock.BaseTime > sp2.StartDisplayTime))
                             {
@@ -696,24 +697,20 @@
 
         static double ComputePictureDuration(MediaContainer container, FrameHolder currentFrame, FrameHolder nextFrame)
         {
-            if (currentFrame.Serial == nextFrame.Serial)
-            {
-                var pictureDuration = nextFrame.Time - currentFrame.Time;
-                if (pictureDuration.IsNaN() || pictureDuration <= 0 || pictureDuration > container.MaxPictureDuration)
-                    return currentFrame.Duration;
-                else
-                    return pictureDuration;
-            }
-            else
-            {
+            if (currentFrame.GroupIndex != nextFrame.GroupIndex)
                 return 0.0;
-            }
+
+            var pictureDuration = nextFrame.Time - currentFrame.Time;
+            if (pictureDuration.IsNaN() || pictureDuration <= 0 || pictureDuration > container.MaxPictureDuration)
+                return currentFrame.Duration;
+            else
+                return pictureDuration;
         }
 
-        static void update_video_pts(MediaContainer container, double pts, int serial)
+        static void update_video_pts(MediaContainer container, double pts, int groupIndex)
         {
             /* update current video pts */
-            container.VideoClock.Set(pts, serial);
+            container.VideoClock.Set(pts, groupIndex);
             container.ExternalClock.SyncToSlave(container.VideoClock);
         }
     }

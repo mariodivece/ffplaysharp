@@ -3,7 +3,7 @@
     using FFmpeg.AutoGen;
     using System;
 
-    public unsafe sealed class FrameHolder : IDisposable
+    public unsafe sealed class FrameHolder : IDisposable, ISerialGroupable
     {
         /// <summary>
         /// Initializes a new instance of the <see cref="FrameHolder" /> class.
@@ -17,8 +17,8 @@
 
         public AVSubtitle* SubtitlePtr { get; private set; }
 
-        public int Serial { get; private set; }
-        
+        public int GroupIndex { get; private set; }
+
         /// <summary>
         /// Gets or sets the Presentation time in seconds.
         /// This is NOT a timestamp in stream units.
@@ -89,23 +89,25 @@
 
         public void MarkUploaded() => IsUploaded = true;
 
-        public void Update(AVFrame* sourceFrame, int serial, double time, double duration)
+        public void Update(AVFrame* sourceFrame, int groupIndex, double time, double duration)
         {
             ffmpeg.av_frame_move_ref(FramePtr, sourceFrame);
             IsUploaded = false;
-            Serial = serial;
+            GroupIndex = groupIndex;
             Time = time;
             Duration = duration;
             Width = FramePtr->width;
             Height = FramePtr->height;
         }
 
-        public void Update(AVSubtitle* sourceFrame, AVCodecContext* codec, int serial, double time)
+        public void Update(AVSubtitle* sourceFrame, AVCodecContext* codec, int groupIndex, double time)
         {
-            ffmpeg.avsubtitle_free(SubtitlePtr);
+            if (SubtitlePtr != null)
+                ffmpeg.avsubtitle_free(SubtitlePtr);
+            
             SubtitlePtr = sourceFrame;
             IsUploaded = false;
-            Serial = serial;
+            GroupIndex = groupIndex;
             Time = time;
             Duration = (SubtitlePtr->end_display_time - SubtitlePtr->start_display_time) / 1000d;
             Width = codec->width;

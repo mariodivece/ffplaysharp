@@ -46,7 +46,10 @@
 
         public static void VeirfyZero()
         {
-            Debug.Assert(Count == 0);
+            if (Count != 0)
+            {
+                Debug.Assert(Count == 0);
+            }
         }
     }
 }
