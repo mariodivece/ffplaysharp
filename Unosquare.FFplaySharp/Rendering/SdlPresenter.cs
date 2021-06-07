@@ -287,6 +287,7 @@
 
             SDL.SDL_Quit();
             Helpers.LogQuiet(string.Empty);
+            ReferenceCounter.VeirfyZero();
             Environment.Exit(0);
         }
 

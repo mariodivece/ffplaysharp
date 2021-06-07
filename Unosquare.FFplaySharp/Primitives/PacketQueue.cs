@@ -10,8 +10,8 @@
         private readonly object SyncLock = new();
         private readonly AutoResetEvent IsAvailableEvent = new(false);
         private bool m_IsClosed = true; // starts in a blocked state
-        private PacketHolder First;
-        private PacketHolder Last;
+        private Packet First;
+        private Packet Last;
 
         private int m_Count;
         private int m_ByteSize;
@@ -74,7 +74,7 @@
             var result = true;
             lock (SyncLock)
             {
-                var newPacket = new PacketHolder(packetPtr) { Next = null };
+                var newPacket = new Packet(packetPtr) { Next = null };
 
                 if (m_IsClosed)
                 {
@@ -94,30 +94,25 @@
 
                     Last = newPacket;
                     Count++;
-                    ByteSize += newPacket.PacketPtr->size + PacketHolder.PacketStructureSize;
-                    DurationUnits += newPacket.PacketPtr->duration;
+                    ByteSize += newPacket.Value.size + Packet.StructureSize;
+                    DurationUnits += newPacket.Value.duration;
                     IsAvailableEvent.Set();
                 }
 
                 if (!result)
-                    newPacket.Dispose();
+                    newPacket.Release();
             }
 
             return result;
         }
 
-        public bool EnqueueFlush() => Enqueue(PacketHolder.CreateFlushPacket());
+        public bool EnqueueFlush() =>
+            Enqueue(Packet.CreateFlushPacket());
 
-        public bool EnqueueNull()
-        {
-            var packet = ffmpeg.av_packet_alloc();
-            packet->data = null;
-            packet->size = 0;
-            packet->stream_index = Component.StreamIndex;
-            return Enqueue(packet);
-        }
+        public bool EnqueueNull() =>
+            Enqueue(Packet.CreateNullPacket(Component.StreamIndex));
 
-        public PacketHolder Dequeue(bool blockWait)
+        public Packet Dequeue(bool blockWait)
         {
             while (true)
             {
@@ -134,8 +129,8 @@
                             Last = null;
 
                         Count--;
-                        ByteSize -= item.PacketPtr->size + PacketHolder.PacketStructureSize;
-                        DurationUnits -= item.PacketPtr->duration;
+                        ByteSize -= item.Value.size + Packet.StructureSize;
+                        DurationUnits -= item.Value.duration;
                         return item;
                     }
                 }
@@ -152,7 +147,7 @@
             lock (SyncLock)
             {
                 for (var currentPacket = First; currentPacket != null; currentPacket = currentPacket?.Next)
-                    currentPacket?.Dispose();
+                    currentPacket?.Release();
 
                 Last = null;
                 First = null;

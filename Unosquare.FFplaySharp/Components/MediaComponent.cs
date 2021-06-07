@@ -7,7 +7,7 @@
     public abstract unsafe class MediaComponent
     {
         private readonly ThreeState ReorderPts;
-        private PacketHolder PendingPacket;
+        private Packet PendingPacket;
         private bool IsPacketPending;
         private Thread Worker;
 
@@ -92,7 +92,7 @@
 
             while (true)
             {
-                PacketHolder currentPacket = null;
+                Packet currentPacket = null;
 
                 if (Packets.Serial == PacketSerial)
                 {
@@ -160,12 +160,13 @@
                     if (Packets.Serial == PacketSerial)
                         break;
 
-                    currentPacket?.Dispose();
+                    currentPacket?.Release();
 
                 } while (true);
 
                 if (currentPacket.IsFlushPacket)
                 {
+                    currentPacket.Release();
                     FlushCodecBuffers();
                 }
                 else
@@ -178,7 +179,7 @@
                         if (decodedSubtitle == null)
                             decodedSubtitle = (AVSubtitle*)ffmpeg.av_malloc((ulong)sizeof(AVSubtitle));
 
-                        resultCode = ffmpeg.avcodec_decode_subtitle2(CodecContext, decodedSubtitle, &gotSubtitle, currentPacket.PacketPtr);
+                        resultCode = ffmpeg.avcodec_decode_subtitle2(CodecContext, decodedSubtitle, &gotSubtitle, currentPacket.Pointer);
 
                         if (resultCode < 0)
                         {
@@ -186,30 +187,30 @@
                         }
                         else
                         {
-                            if (gotSubtitle != 0 && currentPacket.PacketPtr->data == null)
+                            if (gotSubtitle != 0 && currentPacket.Value.data == null)
                             {
                                 IsPacketPending = true;
-                                PendingPacket = new PacketHolder(ffmpeg.av_packet_clone(currentPacket.PacketPtr));
+                                PendingPacket = currentPacket.Clone();
                             }
 
                             resultCode = gotSubtitle != 0
                                 ? 0
-                                : currentPacket.PacketPtr->data != null
+                                : currentPacket.Value.data != null
                                 ? ffmpeg.AVERROR(ffmpeg.EAGAIN)
                                 : ffmpeg.AVERROR_EOF;
                         }
                     }
                     else
                     {
-                        if (ffmpeg.avcodec_send_packet(CodecContext, currentPacket.PacketPtr) == ffmpeg.AVERROR(ffmpeg.EAGAIN))
+                        if (ffmpeg.avcodec_send_packet(CodecContext, currentPacket.Pointer) == ffmpeg.AVERROR(ffmpeg.EAGAIN))
                         {
                             Helpers.LogError(CodecContext, "Receive_frame and send_packet both returned EAGAIN, which is an API violation.\n");
                             IsPacketPending = true;
-                            PendingPacket = new PacketHolder(ffmpeg.av_packet_clone(currentPacket.PacketPtr));
+                            PendingPacket = currentPacket.Clone();
                         }
                     }
 
-                    currentPacket?.Dispose();
+                    currentPacket?.Release();
                 }
             }
         }
@@ -231,7 +232,7 @@
 
         public void DisposeDecoder()
         {
-            PendingPacket?.Dispose();
+            PendingPacket?.Release();
             var codecContext = CodecContext;
             ffmpeg.avcodec_free_context(&codecContext);
             CodecContext = null;
