@@ -6,25 +6,23 @@
     public static class ReferenceCounter
     {
         private static readonly object SyncLock = new();
-        private static readonly SortedDictionary<ulong, object> Graph = new();
+        private static readonly SortedDictionary<ulong, (IUnmanagedReference obj, string source)> Graph = new();
         private static ulong LastObjectId = 0;
         private static ulong m_Count = 0;
 
-        public static ulong Add<T>(UnmanagedReference<T> item)
-            where T : unmanaged
+        public static ulong Add(IUnmanagedReference item, string source)
         {
             lock (SyncLock)
             {
                 var objectId = LastObjectId;
-                Graph.Add(LastObjectId, item);
+                Graph.Add(LastObjectId, (item, source));
                 LastObjectId++;
                 m_Count++;
                 return objectId;
             }
         }
 
-        public static void Remove<T>(UnmanagedReference<T> item)
-            where T : unmanaged
+        public static void Remove(IUnmanagedReference item)
         {
             lock (SyncLock)
             {

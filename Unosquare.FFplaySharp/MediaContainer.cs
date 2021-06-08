@@ -1,5 +1,6 @@
 ﻿namespace Unosquare.FFplaySharp
 {
+    using FFmpeg;
     using FFmpeg.AutoGen;
     using SDL2;
     using System;
@@ -212,7 +213,7 @@
 
             container.Options.StartupVolume = container.Options.StartupVolume.Clamp(0, 100);
             container.Options.StartupVolume = (SDL.SDL_MIX_MAXVOLUME * container.Options.StartupVolume / 100).Clamp(0, SDL.SDL_MIX_MAXVOLUME);
-            
+
             container.IsMuted = false;
             container.ClockSyncMode = container.Options.ClockSyncType;
             container.StartReadThread();
@@ -355,7 +356,7 @@
             // if the stream is paused unpause it, then step
             if (IsPaused)
                 StreamTogglePause();
-            
+
             IsInStepMode = true;
         }
 
@@ -812,41 +813,7 @@
                 }
 
                 if (IsSeekRequested)
-                {
-                    var seekTarget = SeekAbsoluteTarget;
-                    var seekTargetMin = SeekRelativeTarget > 0 ? seekTarget - SeekRelativeTarget + 2 : long.MinValue;
-                    var seekTargetMax = SeekRelativeTarget < 0 ? seekTarget - SeekRelativeTarget - 2 : long.MaxValue;
-                    // FIXME the +-2 is due to rounding being not done in the correct direction in generation
-                    //      of the seek_pos/seek_rel variables
-
-                    ret = ffmpeg.avformat_seek_file(InputContext, -1, seekTargetMin, seekTarget, seekTargetMax, SeekFlags);
-                    if (ret < 0)
-                    {
-                        Helpers.LogError($"{Helpers.PtrToString(InputContext->url)}: error while seeking\n");
-                    }
-                    else
-                    {
-                        foreach (var c in Components)
-                        {
-                            if (c.StreamIndex < 0)
-                                continue;
-
-                            c.Packets.Clear();
-                            c.Packets.EnqueueFlush();
-                        }
-
-                        ExternalClock.Set(SeekFlags.HasFlag(ffmpeg.AVSEEK_FLAG_BYTE)
-                            ? double.NaN
-                            : seekTarget / Clock.TimeBaseMicros, 0);
-                    }
-
-                    IsSeekRequested = false;
-                    IsPictureAttachmentPending = true;
-                    IsAtEndOfStream = false;
-
-                    if (IsPaused)
-                        StepToNextFrame();
-                }
+                    InputContextHandleSeek(ref ret);
 
                 if (IsPictureAttachmentPending)
                 {
@@ -880,53 +847,14 @@
                         goto fail;
                     }
                 }
-
-                var readPacket = new Packet();
-                ret = ffmpeg.av_read_frame(ic, readPacket.Pointer);
-
-                if (ret < 0)
-                {
-                    if ((ret == ffmpeg.AVERROR_EOF || ffmpeg.avio_feof(ic->pb) != 0) && !IsAtEndOfStream)
-                    {
-                        foreach (var c in Components)
-                        {
-                            if (c.StreamIndex >= 0)
-                                c.Packets.EnqueueNull();
-                        }
-
-                        IsAtEndOfStream = true;
-                    }
-
-                    if (ic->pb != null && ic->pb->error != 0)
-                    {
-                        if (o.ExitOnFinish)
-                            goto fail;
-                        else
-                            break;
-                    }
-
-                    NeedsMorePacketsEvent.WaitOne(10);
+                
+                var flowResult = ReadPacket(ref ret);
+                if (flowResult == FlowResult.Fail)
+                    goto fail;
+                else if (flowResult == FlowResult.LoopBreak)
+                    break;
+                else if (flowResult == FlowResult.LoopContinue)
                     continue;
-                }
-                else
-                {
-                    IsAtEndOfStream = false;
-                }
-
-                // check if packet is in play range specified by user, then queue, otherwise discard.
-                var streamStartPts = ic->streams[readPacket.StreamIndex]->start_time;
-
-                var isPacketInPlayRange = !o.Duration.IsValidPts() ||
-                        (readPacket.Pts - (streamStartPts.IsValidPts() ? streamStartPts : 0)) *
-                        ic->streams[readPacket.StreamIndex]->time_base.ToFactor() -
-                        (o.StartOffset.IsValidPts() ? o.StartOffset : 0) / Clock.TimeBaseMicros
-                        <= (o.Duration / Clock.TimeBaseMicros);
-
-                var component = FindComponentByStreamIndex(readPacket.StreamIndex);
-                if (component != null && !component.IsPictureAttachmentStream && isPacketInPlayRange)
-                    component.Packets.Enqueue(readPacket);
-                else
-                    readPacket.Release();
             }
 
             ret = 0;
@@ -942,6 +870,97 @@
             }
 
             return; // 0;
+        }
+
+        private void InputContextHandleSeek(ref int resultCode)
+        {
+            var seekTarget = SeekAbsoluteTarget;
+            var seekTargetMin = SeekRelativeTarget > 0 ? seekTarget - SeekRelativeTarget + 2 : long.MinValue;
+            var seekTargetMax = SeekRelativeTarget < 0 ? seekTarget - SeekRelativeTarget - 2 : long.MaxValue;
+            // FIXME the +-2 is due to rounding being not done in the correct direction in generation
+            //      of the seek_pos/seek_rel variables
+
+            resultCode = ffmpeg.avformat_seek_file(InputContext, -1, seekTargetMin, seekTarget, seekTargetMax, SeekFlags);
+            if (resultCode < 0)
+            {
+                Helpers.LogError($"{Helpers.PtrToString(InputContext->url)}: error while seeking\n");
+            }
+            else
+            {
+                foreach (var c in Components)
+                {
+                    if (c.StreamIndex < 0)
+                        continue;
+
+                    c.Packets.Clear();
+                    c.Packets.EnqueueFlush();
+                }
+
+                ExternalClock.Set(SeekFlags.HasFlag(ffmpeg.AVSEEK_FLAG_BYTE)
+                    ? double.NaN
+                    : seekTarget / Clock.TimeBaseMicros, 0);
+            }
+
+            IsSeekRequested = false;
+            IsPictureAttachmentPending = true;
+            IsAtEndOfStream = false;
+
+            if (IsPaused)
+                StepToNextFrame();
+        }
+
+        private FlowResult ReadPacket(ref int resultCode)
+        {
+            var readPacket = new Packet();
+            resultCode = ffmpeg.av_read_frame(InputContext, readPacket.Pointer);
+
+            if (resultCode < 0)
+            {
+                readPacket.Release();
+
+                if ((resultCode == ffmpeg.AVERROR_EOF || ffmpeg.avio_feof(InputContext->pb) != 0) && !IsAtEndOfStream)
+                {
+                    foreach (var c in Components)
+                    {
+                        if (c.StreamIndex >= 0)
+                            c.Packets.EnqueueNull();
+                    }
+
+                    IsAtEndOfStream = true;
+                }
+
+                if (InputContext->pb != null && InputContext->pb->error != 0)
+                {
+                    if (Options.ExitOnFinish)
+                        return FlowResult.Fail;
+                    else
+                        return FlowResult.LoopBreak;
+                }
+
+                NeedsMorePacketsEvent.WaitOne(10);
+                return FlowResult.LoopContinue;
+            }
+            else
+            {
+                IsAtEndOfStream = false;
+            }
+
+            // check if packet is in play range specified by user, then queue, otherwise discard.
+            var streamStartPts = InputContext->streams[readPacket.StreamIndex]->start_time;
+
+            var isPacketInPlayRange = !Options.Duration.IsValidPts() ||
+                    (readPacket.Pts - (streamStartPts.IsValidPts() ? streamStartPts : 0)) *
+                    InputContext->streams[readPacket.StreamIndex]->time_base.ToFactor() -
+                    (Options.StartOffset.IsValidPts() ? Options.StartOffset : 0) / Clock.TimeBaseMicros
+                    <= (Options.Duration / Clock.TimeBaseMicros);
+
+            var component = FindComponentByStreamIndex(readPacket.StreamIndex);
+            if (component != null && !component.IsPictureAttachmentStream && isPacketInPlayRange)
+                component.Packets.Enqueue(readPacket);
+            else
+                readPacket.Release();
+
+            return FlowResult.Next;
         }
     }
 }

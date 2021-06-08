@@ -1,5 +1,6 @@
 ﻿namespace Unosquare.FFplaySharp.Primitives
 {
+    using FFmpeg;
     using System;
     using System.Threading;
     using Unosquare.FFplaySharp.Components;

@@ -1,13 +1,24 @@
 ﻿namespace Unosquare.FFplaySharp.Primitives
 {
     using System;
+    using System.IO;
 
-    public abstract unsafe class UnmanagedReference<T>
+    public interface IUnmanagedReference
+    {
+        ulong ObjectId { get; }
+
+        IntPtr Address { get; }
+
+        void Release();
+    }
+
+    public abstract unsafe class UnmanagedReference<T> : IUnmanagedReference
         where T : unmanaged
     {
-        protected UnmanagedReference()
+        protected UnmanagedReference(string filePath, int lineNumber)
         {
-            ObjectId = ReferenceCounter.Add(this);
+            ObjectId = ReferenceCounter.Add(this,
+                $"{Path.GetFileName(filePath)}: {lineNumber}");
         }
 
         public ulong ObjectId { get; }
@@ -33,17 +44,5 @@
         }
 
         protected abstract void ReleaseInternal(T* pointer);
-    }
-
-    public abstract unsafe class AllocatableReference<T> : UnmanagedReference<T>
-        where T : unmanaged
-    {
-        protected AllocatableReference()
-            : base()
-        {
-            Update(Allocate());
-        }
-
-        protected abstract T* Allocate();
     }
 }
