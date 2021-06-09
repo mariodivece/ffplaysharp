@@ -281,7 +281,7 @@
         /// <returns></returns>
         public static unsafe IReadOnlyList<FFDictionary> FindStreamInfoOptions(AVFormatContext* s, StringDictionary codecOptions)
         {
-            var result = new List<FFDictionary>(32);
+            var result = new List<FFDictionary>(s->nb_streams);
             if (s->nb_streams == 0)
                 return null;
 
