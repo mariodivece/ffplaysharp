@@ -145,11 +145,11 @@
         /// <param name="stream">The associated stream.</param>
         /// <param name="specifier">The specifier string.</param>
         /// <returns>A non-negative number on success. A negative error code on failure.</returns>
-        public static unsafe int CheckStreamSpecifier(AVFormatContext* formatContext, AVStream* stream, string specifier)
+        public static unsafe int CheckStreamSpecifier(FormatContext formatContext, AVStream* stream, string specifier)
         {
-            var resultCode = ffmpeg.avformat_match_stream_specifier(formatContext, stream, specifier);
+            var resultCode = ffmpeg.avformat_match_stream_specifier(formatContext.Pointer, stream, specifier);
             if (resultCode < 0)
-                Log(formatContext, ffmpeg.AV_LOG_ERROR, $"Invalid stream specifier: {specifier}.\n");
+                Log(formatContext.Pointer, ffmpeg.AV_LOG_ERROR, $"Invalid stream specifier: {specifier}.\n");
 
             return resultCode;
         }
@@ -168,14 +168,14 @@
         /// <param name="codec"></param>
         /// <returns></returns>
         public static unsafe FFDictionary FilterCodecOptions(StringDictionary opts, AVCodecID codec_id,
-                                    AVFormatContext* s, AVStream* st, AVCodec* codec)
+                                    FormatContext s, AVStream* st, AVCodec* codec)
         {
 
             var filteredOptions = new FFDictionary();
 
-            int flags = s->oformat != null ? ffmpeg.AV_OPT_FLAG_ENCODING_PARAM : ffmpeg.AV_OPT_FLAG_DECODING_PARAM;
+            int flags = s.Pointer->oformat != null ? ffmpeg.AV_OPT_FLAG_ENCODING_PARAM : ffmpeg.AV_OPT_FLAG_DECODING_PARAM;
             if (codec == null)
-                codec = s->oformat != null ? ffmpeg.avcodec_find_encoder(codec_id) : ffmpeg.avcodec_find_decoder(codec_id);
+                codec = s.Pointer->oformat != null ? ffmpeg.avcodec_find_encoder(codec_id) : ffmpeg.avcodec_find_decoder(codec_id);
 
             // -codec:a:1 ac3
             // option:mediatype:streamindex value
@@ -279,15 +279,15 @@
         /// <param name="s"></param>
         /// <param name="codecOptions"></param>
         /// <returns></returns>
-        public static unsafe IReadOnlyList<FFDictionary> FindStreamInfoOptions(AVFormatContext* s, StringDictionary codecOptions)
+        public static unsafe IReadOnlyList<FFDictionary> FindStreamInfoOptions(FormatContext s, StringDictionary codecOptions)
         {
-            var result = new List<FFDictionary>((int)s->nb_streams);
-            if (s->nb_streams == 0)
+            var result = new List<FFDictionary>(s.StreamCount);
+            if (s.StreamCount == 0)
                 return null;
 
-            for (var i = 0; i < s->nb_streams; i++)
+            for (var i = 0; i < s.StreamCount; i++)
             {
-                var streamOptions = FilterCodecOptions(codecOptions, s->streams[i]->codecpar->codec_id, s, s->streams[i], null);
+                var streamOptions = FilterCodecOptions(codecOptions, s.Pointer->streams[i]->codecpar->codec_id, s, s.Pointer->streams[i], null);
                 result.Add(streamOptions);
             }
 

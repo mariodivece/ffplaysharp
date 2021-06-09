@@ -322,7 +322,7 @@
 
         public override void Close()
         {
-            if (StreamIndex < 0 || StreamIndex >= Container.InputContext->nb_streams)
+            if (StreamIndex < 0 || StreamIndex >= Container.InputContext.StreamCount)
                 return;
 
             AbortDecoder();
@@ -338,7 +338,7 @@
             ResampledOutputBufferSize = 0;
             OutputBuffer = null;
 
-            Container.InputContext->streams[StreamIndex]->discard = AVDiscard.AVDISCARD_ALL;
+            Container.InputContext.Pointer->streams[StreamIndex]->discard = AVDiscard.AVDISCARD_ALL;
             Stream = null;
             StreamIndex = -1;
         }

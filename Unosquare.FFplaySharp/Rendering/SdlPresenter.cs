@@ -128,7 +128,7 @@
                                 }
                                 break;
                             case SDL.SDL_Keycode.SDLK_PAGEUP:
-                                if (Container.InputContext->nb_chapters <= 1)
+                                if (Container.InputContext.ChapterCount <= 1)
                                 {
                                     incr = 600.0;
                                     goto do_seek;
@@ -136,7 +136,7 @@
                                 Container.ChapterSeek(1);
                                 break;
                             case SDL.SDL_Keycode.SDLK_PAGEDOWN:
-                                if (Container.InputContext->nb_chapters <= 1)
+                                if (Container.InputContext.ChapterCount <= 1)
                                 {
                                     incr = -600.0;
                                     goto do_seek;
@@ -159,8 +159,8 @@
                                 {
                                     pos = Container.StreamBytePosition;
 
-                                    if (Container.InputContext->bit_rate != 0)
-                                        incr *= Container.InputContext->bit_rate / 8.0;
+                                    if (Container.InputContext.Pointer->bit_rate != 0)
+                                        incr *= Container.InputContext.Pointer->bit_rate / 8.0;
                                     else
                                         incr *= 180000.0;
 
@@ -173,8 +173,8 @@
                                     if (pos.IsNaN())
                                         pos = Container.SeekAbsoluteTarget / Clock.TimeBaseMicros;
                                     pos += incr;
-                                    if (Container.InputContext->start_time.IsValidPts() && pos < Container.InputContext->start_time / Clock.TimeBaseMicros)
-                                        pos = Container.InputContext->start_time / Clock.TimeBaseMicros;
+                                    if (Container.InputContext.Pointer->start_time.IsValidPts() && pos < Container.InputContext.Pointer->start_time / Clock.TimeBaseMicros)
+                                        pos = Container.InputContext.Pointer->start_time / Clock.TimeBaseMicros;
                                     Container.SeekByTimestamp(Convert.ToInt64(pos * Clock.TimeBaseMicros), Convert.ToInt64(incr * Clock.TimeBaseMicros));
                                 }
                                 break;
@@ -225,23 +225,23 @@
                                 break;
                             mouseX = sdlEvent.motion.x;
                         }
-                        if (Container.Options.IsByteSeekingEnabled != 0 || Container.InputContext->duration <= 0)
+                        if (Container.Options.IsByteSeekingEnabled != 0 || Container.InputContext.Pointer->duration <= 0)
                         {
-                            var fileSize = ffmpeg.avio_size(Container.InputContext->pb);
+                            var fileSize = ffmpeg.avio_size(Container.InputContext.Pointer->pb);
                             Container.SeekByPosition(Convert.ToInt64(fileSize * mouseX / Container.width));
                         }
                         else
                         {
                             var seekPercent = (mouseX / Container.width);
-                            var durationSecs = Container.InputContext->duration / Clock.TimeBaseMicros;
+                            var durationSecs = Container.InputContext.Pointer->duration / Clock.TimeBaseMicros;
                             var totalDuration = TimeSpan.FromSeconds(durationSecs);
                             var targetTime = TimeSpan.FromSeconds(seekPercent * durationSecs);
-                            var targetPosition = Convert.ToInt64(seekPercent * Container.InputContext->duration);
+                            var targetPosition = Convert.ToInt64(seekPercent * Container.InputContext.Pointer->duration);
 
                             Helpers.LogInfo($"Seek to {(seekPercent * 100):0.00} ({targetTime}) of total duration ({totalDuration})       \n");
 
-                            if (Container.InputContext->start_time.IsValidPts())
-                                targetPosition += Container.InputContext->start_time;
+                            if (Container.InputContext.Pointer->start_time.IsValidPts())
+                                targetPosition += Container.InputContext.Pointer->start_time;
 
                             Container.SeekByTimestamp(targetPosition);
                         }

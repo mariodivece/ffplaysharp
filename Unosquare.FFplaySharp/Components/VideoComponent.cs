@@ -32,7 +32,7 @@
         protected override void DecodingThreadMethod()
         {
             int resultCode;
-            var frameRate = GuessFrameRate();
+            var frameRate = Container.InputContext.GuessFrameRate(Stream);
 
             AVFrame* decodedFrame;
             var lastWidth = 0;
@@ -131,7 +131,7 @@
             return; // 0;
         }
 
-        private AVRational GuessFrameRate() => ffmpeg.av_guess_frame_rate(Container.InputContext, Stream, null);
+        
 
         private int EnqueueFrame(AVFrame* sourceFrame, double frameTime, double duration, int groupIndex)
         {
@@ -158,7 +158,7 @@
             if (gotPicture == 0)
                 return 0;
 
-            frame->sample_aspect_ratio = ffmpeg.av_guess_sample_aspect_ratio(Container.InputContext, Stream, frame);
+            frame->sample_aspect_ratio = Container.InputContext.GuessAspectRatio(Stream, frame);
 
             if (Container.Options.IsFrameDropEnabled > 0 || (Container.Options.IsFrameDropEnabled != 0 && Container.MasterSyncMode != ClockSync.Video))
             {
@@ -222,7 +222,7 @@
             AVFilterContext* lastFilter = null;
 
             var codecParameters = Stream->codecpar;
-            var frameRate = GuessFrameRate();
+            var frameRate = Container.InputContext.GuessFrameRate(Stream);
             var outputPixelFormats = Container.Renderer.Video.RetrieveSupportedPixelFormats().Cast<int>();
             var softwareScalerFlags = string.Empty;
 

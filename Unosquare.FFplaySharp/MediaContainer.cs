@@ -42,7 +42,7 @@
             Components = new List<MediaComponent>() { Audio, Video, Subtitle };
         }
 
-        public AVFormatContext* InputContext { get; private set; }
+        public FormatContext InputContext { get; private set; }
 
         public IPresenter Renderer { get; }
 
@@ -58,9 +58,10 @@
 
         public bool IsSeekMethodUnknown =>
             InputContext != null &&
-            InputContext->iformat != null &&
-            InputContext->iformat->flags.HasFlag(Constants.SeekMethodUnknownFlags) &&
-            InputContext->iformat->read_seek.Pointer.IsNull();
+            InputContext.IsNull == false &&
+            InputContext.Pointer->iformat != null &&
+            InputContext.Pointer->iformat->flags.HasFlag(Constants.SeekMethodUnknownFlags) &&
+            InputContext.Pointer->iformat->read_seek.Pointer.IsNull();
 
         public long SeekAbsoluteTarget { get; private set; }
 
@@ -85,7 +86,7 @@
                     bytePosition = Audio.Frames.ShownBytePosition;
 
                 if (bytePosition < 0)
-                    bytePosition = ffmpeg.avio_tell(InputContext->pb);
+                    bytePosition = ffmpeg.avio_tell(InputContext.Pointer->pb);
 
                 return bytePosition;
             }
@@ -274,8 +275,8 @@
 
         public void StreamCycleChannel(AVMediaType codecType)
         {
-            AVFormatContext* ic = InputContext;
-            var streamCount = (int)ic->nb_streams;
+            FormatContext ic = InputContext;
+            var streamCount = (int)ic.StreamCount;
 
             MediaComponent component = codecType switch
             {
@@ -290,7 +291,7 @@
             AVProgram* program = null;
             if (component.IsVideo && component.StreamIndex != -1)
             {
-                program = ffmpeg.av_find_program_from_stream(ic, null, component.StreamIndex);
+                program = ic.FindProgramFromStream(component.StreamIndex);
                 if (program != null)
                 {
                     streamCount = (int)program->nb_stream_indexes;
@@ -322,7 +323,10 @@
                 if (nextStreamIndex == startStreamIndex)
                     return;
 
-                var st = InputContext->streams[program != null ? program->stream_index[nextStreamIndex] : nextStreamIndex];
+                var st = InputContext.Pointer->streams[program != null
+                    ? program->stream_index[nextStreamIndex]
+                    : nextStreamIndex];
+
                 if (st->codecpar->codec_type == component.MediaType)
                 {
                     // check that parameters are OK
@@ -383,13 +387,13 @@
             var i = 0;
             var pos = (long)(MasterTime * Clock.TimeBaseMicros);
 
-            if (InputContext->nb_chapters <= 0)
+            if (InputContext.ChapterCount <= 0)
                 return;
 
             /* find the current chapter */
-            for (i = 0; i < InputContext->nb_chapters; i++)
+            for (i = 0; i < InputContext.ChapterCount; i++)
             {
-                var chapter = InputContext->chapters[i];
+                var chapter = InputContext.Pointer->chapters[i];
                 if (ffmpeg.av_compare_ts(pos, Constants.AV_TIME_BASE_Q, chapter->start, chapter->time_base) < 0)
                 {
                     i--;
@@ -399,11 +403,11 @@
 
             i += incrementCount;
             i = Math.Max(i, 0);
-            if (i >= InputContext->nb_chapters)
+            if (i >= InputContext.ChapterCount)
                 return;
 
             Helpers.LogVerbose($"Seeking to chapter {i}.\n");
-            SeekByTimestamp(ffmpeg.av_rescale_q(InputContext->chapters[i]->start, InputContext->chapters[i]->time_base, Constants.AV_TIME_BASE_Q));
+            SeekByTimestamp(ffmpeg.av_rescale_q(InputContext.Pointer->chapters[i]->start, InputContext.Pointer->chapters[i]->time_base, Constants.AV_TIME_BASE_Q));
         }
 
         /// <summary>
@@ -418,14 +422,14 @@
             var ret = 0;
             var lowResFactor = Options.LowResolution;
 
-            if (streamIndex < 0 || streamIndex >= ic->nb_streams)
+            if (streamIndex < 0 || streamIndex >= ic.StreamCount)
                 return -1;
 
             var codecContext = ffmpeg.avcodec_alloc_context3(null);
-            ret = ffmpeg.avcodec_parameters_to_context(codecContext, ic->streams[streamIndex]->codecpar);
+            ret = ffmpeg.avcodec_parameters_to_context(codecContext, ic.Pointer->streams[streamIndex]->codecpar);
 
             if (ret < 0) goto fail;
-            codecContext->pkt_timebase = ic->streams[streamIndex]->time_base;
+            codecContext->pkt_timebase = ic.Pointer->streams[streamIndex]->time_base;
 
             var codec = ffmpeg.avcodec_find_decoder(codecContext->codec_id);
             var targetMediaType = codecContext->codec_type;
@@ -469,7 +473,7 @@
             const string ThreadsOptionKey = "threads";
             const string ThreadsOptionValue = "auto";
 
-            var codecOptions = Helpers.FilterCodecOptions(Options.CodecOptions, codecContext->codec_id, ic, ic->streams[streamIndex], codec);
+            var codecOptions = Helpers.FilterCodecOptions(Options.CodecOptions, codecContext->codec_id, ic, ic.Pointer->streams[streamIndex], codec);
             if (!codecOptions.ContainsKey(ThreadsOptionKey))
                 codecOptions[ThreadsOptionKey] = ThreadsOptionValue;
 
@@ -499,7 +503,7 @@
             }
 
             IsAtEndOfStream = false;
-            ic->streams[streamIndex]->discard = AVDiscard.AVDISCARD_DEFAULT;
+            ic.Pointer->streams[streamIndex]->discard = AVDiscard.AVDISCARD_DEFAULT;
             ret = targetComponent.InitializeDecoder(codecContext, streamIndex);
             if (ret < 0) goto fail;
             targetComponent.Start();
@@ -532,8 +536,7 @@
                 component.Close();
 
             // Close the input context.
-            var ic = InputContext;
-            ffmpeg.avformat_close_input(&ic);
+            InputContext.Release();
             InputContext = null;
 
             // Release packets and frames
@@ -548,16 +551,16 @@
             ffmpeg.sws_freeContext(Subtitle.ConvertContext);
         }
 
-        private static bool IsInputFormatRealtime(AVFormatContext* ic)
+        private static bool IsInputFormatRealtime(FormatContext ic)
         {
-            var inputFormatName = Helpers.PtrToString(ic->iformat->name);
+            var inputFormatName = Helpers.PtrToString(ic.Pointer->iformat->name);
             if (inputFormatName == "rtp" || inputFormatName == "rtsp" || inputFormatName == "sdp")
                 return true;
 
-            var url = Helpers.PtrToString(ic->url)?.ToLowerInvariant();
+            var url = Helpers.PtrToString(ic.Pointer->url)?.ToLowerInvariant();
             url = string.IsNullOrWhiteSpace(url) ? string.Empty : url;
 
-            if (ic->pb != null && (url.StartsWith("rtp:") || url.StartsWith("udp:")))
+            if (ic.Pointer->pb != null && (url.StartsWith("rtp:") || url.StartsWith("udp:")))
                 return true;
 
             return false;
@@ -620,8 +623,10 @@
 
             IsAtEndOfStream = false;
 
-            var ic = ffmpeg.avformat_alloc_context();
-            ic->interrupt_callback.callback = InputInterruptCallback;
+            var ic = new FormatContext
+            {
+                InterruptCallback = InputInterruptCallback
+            };
 
             var formatOptions = o.FormatOptions.ToUnmanaged();
             if (!formatOptions.ContainsKey("scan_all_pmts"))
@@ -630,11 +635,7 @@
                 scan_all_pmts_set = true;
             }
 
-            {
-                var formatOptionsArg = formatOptions.Pointer;
-                err = ffmpeg.avformat_open_input(&ic, FileName, InputFormat.Pointer, &formatOptionsArg);
-                formatOptions.Update(formatOptionsArg);
-            }
+            err = ic.OpenInput(FileName, InputFormat, formatOptions);
 
             if (err < 0)
             {
@@ -659,9 +660,9 @@
             InputContext = ic;
 
             if (o.GeneratePts)
-                ic->flags |= ffmpeg.AVFMT_FLAG_GENPTS;
+                ic.Pointer->flags |= ffmpeg.AVFMT_FLAG_GENPTS;
 
-            ffmpeg.av_format_inject_global_side_data(ic);
+            ic.InjectGlobalSideData();
 
             if (o.IsStreamInfoEnabled)
             {
@@ -670,7 +671,7 @@
                 for (var optionIndex = 0; optionIndex < perStreamOptionsList.Count; optionIndex++)
                     perStreamOptions[optionIndex] = perStreamOptionsList[optionIndex].Pointer;
 
-                err = ffmpeg.avformat_find_stream_info(ic, perStreamOptions);
+                err = ffmpeg.avformat_find_stream_info(ic.Pointer, perStreamOptions);
                 ffmpeg.av_freep(&perStreamOptions);
 
                 foreach (var optionsDictionary in perStreamOptionsList)
@@ -684,15 +685,15 @@
                 }
             }
 
-            if (ic->pb != null)
-                ic->pb->eof_reached = 0; // FIXME hack, ffplay maybe should not use avio_feof() to test for the end
+            if (ic.Pointer->pb != null)
+                ic.Pointer->pb->eof_reached = 0; // FIXME hack, ffplay maybe should not use avio_feof() to test for the end
 
             if (o.IsByteSeekingEnabled.IsAuto())
-                o.IsByteSeekingEnabled = ic->iformat->flags.HasFlag(ffmpeg.AVFMT_TS_DISCONT) && Helpers.PtrToString(ic->iformat->name) != "ogg" ? ThreeState.On : ThreeState.Off;
+                o.IsByteSeekingEnabled = ic.Pointer->iformat->flags.HasFlag(ffmpeg.AVFMT_TS_DISCONT) && Helpers.PtrToString(ic.Pointer->iformat->name) != "ogg" ? ThreeState.On : ThreeState.Off;
 
-            MaxPictureDuration = ic->iformat->flags.HasFlag(ffmpeg.AVFMT_TS_DISCONT) ? 10.0 : 3600.0;
+            MaxPictureDuration = ic.Pointer->iformat->flags.HasFlag(ffmpeg.AVFMT_TS_DISCONT) ? 10.0 : 3600.0;
 
-            var metadata = FFDictionary.Extract(ic->metadata);
+            var metadata = FFDictionary.Extract(ic.Pointer->metadata);
             if (string.IsNullOrWhiteSpace(Renderer.Video.WindowTitle) && metadata.ContainsKey("title"))
                 Renderer.Video.WindowTitle = $"{metadata["title"]} - {o.InputFileName}";
 
@@ -701,10 +702,10 @@
             {
                 var startTimestamp = o.StartOffset;
                 /* add the stream start time */
-                if (ic->start_time.IsValidPts())
-                    startTimestamp += ic->start_time;
+                if (ic.Pointer->start_time.IsValidPts())
+                    startTimestamp += ic.Pointer->start_time;
 
-                ret = ffmpeg.avformat_seek_file(ic, -1, long.MinValue, startTimestamp, long.MaxValue, 0);
+                ret = ffmpeg.avformat_seek_file(ic.Pointer, -1, long.MinValue, startTimestamp, long.MaxValue, 0);
                 if (ret < 0)
                     Helpers.LogWarning($"{FileName}: could not seek to position {(startTimestamp / Clock.TimeBaseMicros)}\n");
             }
@@ -712,15 +713,15 @@
             IsRealtime = IsInputFormatRealtime(ic);
 
             if (o.ShowStatus != 0)
-                ffmpeg.av_dump_format(ic, 0, FileName, 0);
+                ffmpeg.av_dump_format(ic.Pointer, 0, FileName, 0);
 
-            for (i = 0; i < ic->nb_streams; i++)
+            for (i = 0; i < ic.Pointer->nb_streams; i++)
             {
-                var st = ic->streams[i];
+                var st = ic.Pointer->streams[i];
                 var type = st->codecpar->codec_type;
                 st->discard = AVDiscard.AVDISCARD_ALL;
                 if (type >= 0 && o.WantedStreams.ContainsKey(type) && o.WantedStreams[type] != null && streamIndexes[type] == -1)
-                    if (ffmpeg.avformat_match_stream_specifier(ic, st, o.WantedStreams[type]) > 0)
+                    if (ffmpeg.avformat_match_stream_specifier(ic.Pointer, st, o.WantedStreams[type]) > 0)
                         streamIndexes[type] = i;
             }
 
@@ -735,17 +736,17 @@
 
             if (!o.IsVideoDisabled)
                 streamIndexes[AVMediaType.AVMEDIA_TYPE_VIDEO] =
-                    ffmpeg.av_find_best_stream(ic, AVMediaType.AVMEDIA_TYPE_VIDEO,
+                    ffmpeg.av_find_best_stream(ic.Pointer, AVMediaType.AVMEDIA_TYPE_VIDEO,
                                         streamIndexes[AVMediaType.AVMEDIA_TYPE_VIDEO], -1, null, 0);
             if (!o.IsAudioDisabled)
                 streamIndexes[AVMediaType.AVMEDIA_TYPE_AUDIO] =
-                    ffmpeg.av_find_best_stream(ic, AVMediaType.AVMEDIA_TYPE_AUDIO,
+                    ffmpeg.av_find_best_stream(ic.Pointer, AVMediaType.AVMEDIA_TYPE_AUDIO,
                                         streamIndexes[AVMediaType.AVMEDIA_TYPE_AUDIO],
                                         streamIndexes[AVMediaType.AVMEDIA_TYPE_VIDEO],
                                         null, 0);
             if (!o.IsVideoDisabled && !o.IsSubtitleDisabled)
                 streamIndexes[AVMediaType.AVMEDIA_TYPE_SUBTITLE] =
-                    ffmpeg.av_find_best_stream(ic, AVMediaType.AVMEDIA_TYPE_SUBTITLE,
+                    ffmpeg.av_find_best_stream(ic.Pointer, AVMediaType.AVMEDIA_TYPE_SUBTITLE,
                                         streamIndexes[AVMediaType.AVMEDIA_TYPE_SUBTITLE],
                                         (streamIndexes[AVMediaType.AVMEDIA_TYPE_AUDIO] >= 0 ?
                                          streamIndexes[AVMediaType.AVMEDIA_TYPE_AUDIO] :
@@ -755,9 +756,9 @@
             ShowMode = o.ShowMode;
             if (streamIndexes[AVMediaType.AVMEDIA_TYPE_VIDEO] >= 0)
             {
-                AVStream* st = ic->streams[streamIndexes[AVMediaType.AVMEDIA_TYPE_VIDEO]];
+                AVStream* st = ic.Pointer->streams[streamIndexes[AVMediaType.AVMEDIA_TYPE_VIDEO]];
                 AVCodecParameters* codecpar = st->codecpar;
-                AVRational sar = ffmpeg.av_guess_sample_aspect_ratio(ic, st, null);
+                AVRational sar = ic.GuessAspectRatio(st, null);
                 if (codecpar->width != 0)
                     Renderer.Video.set_default_window_size(codecpar->width, codecpar->height, sar);
             }
@@ -801,14 +802,14 @@
                 {
                     WasPaused = IsPaused;
                     if (IsPaused)
-                        ReadPauseResultCode = ffmpeg.av_read_pause(ic);
+                        ReadPauseResultCode = ffmpeg.av_read_pause(ic.Pointer);
                     else
-                        ffmpeg.av_read_play(ic);
+                        ffmpeg.av_read_play(ic.Pointer);
                 }
 
                 if (IsPaused &&
-                        (Helpers.PtrToString(ic->iformat->name) == "rtsp" ||
-                         (ic->pb != null && o.InputFileName.StartsWith("mmsh:"))))
+                        (Helpers.PtrToString(ic.Pointer->iformat->name) == "rtsp" ||
+                         (ic.Pointer->pb != null && o.InputFileName.StartsWith("mmsh:"))))
                 {
                     /* wait 10 ms to avoid trying to get another packet */
                     /* XXX: horrible */
@@ -864,7 +865,7 @@
             ret = 0;
         fail:
             if (ic != null && InputContext == null)
-                ffmpeg.avformat_close_input(&ic);
+                ic.Release();
 
             if (ret != 0)
             {
@@ -884,10 +885,10 @@
             // FIXME the +-2 is due to rounding being not done in the correct direction in generation
             //      of the seek_pos/seek_rel variables
 
-            resultCode = ffmpeg.avformat_seek_file(InputContext, -1, seekTargetMin, seekTarget, seekTargetMax, SeekFlags);
+            resultCode = ffmpeg.avformat_seek_file(InputContext.Pointer, -1, seekTargetMin, seekTarget, seekTargetMax, SeekFlags);
             if (resultCode < 0)
             {
-                Helpers.LogError($"{Helpers.PtrToString(InputContext->url)}: error while seeking\n");
+                Helpers.LogError($"{Helpers.PtrToString(InputContext.Pointer->url)}: error while seeking\n");
             }
             else
             {
@@ -916,13 +917,13 @@
         private FlowResult ReadPacket(ref int resultCode)
         {
             var readPacket = new Packet();
-            resultCode = ffmpeg.av_read_frame(InputContext, readPacket.Pointer);
+            resultCode = ffmpeg.av_read_frame(InputContext.Pointer, readPacket.Pointer);
 
             if (resultCode < 0)
             {
                 readPacket.Release();
 
-                if ((resultCode == ffmpeg.AVERROR_EOF || ffmpeg.avio_feof(InputContext->pb) != 0) && !IsAtEndOfStream)
+                if ((resultCode == ffmpeg.AVERROR_EOF || ffmpeg.avio_feof(InputContext.Pointer->pb) != 0) && !IsAtEndOfStream)
                 {
                     foreach (var c in Components)
                     {
@@ -933,7 +934,7 @@
                     IsAtEndOfStream = true;
                 }
 
-                if (InputContext->pb != null && InputContext->pb->error != 0)
+                if (InputContext.Pointer->pb != null && InputContext.Pointer->pb->error != 0)
                 {
                     if (Options.ExitOnFinish)
                         return FlowResult.Fail;
@@ -950,11 +951,11 @@
             }
 
             // check if packet is in play range specified by user, then queue, otherwise discard.
-            var streamStartPts = InputContext->streams[readPacket.StreamIndex]->start_time;
+            var streamStartPts = InputContext.Pointer->streams[readPacket.StreamIndex]->start_time;
 
             var isPacketInPlayRange = !Options.Duration.IsValidPts() ||
                     (readPacket.Pts - (streamStartPts.IsValidPts() ? streamStartPts : 0)) *
-                    InputContext->streams[readPacket.StreamIndex]->time_base.ToFactor() -
+                    InputContext.Pointer->streams[readPacket.StreamIndex]->time_base.ToFactor() -
                     (Options.StartOffset.IsValidPts() ? Options.StartOffset : 0) / Clock.TimeBaseMicros
                     <= (Options.Duration / Clock.TimeBaseMicros);
 
