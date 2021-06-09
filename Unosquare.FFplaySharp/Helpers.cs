@@ -1,5 +1,6 @@
 ﻿namespace Unosquare.FFplaySharp
 {
+    using FFmpeg;
     using FFmpeg.AutoGen;
     using System;
     using System.Collections.Generic;
@@ -11,7 +12,7 @@
         private const string FFmpegDirectory = @"c:\ffmpeg\x64";
 
         public static void SetFFmpegRootPath(string path = FFmpegDirectory) => ffmpeg.RootPath = path;
-        
+
         public static bool HasFlag(this int flagsVariable, int flagValue) => (flagsVariable & flagValue) != 0;
 
         public static int AV_CEIL_RSHIFT(int a, int b) => ((a) + (1 << (b)) - 1) >> (b);
@@ -160,72 +161,60 @@
         public static unsafe AVDictionary* filter_codec_opts(AVDictionary* opts, AVCodecID codec_id,
                                     AVFormatContext* s, AVStream* st, AVCodec* codec)
         {
-            AVDictionary* ret = null;
-            AVDictionaryEntry* t = null;
-            int flags = s->oformat != null ? ffmpeg.AV_OPT_FLAG_ENCODING_PARAM : ffmpeg.AV_OPT_FLAG_DECODING_PARAM;
-            byte prefix = 0;
-            var cc = ffmpeg.avcodec_get_class();
 
+            AVDictionary* ret = null;
+
+            int flags = s->oformat != null ? ffmpeg.AV_OPT_FLAG_ENCODING_PARAM : ffmpeg.AV_OPT_FLAG_DECODING_PARAM;
             if (codec == null)
                 codec = s->oformat != null ? ffmpeg.avcodec_find_encoder(codec_id) : ffmpeg.avcodec_find_decoder(codec_id);
 
+            // -codec:a:1 ac3
+            // option:mediatype:streamindex value
+            // option:mediatype
+            // option
+
+            var prefix = string.Empty;
             switch (st->codecpar->codec_type)
             {
                 case AVMediaType.AVMEDIA_TYPE_VIDEO:
-                    prefix = Convert.ToByte('v');
+                    prefix = "v";
                     flags |= ffmpeg.AV_OPT_FLAG_VIDEO_PARAM;
                     break;
                 case AVMediaType.AVMEDIA_TYPE_AUDIO:
-                    prefix = Convert.ToByte('a');
+                    prefix = "a";
                     flags |= ffmpeg.AV_OPT_FLAG_AUDIO_PARAM;
                     break;
                 case AVMediaType.AVMEDIA_TYPE_SUBTITLE:
-                    prefix = Convert.ToByte('s');
+                    prefix = "s";
                     flags |= ffmpeg.AV_OPT_FLAG_SUBTITLE_PARAM;
                     break;
             }
 
-            while ((t = ffmpeg.av_dict_get(opts, string.Empty, t, ffmpeg.AV_DICT_IGNORE_SUFFIX)) != null)
+            DictionaryEntry t = null;
+            while ((t = Dictionary.Next(opts, t)) != null)
             {
-                var p = strchr(t->key, ':');
+                var keyParts = t.Key.Split(':', 2);
+                var optionName = keyParts[0];
+                var specifier = keyParts.Length > 1 ? keyParts[1] : null;
 
-                /* check stream specification in opt name */
-                if (p != null)
-                    switch (CheckStreamSpecifier(s, st, PtrToString(p + 1)))
-                    {
-                        case 1: *p = 0; break;
-                        default: continue;
-                            // default: exit_program(1);
-                    }
+                var checkResult = specifier != null ? CheckStreamSpecifier(s, st, specifier) : -1;
+                if (checkResult <= 0)
+                    continue;
 
-                if (ffmpeg.av_opt_find(&cc, PtrToString(t->key), null, flags, ffmpeg.AV_OPT_SEARCH_FAKE_OBJ) != null ||
+                if (MediaClass.Codec.FindOption(optionName, flags, ffmpeg.AV_OPT_SEARCH_FAKE_OBJ) != null ||
                     codec == null ||
                     (codec->priv_class != null &&
-                     ffmpeg.av_opt_find(&codec->priv_class, PtrToString(t->key), null, flags, ffmpeg.AV_OPT_SEARCH_FAKE_OBJ) != null))
-                    ffmpeg.av_dict_set(&ret, PtrToString(t->key), PtrToString(t->value), 0);
-                else if (t->key[0] == prefix &&
-                         ffmpeg.av_opt_find(&cc, PtrToString(t->key + 1), null, flags, ffmpeg.AV_OPT_SEARCH_FAKE_OBJ) != null)
-                    ffmpeg.av_dict_set(&ret, PtrToString(t->key + 1), PtrToString(t->value), 0);
-
-                if (p != null)
-                    *p = Convert.ToByte(':');
+                     MediaClass.FromPrivateClass(codec->priv_class).FindOption(optionName, flags, ffmpeg.AV_OPT_SEARCH_FAKE_OBJ) != null))
+                    ffmpeg.av_dict_set(&ret, optionName, t.Value, 0);
+                else if (prefix != string.Empty && optionName.StartsWith(prefix) && optionName.Length > 1 &&
+                         MediaClass.Codec.FindOption(optionName.Substring(1), flags, ffmpeg.AV_OPT_SEARCH_FAKE_OBJ) != null)
+                    ffmpeg.av_dict_set(&ret, optionName.Substring(1), t.Value, 0);
             }
+
             return ret;
         }
 
-        public static unsafe Dictionary<string, string> ExtractDictionary(AVDictionary* avDitionary)
-        {
-            var result = new Dictionary<string, string>(64);
-            AVDictionaryEntry* entry = null;
-            while ((entry = ffmpeg.av_dict_get(avDitionary, string.Empty, entry, ffmpeg.AV_DICT_IGNORE_SUFFIX)) != null)
-            {
-                var key = PtrToString(entry->key);
-                var value = PtrToString(entry->value);
-                result[key] = value;
-            }
 
-            return result;
-        }
 
         public static unsafe void Log(void* opaque, int logLevel, string message) =>
             ffmpeg.av_log(opaque, logLevel, message);

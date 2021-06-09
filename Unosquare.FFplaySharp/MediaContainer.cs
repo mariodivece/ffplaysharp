@@ -15,7 +15,7 @@
     {
         private readonly AVIOInterruptCB_callback InputInterruptCallback;
 
-        private AVInputFormat* InputFormat = null;
+        private InputFormat InputFormat = null;
         private Thread ReadingThread;
 
         private bool WasPaused;
@@ -197,7 +197,7 @@
             if (string.IsNullOrWhiteSpace(container.FileName))
                 goto fail;
 
-            container.InputFormat = o.InputFormat;
+            container.InputFormat = o.InputFormat ?? InputFormat.None;
             container.ytop = 0;
             container.xleft = 0;
 
@@ -468,7 +468,7 @@
             const string ThreadsOptionValue = "auto";
 
             var codecOptions = Helpers.filter_codec_opts(Options.CodecOptions, codecContext->codec_id, ic, ic->streams[streamIndex], codec);
-            if (ffmpeg.av_dict_get(codecOptions, ThreadsOptionKey, null, 0) == null)
+            if (Dictionary.Find(codecOptions, ThreadsOptionKey) == null)
                 ffmpeg.av_dict_set(&codecOptions, ThreadsOptionKey, ThreadsOptionValue, 0);
 
             if (lowResFactor != 0)
@@ -482,11 +482,10 @@
                 goto fail;
             }
 
-            var t = ffmpeg.av_dict_get(codecOptions, string.Empty, null, ffmpeg.AV_DICT_IGNORE_SUFFIX);
+            var t = Dictionary.First(codecOptions);
             if (t != null)
             {
-                var key = Helpers.PtrToString(t->key);
-                Helpers.LogError($"Option {key} not found.\n");
+                Helpers.LogError($"Option {t.Key} not found.\n");
                 ret = ffmpeg.AVERROR_OPTION_NOT_FOUND;
                 goto fail;
             }
@@ -618,7 +617,7 @@
             var ic = ffmpeg.avformat_alloc_context();
             ic->interrupt_callback.callback = InputInterruptCallback;
 
-            if (ffmpeg.av_dict_get(o.FormatOptions, "scan_all_pmts", null, ffmpeg.AV_DICT_MATCH_CASE) == null)
+            if (Dictionary.Find(o.FormatOptions, "scan_all_pmts", true) == null)
             {
                 var formatOptions = o.FormatOptions;
                 ffmpeg.av_dict_set(&formatOptions, "scan_all_pmts", "1", ffmpeg.AV_DICT_DONT_OVERWRITE);
@@ -628,7 +627,7 @@
 
             {
                 var formatOptions = o.FormatOptions;
-                err = ffmpeg.avformat_open_input(&ic, FileName, InputFormat, &formatOptions);
+                err = ffmpeg.avformat_open_input(&ic, FileName, InputFormat.Pointer, &formatOptions);
                 o.FormatOptions = formatOptions;
             }
 
@@ -646,10 +645,10 @@
                 o.FormatOptions = formatOptions;
             }
 
-            AVDictionaryEntry* formatOption;
-            if ((formatOption = ffmpeg.av_dict_get(o.FormatOptions, string.Empty, null, ffmpeg.AV_DICT_IGNORE_SUFFIX)) != null)
+            DictionaryEntry formatOption = null;
+            if ((formatOption = Dictionary.First(o.FormatOptions)) != null)
             {
-                Helpers.LogError($"Option {Helpers.PtrToString(formatOption->key)} not found.\n");
+                Helpers.LogError($"Option {formatOption.Key} not found.\n");
                 ret = ffmpeg.AVERROR_OPTION_NOT_FOUND;
                 goto fail;
             }
@@ -689,8 +688,8 @@
 
             MaxPictureDuration = ic->iformat->flags.HasFlag(ffmpeg.AVFMT_TS_DISCONT) ? 10.0 : 3600.0;
 
-            if (string.IsNullOrWhiteSpace(Renderer.Video.WindowTitle) && (formatOption = ffmpeg.av_dict_get(ic->metadata, "title", null, 0)) != null)
-                Renderer.Video.WindowTitle = $"{Helpers.PtrToString(formatOption->value)} - {o.InputFileName}";
+            if (string.IsNullOrWhiteSpace(Renderer.Video.WindowTitle) && (formatOption = Dictionary.Find(ic->metadata, "title")) != null)
+                Renderer.Video.WindowTitle = $"{formatOption.Value} - {o.InputFileName}";
 
             /* if seeking requested, we execute it */
             if (o.StartOffset.IsValidPts())

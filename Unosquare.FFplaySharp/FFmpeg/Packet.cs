@@ -7,7 +7,7 @@
     using Unosquare.FFplaySharp;
     using Unosquare.FFplaySharp.Primitives;
 
-    public unsafe sealed class Packet : UnmanagedReference<AVPacket>, ISerialGroupable
+    public unsafe sealed class Packet : UnmanagedCountedReference<AVPacket>, ISerialGroupable
     {
         public Packet([CallerFilePath] string filePath = default, [CallerLineNumber] int lineNumber = default)
             : this(ffmpeg.av_packet_alloc(), filePath, lineNumber)

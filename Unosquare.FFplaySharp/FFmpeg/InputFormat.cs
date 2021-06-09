@@ -1,25 +1,21 @@
 ﻿namespace FFmpeg
 {
     using FFmpeg.AutoGen;
-    using System;
-    using System.Collections.Generic;
-    using System.Linq;
-    using System.Runtime.CompilerServices;
-    using System.Text;
-    using System.Threading.Tasks;
     using Unosquare.FFplaySharp.Primitives;
 
-    public class InputFormat : UnmanagedReference<AVInputFormat>
+    public unsafe sealed class InputFormat : UnmanagedReference<AVInputFormat>
     {
-        public InputFormat([CallerFilePath] string filePath = default, [CallerLineNumber] int lineNumber = default)
-            : base(filePath, lineNumber)
+        public static readonly InputFormat None = new(null);
+
+        private InputFormat(AVInputFormat* pointer)
         {
-            // placeholder
+            Update(pointer);
         }
 
-        protected override unsafe void ReleaseInternal(AVInputFormat* pointer)
+        public static InputFormat Find(string shortName)
         {
-            throw new NotImplementedException();
+            var pointer = ffmpeg.av_find_input_format(shortName);
+            return new(pointer);
         }
     }
 }

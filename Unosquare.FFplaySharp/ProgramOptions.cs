@@ -1,5 +1,6 @@
 ﻿namespace Unosquare.FFplaySharp
 {
+    using FFmpeg;
     using FFmpeg.AutoGen;
     using System;
     using System.Collections.Generic;
@@ -50,7 +51,7 @@
             Option("volume", true, "set startup volume 0=min 100=max", "volume", (t, a) =>
                 t.StartupVolume = int.TryParse(a, out var v) ? v : t.StartupVolume),
             Option("f", true, "force format", "fmt", (t, a) =>
-                t.InputFormat = ffmpeg.av_find_input_format(a)),
+                t.InputFormat = InputFormat.Find(a)),
             Option("pix_fmt", true, "set pixel format", "format", (t, a) =>
             {
                 ffmpeg.av_log(null, ffmpeg.AV_LOG_WARNING, "Option -pix_fmt is deprecated, use -pixel_format.\n");
@@ -114,7 +115,7 @@
                 t.InputFileName = a)
         };
 
-        public AVInputFormat* InputFormat { get; set; }
+        public InputFormat InputFormat { get; set; }
 
         public string InputFileName { get; set; }
         
@@ -303,22 +304,6 @@
         private static OptionDef<ProgramOptions> Option(string name, bool hasArgument, string help, Action<ProgramOptions, string> apply)
             => new OptionDef<ProgramOptions>(name, hasArgument ? OptionFlags.HAS_ARG : OptionFlags.OPT_BOOL, apply, help);
 
-        /// <summary>
-        /// Port of opt_find. Finds an option in a given ffmpeg class.
-        /// </summary>
-        /// <param name="classObject"></param>
-        /// <param name="optionName"></param>
-        /// <param name="searchFlags"></param>
-        /// <returns></returns>
-        private static AVOption* FindClassOption(void* classObject, string optionName, int searchFlags)
-        {
-            var o = ffmpeg.av_opt_find(classObject, optionName, null, 0, searchFlags);
-            if (o != null && o->flags == 0)
-                return null;
-
-            return o;
-        }
-
         private static int FlagSetMode(AVOption* option, string flagName) =>
             option->type == AVOptionType.AV_OPT_TYPE_FLAGS && (flagName.StartsWith('-') || flagName.StartsWith('+'))
                 ? ffmpeg.AV_DICT_APPEND : 0;
@@ -335,10 +320,6 @@
 
             AVOption* o;
             bool isConsumed = false;
-            var codecClass = ffmpeg.avcodec_get_class();
-            var formatClass = ffmpeg.avformat_get_class();
-            var scalerClass = ffmpeg.sws_get_class();
-            var resamplerClass = ffmpeg.swr_get_class();
 
             if (optionName == "debug" || optionName == "fdebug")
                 ffmpeg.av_log_set_level(ffmpeg.AV_LOG_DEBUG);
@@ -348,9 +329,9 @@
                 ? optionName.Substring(0, optionName.IndexOf(':'))
                 : new string(optionName);
 
-            if ((o = FindClassOption(&codecClass, strippedOptionName, SearchFlags)) != null || (
+            if ((o = MediaClass.Codec.FindOption(strippedOptionName, SearchFlags)) != null || (
                 (optionName[0] == 'v' || optionName[0] == 'a' || optionName[0] == 's') &&
-                (o = FindClassOption(&codecClass, optionName.Substring(1), ffmpeg.AV_OPT_SEARCH_FAKE_OBJ)) != null))
+                (o = MediaClass.Codec.FindOption(optionName.Substring(1))) != null))
             {
                 var codecOptions = CodecOptions;
                 ffmpeg.av_dict_set(&codecOptions, optionName, optionValue, FlagSetMode(o, optionValue));
@@ -358,7 +339,7 @@
                 isConsumed = true;
             }
 
-            if ((o = FindClassOption(&formatClass, optionName, SearchFlags)) != null)
+            if ((o = MediaClass.Format.FindOption(optionName, SearchFlags)) != null)
             {
                 var formatOptions = FormatOptions;
                 ffmpeg.av_dict_set(&formatOptions, optionName, optionValue, FlagSetMode(o, optionValue));
@@ -370,7 +351,7 @@
                 isConsumed = true;
             }
 
-            if (!isConsumed && (o = FindClassOption(&scalerClass, optionName, SearchFlags)) != null)
+            if (!isConsumed && (o = MediaClass.Format.FindOption(optionName, SearchFlags)) != null)
             {
                 var dummyScaler = ffmpeg.sws_alloc_context();
                 var setResult = ffmpeg.av_opt_set(dummyScaler, optionName, optionValue, 0);
@@ -397,7 +378,7 @@
                 isConsumed = true;
             }
 
-            if (!isConsumed && (o = FindClassOption(&resamplerClass, optionName, SearchFlags)) != null)
+            if (!isConsumed && (o = MediaClass.Resampler.FindOption(optionName, SearchFlags)) != null)
             {
                 var dummyRescaler = ffmpeg.swr_alloc();
                 var setResult = ffmpeg.av_opt_set(dummyRescaler, optionName, optionValue, 0);

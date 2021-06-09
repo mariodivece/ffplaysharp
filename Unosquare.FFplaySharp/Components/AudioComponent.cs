@@ -1,5 +1,6 @@
 ﻿namespace Unosquare.FFplaySharp.Components
 {
+    using FFmpeg;
     using FFmpeg.AutoGen;
     using System;
     using System.Diagnostics;
@@ -388,7 +389,7 @@
 
         private string RetrieveResamplerOptions()
         {
-            var options = Helpers.ExtractDictionary(Container.Options.ResamplerOptions);
+            var options = Dictionary.Extract(Container.Options.ResamplerOptions);
             var result = string.Join(":", options.Select(kvp => $"{kvp.Key}={kvp.Value}").ToArray());
             return string.IsNullOrWhiteSpace(result) ? null : result;
         }

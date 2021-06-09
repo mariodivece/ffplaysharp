@@ -4,7 +4,7 @@
     using System.Runtime.CompilerServices;
     using Unosquare.FFplaySharp.Primitives;
 
-    public unsafe sealed class FormatContext : UnmanagedReference<AVFormatContext>
+    public unsafe sealed class FormatContext : UnmanagedCountedReference<AVFormatContext>
     {
         public FormatContext([CallerFilePath] string filePath = default, [CallerLineNumber] int lineNumber = default)
             : base(filePath, lineNumber)
@@ -18,11 +18,11 @@
             set => Pointer->interrupt_callback.callback = value;
         }
 
-        public int OpenInput(string filePath, AVInputFormat* format, Dictionary formatOptions)
+        public int OpenInput(string filePath, InputFormat format, Dictionary formatOptions)
         {
             var context = Pointer;
             var formatOptionsPtr = formatOptions.Pointer;
-            var resultCode = ffmpeg.avformat_open_input(&context, filePath, format, &formatOptionsPtr);
+            var resultCode = ffmpeg.avformat_open_input(&context, filePath, format.Pointer, &formatOptionsPtr);
             Update(context);
             formatOptions.Update(formatOptionsPtr);
             

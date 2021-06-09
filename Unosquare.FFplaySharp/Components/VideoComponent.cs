@@ -1,12 +1,11 @@
 ﻿namespace Unosquare.FFplaySharp.Components
 {
+    using FFmpeg;
     using FFmpeg.AutoGen;
     using SDL2;
     using System;
-    using System.Collections.Generic;
     using System.Linq;
     using Unosquare.FFplaySharp.Primitives;
-    using Unosquare.FFplaySharp.Rendering;
 
     public unsafe sealed class VideoComponent : FilteringMediaComponent
     {
@@ -225,7 +224,7 @@
             var codecParameters = Stream->codecpar;
             var frameRate = GuessFrameRate();
             var outputPixelFormats = Container.Renderer.Video.RetrieveSupportedPixelFormats().Cast<int>();
-            var softwareScalerOptions = Helpers.ExtractDictionary(Container.Options.ScalerOptions);
+            var softwareScalerOptions = Dictionary.Extract(Container.Options.ScalerOptions);
             var softwareScalerFlags = string.Empty;
 
             foreach (var kvp in softwareScalerOptions)
