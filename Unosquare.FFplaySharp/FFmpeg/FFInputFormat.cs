@@ -3,16 +3,16 @@
     using FFmpeg.AutoGen;
     using Unosquare.FFplaySharp.Primitives;
 
-    public unsafe sealed class InputFormat : UnmanagedReference<AVInputFormat>
+    public unsafe sealed class FFInputFormat : UnmanagedReference<AVInputFormat>
     {
-        public static readonly InputFormat None = new(null);
+        public static readonly FFInputFormat None = new(null);
 
-        private InputFormat(AVInputFormat* pointer)
+        private FFInputFormat(AVInputFormat* pointer)
         {
             Update(pointer);
         }
 
-        public static InputFormat Find(string shortName)
+        public static FFInputFormat Find(string shortName)
         {
             var pointer = ffmpeg.av_find_input_format(shortName);
             return new(pointer);

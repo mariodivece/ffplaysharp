@@ -10,8 +10,8 @@
         private readonly object SyncLock = new();
         private readonly AutoResetEvent IsAvailableEvent = new(false);
         private bool m_IsClosed = true; // starts in a blocked state
-        private Packet First;
-        private Packet Last;
+        private FFPacket First;
+        private FFPacket Last;
 
         private int m_Count;
         private int m_ByteSize;
@@ -69,7 +69,7 @@
             }
         }
 
-        public bool Enqueue(Packet packet)
+        public bool Enqueue(FFPacket packet)
         {
             var result = true;
             lock (SyncLock)
@@ -94,7 +94,7 @@
 
                     Last = packet;
                     Count++;
-                    ByteSize += packet.Size + Packet.StructureSize;
+                    ByteSize += packet.Size + FFPacket.StructureSize;
                     DurationUnits += packet.DurationUnits;
                     IsAvailableEvent.Set();
                 }
@@ -107,12 +107,12 @@
         }
 
         public bool EnqueueFlush() =>
-            Enqueue(Packet.CreateFlushPacket());
+            Enqueue(FFPacket.CreateFlushPacket());
 
         public bool EnqueueNull() =>
-            Enqueue(Packet.CreateNullPacket(Component.StreamIndex));
+            Enqueue(FFPacket.CreateNullPacket(Component.StreamIndex));
 
-        public Packet Dequeue(bool blockWait)
+        public FFPacket Dequeue(bool blockWait)
         {
             while (true)
             {
@@ -129,7 +129,7 @@
                             Last = null;
 
                         Count--;
-                        ByteSize -= item.Size + Packet.StructureSize;
+                        ByteSize -= item.Size + FFPacket.StructureSize;
                         DurationUnits -= item.DurationUnits;
                         return item;
                     }

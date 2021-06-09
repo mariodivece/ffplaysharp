@@ -3,14 +3,14 @@
     using FFmpeg.AutoGen;
     using Unosquare.FFplaySharp.Primitives;
 
-    public unsafe sealed class MediaClass : UnmanagedReference<AVClass>
+    public unsafe sealed class FFMediaClass : UnmanagedReference<AVClass>
     {
-        public static readonly MediaClass Codec = new(ffmpeg.avcodec_get_class());
-        public static readonly MediaClass Format = new(ffmpeg.avformat_get_class());
-        public static readonly MediaClass Scaler = new(ffmpeg.sws_get_class());
-        public static readonly MediaClass Resampler = new(ffmpeg.swr_get_class());
+        public static readonly FFMediaClass Codec = new(ffmpeg.avcodec_get_class());
+        public static readonly FFMediaClass Format = new(ffmpeg.avformat_get_class());
+        public static readonly FFMediaClass Scaler = new(ffmpeg.sws_get_class());
+        public static readonly FFMediaClass Resampler = new(ffmpeg.swr_get_class());
 
-        private MediaClass(AVClass* pointer)
+        public FFMediaClass(AVClass* pointer)
             : base(pointer)
         {
             // placeholder
@@ -41,7 +41,7 @@
         public AVOption* FindOption(string optionName) =>
             FindOption(optionName, 0, ffmpeg.AV_OPT_SEARCH_FAKE_OBJ);
 
-        public static MediaClass FromPrivateClass(AVClass* pointer) =>
-            pointer == null ? null : new MediaClass(pointer);
+        public static FFMediaClass FromPrivateClass(AVClass* pointer) =>
+            pointer == null ? null : new FFMediaClass(pointer);
     }
 }

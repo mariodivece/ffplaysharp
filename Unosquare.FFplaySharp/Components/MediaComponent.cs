@@ -8,7 +8,7 @@
     public abstract unsafe class MediaComponent
     {
         private readonly ThreeState ReorderPts;
-        private Packet PendingPacket;
+        private FFPacket PendingPacket;
         private bool IsPacketPending;
         private Thread Worker;
 
@@ -26,9 +26,9 @@
 
         public FrameQueue Frames { get; }
 
-        public AVCodecContext* CodecContext { get; private set; }
+        public FFCodecContext CodecContext { get; private set; }
 
-        public Stream Stream;
+        public FFStream Stream;
 
         public int StreamIndex { get; set; }
 
@@ -93,7 +93,7 @@
 
             while (true)
             {
-                Packet currentPacket = null;
+                FFPacket currentPacket = null;
 
                 if (Packets.GroupIndex == PacketGroupIndex)
                 {
@@ -102,13 +102,13 @@
                         if (Packets.IsClosed)
                             return -1;
 
-                        switch (CodecContext->codec_type)
+                        switch (CodecContext.CodecType)
                         {
                             case AVMediaType.AVMEDIA_TYPE_VIDEO:
                                 if (decodedFrame == null)
                                     decodedFrame = ffmpeg.av_frame_alloc();
 
-                                resultCode = ffmpeg.avcodec_receive_frame(CodecContext, decodedFrame);
+                                resultCode = ffmpeg.avcodec_receive_frame(CodecContext.Pointer, decodedFrame);
                                 if (resultCode >= 0)
                                 {
                                     if (ReorderPts.IsAuto())
@@ -121,14 +121,14 @@
                             case AVMediaType.AVMEDIA_TYPE_AUDIO:
                                 if (decodedFrame == null) decodedFrame = ffmpeg.av_frame_alloc();
 
-                                resultCode = ffmpeg.avcodec_receive_frame(CodecContext, decodedFrame);
+                                resultCode = ffmpeg.avcodec_receive_frame(CodecContext.Pointer, decodedFrame);
                                 break;
                         }
 
                         if (resultCode == ffmpeg.AVERROR_EOF)
                         {
                             FinalPacketGroupIndex = PacketGroupIndex;
-                            ffmpeg.avcodec_flush_buffers(CodecContext);
+                            ffmpeg.avcodec_flush_buffers(CodecContext.Pointer);
                             return 0;
                         }
 
@@ -172,7 +172,7 @@
                 }
                 else
                 {
-                    if (CodecContext->codec_type == AVMediaType.AVMEDIA_TYPE_SUBTITLE)
+                    if (CodecContext.CodecType == AVMediaType.AVMEDIA_TYPE_SUBTITLE)
                     {
                         var gotSubtitle = 0;
 
@@ -180,7 +180,7 @@
                         if (decodedSubtitle == null)
                             decodedSubtitle = (AVSubtitle*)ffmpeg.av_malloc((ulong)sizeof(AVSubtitle));
 
-                        resultCode = ffmpeg.avcodec_decode_subtitle2(CodecContext, decodedSubtitle, &gotSubtitle, currentPacket.Pointer);
+                        resultCode = ffmpeg.avcodec_decode_subtitle2(CodecContext.Pointer, decodedSubtitle, &gotSubtitle, currentPacket.Pointer);
 
                         if (resultCode < 0)
                         {
@@ -203,9 +203,9 @@
                     }
                     else
                     {
-                        if (ffmpeg.avcodec_send_packet(CodecContext, currentPacket.Pointer) == ffmpeg.AVERROR(ffmpeg.EAGAIN))
+                        if (CodecContext.SendPacket(currentPacket) == ffmpeg.AVERROR(ffmpeg.EAGAIN))
                         {
-                            Helpers.LogError(CodecContext, "Receive_frame and send_packet both returned EAGAIN, which is an API violation.\n");
+                            Helpers.LogError(CodecContext.Pointer, "Receive_frame and send_packet both returned EAGAIN, which is an API violation.\n");
                             IsPacketPending = true;
                             PendingPacket = currentPacket.Clone();
                         }
@@ -218,11 +218,11 @@
 
         protected virtual void FlushCodecBuffers()
         {
-            ffmpeg.avcodec_flush_buffers(CodecContext);
+            CodecContext.FlushBuffers();
             FinalPacketGroupIndex = 0;
         }
 
-        public virtual int InitializeDecoder(AVCodecContext* codecContext, int streamIndex)
+        public virtual int InitializeDecoder(FFCodecContext codecContext, int streamIndex)
         {
             StreamIndex = streamIndex;
             Stream = Container.InputContext.Streams[streamIndex];
@@ -234,8 +234,7 @@
         public void DisposeDecoder()
         {
             PendingPacket?.Release();
-            var codecContext = CodecContext;
-            ffmpeg.avcodec_free_context(&codecContext);
+            CodecContext.Release();
             CodecContext = null;
         }
 

@@ -54,7 +54,7 @@
 
         public override AVMediaType MediaType => AVMediaType.AVMEDIA_TYPE_AUDIO;
 
-        public int ConfigureFilters(AVCodecContext* codecContext)
+        public int ConfigureFilters(FFCodecContext codecContext)
         {
             FilterSpec.ImportFrom(codecContext);
             return ConfigureFilters(false);
@@ -345,7 +345,7 @@
 
         protected override FrameQueue CreateFrameQueue() => new(Packets, Constants.AudioFrameQueueCapacity, true);
 
-        public override unsafe int InitializeDecoder(AVCodecContext* codecContext, int streamIndex)
+        public override unsafe int InitializeDecoder(FFCodecContext codecContext, int streamIndex)
         {
             if (ConfigureFilters(codecContext) < 0)
                 return -1;
@@ -408,7 +408,7 @@
                 var decoderTimeBase = ffmpeg.av_make_q(1, frame->sample_rate);
 
                 if (frame->pts.IsValidPts())
-                    frame->pts = ffmpeg.av_rescale_q(frame->pts, CodecContext->pkt_timebase, decoderTimeBase);
+                    frame->pts = ffmpeg.av_rescale_q(frame->pts, CodecContext.PacketTimeBase, decoderTimeBase);
                 else if (NextPts.IsValidPts())
                     frame->pts = ffmpeg.av_rescale_q(NextPts, NextPtsTimeBase, decoderTimeBase);
 

@@ -1,5 +1,6 @@
 ﻿namespace Unosquare.FFplaySharp.Primitives
 {
+    using FFmpeg;
     using FFmpeg.AutoGen;
     using System;
 
@@ -100,7 +101,7 @@
             Height = FramePtr->height;
         }
 
-        public void Update(AVSubtitle* sourceFrame, AVCodecContext* codec, int groupIndex, double time)
+        public void Update(AVSubtitle* sourceFrame, FFCodecContext codecContext, int groupIndex, double time)
         {
             if (SubtitlePtr != null)
                 ffmpeg.avsubtitle_free(SubtitlePtr);
@@ -110,8 +111,8 @@
             GroupIndex = groupIndex;
             Time = time;
             Duration = (SubtitlePtr->end_display_time - SubtitlePtr->start_display_time) / 1000d;
-            Width = codec->width;
-            Height = codec->height;
+            Width = codecContext.Width;
+            Height = codecContext.Height;
         }
 
         public void UpdateSubtitleArea(int width, int height)

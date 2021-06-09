@@ -5,9 +5,9 @@
     using System.Runtime.CompilerServices;
     using Unosquare.FFplaySharp.Primitives;
 
-    public unsafe sealed class FormatContext : UnmanagedCountedReference<AVFormatContext>
+    public unsafe sealed class FFFormatContext : UnmanagedCountedReference<AVFormatContext>
     {
-        public FormatContext([CallerFilePath] string filePath = default, [CallerLineNumber] int lineNumber = default)
+        public FFFormatContext([CallerFilePath] string filePath = default, [CallerLineNumber] int lineNumber = default)
             : base(filePath, lineNumber)
         {
             Update(ffmpeg.avformat_alloc_context());
@@ -22,7 +22,11 @@
 
         public StreamCollection Streams { get; }
 
-        public int StreamCount => Convert.ToInt32(Pointer->nb_streams);
+        public int Flags
+        {
+            get => Pointer->flags;
+            set => Pointer->flags = value;
+        }
 
         public int ChapterCount => Convert.ToInt32(Pointer->nb_chapters);
 
@@ -32,15 +36,18 @@
 
         public void InjectGlobalSideData() => ffmpeg.av_format_inject_global_side_data(Pointer);
 
-        public AVProgram* FindProgramFromStream(int streamIndex) =>
-            ffmpeg.av_find_program_from_stream(Pointer, null, streamIndex);
+        public FFProgram FindProgramByStream(int streamIndex)
+        {
+            var program = ffmpeg.av_find_program_from_stream(Pointer, null, streamIndex);
+            return program != null ? new(program) : null;
+        }
 
-        public AVRational GuessFrameRate(Stream stream) => ffmpeg.av_guess_frame_rate(Pointer, stream.Pointer, null);
+        public AVRational GuessFrameRate(FFStream stream) => ffmpeg.av_guess_frame_rate(Pointer, stream.Pointer, null);
 
-        public AVRational GuessAspectRatio(Stream stream, AVFrame* frame) =>
+        public AVRational GuessAspectRatio(FFStream stream, AVFrame* frame) =>
             ffmpeg.av_guess_sample_aspect_ratio(Pointer, stream.Pointer, frame);
 
-        public int OpenInput(string filePath, InputFormat format, FFDictionary formatOptions)
+        public int OpenInput(string filePath, FFInputFormat format, FFDictionary formatOptions)
         {
             var context = Pointer;
             var formatOptionsPtr = formatOptions.Pointer;

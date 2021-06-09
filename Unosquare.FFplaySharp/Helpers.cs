@@ -91,7 +91,7 @@
         /// </summary>
         /// <param name="stream"></param>
         /// <returns></returns>
-        public static unsafe double ComputeDisplayRotation(Stream stream)
+        public static unsafe double ComputeDisplayRotation(FFStream stream)
         {
             var displayMatrix = ffmpeg.av_stream_get_side_data(stream.Pointer, AVPacketSideDataType.AV_PKT_DATA_DISPLAYMATRIX, null);
             var theta = displayMatrix != null ? -ComputeMatrixRotation((int*)displayMatrix) : 0d;
@@ -145,7 +145,7 @@
         /// <param name="stream">The associated stream.</param>
         /// <param name="specifier">The specifier string.</param>
         /// <returns>A non-negative number on success. A negative error code on failure.</returns>
-        public static unsafe int CheckStreamSpecifier(FormatContext formatContext, Stream stream, string specifier)
+        public static unsafe int CheckStreamSpecifier(FFFormatContext formatContext, FFStream stream, string specifier)
         {
             var resultCode = ffmpeg.avformat_match_stream_specifier(formatContext.Pointer, stream.Pointer, specifier);
             if (resultCode < 0)
@@ -161,21 +161,33 @@
         /// <summary>
         /// Port of filter_codec_opts.
         /// </summary>
-        /// <param name="opts"></param>
-        /// <param name="codec_id"></param>
-        /// <param name="s"></param>
-        /// <param name="st"></param>
+        /// <param name="allOptions"></param>
+        /// <param name="codecId"></param>
+        /// <param name="formatContext"></param>
+        /// <param name="stream"></param>
         /// <param name="codec"></param>
         /// <returns></returns>
-        public static unsafe FFDictionary FilterCodecOptions(StringDictionary opts, AVCodecID codec_id,
-                                    FormatContext s, Stream st, AVCodec* codec)
+        public static unsafe FFDictionary FilterCodecOptions(
+            StringDictionary allOptions,
+            AVCodecID codecId,
+            FFFormatContext formatContext,
+            FFStream stream,
+            FFCodec codec)
         {
 
             var filteredOptions = new FFDictionary();
 
-            int flags = s.Pointer->oformat != null ? ffmpeg.AV_OPT_FLAG_ENCODING_PARAM : ffmpeg.AV_OPT_FLAG_DECODING_PARAM;
+            int flags = formatContext.Pointer->oformat != null
+                ? ffmpeg.AV_OPT_FLAG_ENCODING_PARAM
+                : ffmpeg.AV_OPT_FLAG_DECODING_PARAM;
+
             if (codec == null)
-                codec = s.Pointer->oformat != null ? ffmpeg.avcodec_find_encoder(codec_id) : ffmpeg.avcodec_find_decoder(codec_id);
+            {
+                codec = formatContext.Pointer->oformat != null
+                    ? FFCodec.FromEncoderId(codecId)
+                    : FFCodec.FromDecoderId(codecId);
+            }
+                
 
             // -codec:a:1 ac3
             // option:mediatype:streamindex value
@@ -183,7 +195,7 @@
             // option
 
             var prefix = string.Empty;
-            switch (st.Pointer->codecpar->codec_type)
+            switch (stream.CodecParameters.CodecType)
             {
                 case AVMediaType.AVMEDIA_TYPE_VIDEO:
                     prefix = "v";
@@ -199,23 +211,23 @@
                     break;
             }
 
-            foreach (var t in opts)
+            foreach (var t in allOptions)
             {
                 var keyParts = t.Key.Split(':', 2);
                 var optionName = keyParts[0];
                 var specifier = keyParts.Length > 1 ? keyParts[1] : null;
 
-                var checkResult = specifier != null ? CheckStreamSpecifier(s, st, specifier) : -1;
+                var checkResult = specifier != null ? CheckStreamSpecifier(formatContext, stream, specifier) : -1;
                 if (checkResult <= 0)
                     continue;
 
-                if (MediaClass.Codec.FindOption(optionName, flags, ffmpeg.AV_OPT_SEARCH_FAKE_OBJ) != null ||
+                if (FFMediaClass.Codec.FindOption(optionName, flags, ffmpeg.AV_OPT_SEARCH_FAKE_OBJ) != null ||
                     codec == null ||
-                    (codec->priv_class != null &&
-                     MediaClass.FromPrivateClass(codec->priv_class).FindOption(optionName, flags, ffmpeg.AV_OPT_SEARCH_FAKE_OBJ) != null))
+                    (codec.PrivateClass != null &&
+                     codec.PrivateClass.FindOption(optionName, flags, ffmpeg.AV_OPT_SEARCH_FAKE_OBJ) != null))
                     filteredOptions[optionName] = t.Value;
                 else if (prefix != string.Empty && optionName.StartsWith(prefix) && optionName.Length > 1 &&
-                         MediaClass.Codec.FindOption(optionName.Substring(1), flags, ffmpeg.AV_OPT_SEARCH_FAKE_OBJ) != null)
+                         FFMediaClass.Codec.FindOption(optionName.Substring(1), flags, ffmpeg.AV_OPT_SEARCH_FAKE_OBJ) != null)
                     filteredOptions[optionName.Substring(1)] = t.Value;
             }
 
@@ -276,18 +288,18 @@
         /// Gets an array of dictionaries, each associated with a stream, and unsed for calling
         /// <see cref="ffmpeg.avformat_find_stream_info(AVFormatContext*, AVDictionary**)"/>.
         /// </summary>
-        /// <param name="s"></param>
+        /// <param name="inputContext"></param>
         /// <param name="codecOptions"></param>
         /// <returns></returns>
-        public static unsafe IReadOnlyList<FFDictionary> FindStreamInfoOptions(FormatContext s, StringDictionary codecOptions)
+        public static unsafe IReadOnlyList<FFDictionary> FindStreamInfoOptions(FFFormatContext inputContext, StringDictionary codecOptions)
         {
-            var result = new List<FFDictionary>(s.StreamCount);
-            if (s.StreamCount == 0)
+            var result = new List<FFDictionary>(inputContext.Streams.Count);
+            if (inputContext.Streams.Count == 0)
                 return null;
 
-            for (var i = 0; i < s.StreamCount; i++)
+            for (var i = 0; i < inputContext.Streams.Count; i++)
             {
-                var streamOptions = FilterCodecOptions(codecOptions, s.Streams[i].Pointer->codecpar->codec_id, s, s.Streams[i], null);
+                var streamOptions = FilterCodecOptions(codecOptions, inputContext.Streams[i].CodecParameters.CodecId, inputContext, inputContext.Streams[i], null);
                 result.Add(streamOptions);
             }
 

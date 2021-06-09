@@ -4,9 +4,9 @@
     using System;
     using Unosquare.FFplaySharp.Primitives;
 
-    public unsafe sealed class Stream : UnmanagedReference<AVStream>
+    public unsafe sealed class FFStream : UnmanagedReference<AVStream>
     {
-        public Stream(AVStream* pointer)
+        public FFStream(AVStream* pointer)
             : base(pointer)
         {
             // placeholder
@@ -18,6 +18,8 @@
             set => Pointer->discard = value;
         }
 
+        public FFCodecParameters CodecParameters => new(Pointer->codecpar);
+
         public AVRational TimeBase => Pointer->time_base;
 
         public long StartTime => Pointer->start_time;
@@ -25,14 +27,14 @@
 
     public unsafe sealed class StreamCollection
     {
-        private readonly FormatContext Parent;
+        private readonly FFFormatContext Parent;
 
-        public StreamCollection(FormatContext parent)
+        public StreamCollection(FFFormatContext parent)
         {
             Parent = parent;
         }
 
-        public Stream this[int index]
+        public FFStream this[int index]
         {
             get => new(Parent.Pointer->streams[index]);
         }

@@ -15,7 +15,7 @@
     {
         private readonly AVIOInterruptCB_callback InputInterruptCallback;
 
-        private InputFormat InputFormat = null;
+        private FFInputFormat InputFormat = null;
         private Thread ReadingThread;
 
         private bool WasPaused;
@@ -42,7 +42,7 @@
             Components = new List<MediaComponent>() { Audio, Video, Subtitle };
         }
 
-        public FormatContext InputContext { get; private set; }
+        public FFFormatContext InputContext { get; private set; }
 
         public IPresenter Renderer { get; }
 
@@ -187,8 +187,6 @@
 
         public static MediaContainer Open(ProgramOptions options, IPresenter renderer)
         {
-            var d = new FFDictionary();
-
             var container = new MediaContainer(options, renderer);
             renderer.Initialize(container);
 
@@ -200,7 +198,7 @@
             if (string.IsNullOrWhiteSpace(container.FileName))
                 goto fail;
 
-            container.InputFormat = o.InputFormat ?? InputFormat.None;
+            container.InputFormat = o.InputFormat ?? FFInputFormat.None;
             container.ytop = 0;
             container.xleft = 0;
 
@@ -275,8 +273,7 @@
 
         public void StreamCycleChannel(AVMediaType codecType)
         {
-            FormatContext ic = InputContext;
-            var streamCount = (int)ic.StreamCount;
+            var streamCount = InputContext.Streams.Count;
 
             MediaComponent component = codecType switch
             {
@@ -288,16 +285,20 @@
             var startStreamIndex = component.LastStreamIndex;
             var nextStreamIndex = startStreamIndex;
 
-            AVProgram* program = null;
+            FFProgram program = null;
             if (component.IsVideo && component.StreamIndex != -1)
             {
-                program = ic.FindProgramFromStream(component.StreamIndex);
+                program = InputContext.FindProgramByStream(component.StreamIndex);
                 if (program != null)
                 {
-                    streamCount = (int)program->nb_stream_indexes;
-                    for (startStreamIndex = 0; startStreamIndex < streamCount; startStreamIndex++)
-                        if (program->stream_index[startStreamIndex] == nextStreamIndex)
+                    var streamIndices = program.StreamIndices;
+
+                    for (startStreamIndex = 0; startStreamIndex < streamIndices.Count; startStreamIndex++)
+                    {
+                        if (streamIndices[startStreamIndex] == nextStreamIndex)
                             break;
+                    }
+
                     if (startStreamIndex == streamCount)
                         startStreamIndex = -1;
                     nextStreamIndex = startStreamIndex;
@@ -323,18 +324,20 @@
                 if (nextStreamIndex == startStreamIndex)
                     return;
 
-                var st = InputContext.Pointer->streams[program != null
-                    ? program->stream_index[nextStreamIndex]
-                    : nextStreamIndex];
+                var resultStreamIndex = program != null && !program.IsNull
+                    ? Convert.ToInt32(program.StreamIndices[nextStreamIndex])
+                    : nextStreamIndex;
 
-                if (st->codecpar->codec_type == component.MediaType)
+                var st = InputContext.Streams[resultStreamIndex];
+
+                if (st.CodecParameters.CodecType == component.MediaType)
                 {
                     // check that parameters are OK
                     switch (component.MediaType)
                     {
                         case AVMediaType.AVMEDIA_TYPE_AUDIO:
-                            if (st->codecpar->sample_rate != 0 &&
-                                st->codecpar->channels != 0)
+                            if (st.CodecParameters.SampleRate != 0 &&
+                                st.CodecParameters.Channels != 0)
                                 goto the_end;
                             break;
                         case AVMediaType.AVMEDIA_TYPE_VIDEO:
@@ -347,7 +350,7 @@
             }
         the_end:
             if (program != null && nextStreamIndex != -1)
-                nextStreamIndex = (int)program->stream_index[nextStreamIndex];
+                nextStreamIndex = program.StreamIndices[nextStreamIndex];
 
             Helpers.LogInfo($"Switch {component.MediaTypeString} stream from #{component.StreamIndex} to #{nextStreamIndex}\n");
             component.Close();
@@ -418,21 +421,20 @@
         /// <returns>0 if OK</returns>
         public int OpenComponent(int streamIndex)
         {
-            var ic = InputContext;
             var ret = 0;
             var lowResFactor = Options.LowResolution;
 
-            if (streamIndex < 0 || streamIndex >= ic.StreamCount)
+            if (streamIndex < 0 || streamIndex >= InputContext.Streams.Count)
                 return -1;
 
-            var codecContext = ffmpeg.avcodec_alloc_context3(null);
-            ret = ffmpeg.avcodec_parameters_to_context(codecContext, ic.Pointer->streams[streamIndex]->codecpar);
+            var codecContext = new FFCodecContext();
+            ret = codecContext.ApplyStreamParameters(InputContext.Streams[streamIndex]);
 
             if (ret < 0) goto fail;
-            codecContext->pkt_timebase = ic.Streams[streamIndex].TimeBase;
+            codecContext.PacketTimeBase = InputContext.Streams[streamIndex].TimeBase;
 
-            var codec = ffmpeg.avcodec_find_decoder(codecContext->codec_id);
-            var targetMediaType = codecContext->codec_type;
+            var codec = FFCodec.FromDecoderId(codecContext.CodecId);
+            var targetMediaType = codecContext.CodecType;
 
             var targetComponent = targetMediaType switch
             {
@@ -446,34 +448,40 @@
             targetComponent.LastStreamIndex = streamIndex;
 
             if (!string.IsNullOrWhiteSpace(forcedCodecName))
-                codec = ffmpeg.avcodec_find_decoder_by_name(forcedCodecName);
+                codec = FFCodec.FromDecoderName(forcedCodecName);
 
             if (codec == null)
             {
                 if (!string.IsNullOrWhiteSpace(forcedCodecName))
                     Helpers.LogWarning($"No codec could be found with name '{forcedCodecName}'\n");
                 else
-                    Helpers.LogWarning($"No decoder could be found for codec {ffmpeg.avcodec_get_name(codecContext->codec_id)}\n");
+                    Helpers.LogWarning($"No decoder could be found for codec {codecContext.CodecName}\n");
                 ret = ffmpeg.AVERROR(ffmpeg.EINVAL);
                 goto fail;
             }
 
-            codecContext->codec_id = codec->id;
-            if (lowResFactor > codec->max_lowres)
+            codecContext.CodecId = codec.Id;
+            if (lowResFactor > codec.MaxLowResFactor)
             {
-                Helpers.LogWarning($"The maximum value for lowres supported by the decoder is {codec->max_lowres}\n");
-                lowResFactor = codec->max_lowres;
+                Helpers.LogWarning($"The maximum value for lowres supported by the decoder is {codec.MaxLowResFactor}\n");
+                lowResFactor = codec.MaxLowResFactor;
             }
 
-            codecContext->lowres = lowResFactor;
+            codecContext.LowResFactor = lowResFactor;
 
             if (Options.IsFastDecodingEnabled != 0)
-                codecContext->flags2 |= ffmpeg.AV_CODEC_FLAG2_FAST;
+                codecContext.Flags2 |= ffmpeg.AV_CODEC_FLAG2_FAST;
 
             const string ThreadsOptionKey = "threads";
             const string ThreadsOptionValue = "auto";
 
-            var codecOptions = Helpers.FilterCodecOptions(Options.CodecOptions, codecContext->codec_id, ic, ic.Streams[streamIndex], codec);
+            var codecOptions = Helpers.FilterCodecOptions(
+                Options.CodecOptions,
+                codecContext.CodecId,
+                InputContext,
+                InputContext.Streams[streamIndex],
+                codec);
+
             if (!codecOptions.ContainsKey(ThreadsOptionKey))
                 codecOptions[ThreadsOptionKey] = ThreadsOptionValue;
 
@@ -483,11 +491,7 @@
             if (targetMediaType == AVMediaType.AVMEDIA_TYPE_VIDEO || targetMediaType == AVMediaType.AVMEDIA_TYPE_AUDIO)
                 codecOptions["refcounted_frames"] = "1";
 
-            {
-                var codecOptionsArg = codecOptions.Pointer;
-                ret = ffmpeg.avcodec_open2(codecContext, codec, &codecOptionsArg);
-                codecOptions.Update(codecOptionsArg);
-            }
+            ret = codecContext.Open(codec, codecOptions);
 
             var invalidKey = codecOptions.First?.Key;
             codecOptions.Release();
@@ -503,7 +507,7 @@
             }
 
             IsAtEndOfStream = false;
-            ic.Pointer->streams[streamIndex]->discard = AVDiscard.AVDISCARD_DEFAULT;
+            InputContext.Streams[streamIndex].DiscardFlags = AVDiscard.AVDISCARD_DEFAULT;
             ret = targetComponent.InitializeDecoder(codecContext, streamIndex);
             if (ret < 0) goto fail;
             targetComponent.Start();
@@ -517,7 +521,7 @@
             goto exit;
 
         fail:
-            ffmpeg.avcodec_free_context(&codecContext);
+            codecContext.Release();
         exit:
             return ret;
         }
@@ -551,7 +555,7 @@
             ffmpeg.sws_freeContext(Subtitle.ConvertContext);
         }
 
-        private static bool IsInputFormatRealtime(FormatContext ic)
+        private static bool IsInputFormatRealtime(FFFormatContext ic)
         {
             var inputFormatName = Helpers.PtrToString(ic.Pointer->iformat->name);
             if (inputFormatName == "rtp" || inputFormatName == "rtsp" || inputFormatName == "sdp")
@@ -623,7 +627,7 @@
 
             IsAtEndOfStream = false;
 
-            var ic = new FormatContext
+            var ic = new FFFormatContext
             {
                 InterruptCallback = InputInterruptCallback
             };
@@ -660,7 +664,7 @@
             InputContext = ic;
 
             if (o.GeneratePts)
-                ic.Pointer->flags |= ffmpeg.AVFMT_FLAG_GENPTS;
+                ic.Flags |= ffmpeg.AVFMT_FLAG_GENPTS;
 
             ic.InjectGlobalSideData();
 
@@ -715,13 +719,13 @@
             if (o.ShowStatus != 0)
                 ffmpeg.av_dump_format(ic.Pointer, 0, FileName, 0);
 
-            for (i = 0; i < ic.Pointer->nb_streams; i++)
+            for (i = 0; i < ic.Streams.Count; i++)
             {
-                var st = ic.Pointer->streams[i];
-                var type = st->codecpar->codec_type;
-                st->discard = AVDiscard.AVDISCARD_ALL;
+                var st = ic.Streams[i];
+                var type = st.CodecParameters.CodecType;
+                st.DiscardFlags = AVDiscard.AVDISCARD_ALL;
                 if (type >= 0 && o.WantedStreams.ContainsKey(type) && o.WantedStreams[type] != null && streamIndexes[type] == -1)
-                    if (ffmpeg.avformat_match_stream_specifier(ic.Pointer, st, o.WantedStreams[type]) > 0)
+                    if (ffmpeg.avformat_match_stream_specifier(ic.Pointer, st.Pointer, o.WantedStreams[type]) > 0)
                         streamIndexes[type] = i;
             }
 
@@ -757,10 +761,10 @@
             if (streamIndexes[AVMediaType.AVMEDIA_TYPE_VIDEO] >= 0)
             {
                 var st = ic.Streams[streamIndexes[AVMediaType.AVMEDIA_TYPE_VIDEO]];
-                var codecpar = st.Pointer->codecpar;
+                var codecpar = st.CodecParameters;
                 var sar = ic.GuessAspectRatio(st, null);
-                if (codecpar->width != 0)
-                    Renderer.Video.set_default_window_size(codecpar->width, codecpar->height, sar);
+                if (codecpar.Width != 0)
+                    Renderer.Video.set_default_window_size(codecpar.Width, codecpar.Height, sar);
             }
 
             /* open the streams */
@@ -824,7 +828,7 @@
                 {
                     if (Video.IsPictureAttachmentStream)
                     {
-                        var copy = Packet.Clone(&Video.Stream.Pointer->attached_pic);
+                        var copy = FFPacket.Clone(&Video.Stream.Pointer->attached_pic);
                         Video.Packets.Enqueue(copy);
                         Video.Packets.EnqueueNull();
                     }
@@ -916,7 +920,7 @@
 
         private FlowResult ReadPacket(ref int resultCode)
         {
-            var readPacket = new Packet();
+            var readPacket = new FFPacket();
             resultCode = ffmpeg.av_read_frame(InputContext.Pointer, readPacket.Pointer);
 
             if (resultCode < 0)

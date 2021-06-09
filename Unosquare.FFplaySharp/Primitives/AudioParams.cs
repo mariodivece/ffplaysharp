@@ -1,5 +1,6 @@
 ﻿namespace Unosquare.FFplaySharp.Primitives
 {
+    using FFmpeg;
     using FFmpeg.AutoGen;
     using System;
 
@@ -31,12 +32,12 @@
             Frequency = frame->sample_rate;
         }
 
-        public void ImportFrom(AVCodecContext* codecContext)
+        public void ImportFrom(FFCodecContext codecContext)
         {
-            Frequency = codecContext->sample_rate;
-            Channels = codecContext->channels;
-            Layout = ValidateChannelLayout(codecContext->channel_layout, codecContext->channels);
-            SampleFormat = codecContext->sample_fmt;
+            Frequency = codecContext.SampleRate;
+            Channels = codecContext.Channels;
+            Layout = ValidateChannelLayout(codecContext.ChannelLayout, codecContext.Channels);
+            SampleFormat = codecContext.SampleFormat;
         }
 
         public AudioParams Clone()

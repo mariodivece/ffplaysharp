@@ -51,7 +51,7 @@
             Option("volume", true, "set startup volume 0=min 100=max", "volume", (t, a) =>
                 t.StartupVolume = int.TryParse(a, out var v) ? v : t.StartupVolume),
             Option("f", true, "force format", "fmt", (t, a) =>
-                t.InputFormat = InputFormat.Find(a)),
+                t.InputFormat = FFInputFormat.Find(a)),
             Option("pix_fmt", true, "set pixel format", "format", (t, a) =>
             {
                 ffmpeg.av_log(null, ffmpeg.AV_LOG_WARNING, "Option -pix_fmt is deprecated, use -pixel_format.\n");
@@ -115,7 +115,7 @@
                 t.InputFileName = a)
         };
 
-        public InputFormat InputFormat { get; set; }
+        public FFInputFormat InputFormat { get; set; }
 
         public string InputFileName { get; set; }
         
@@ -315,15 +315,15 @@
                 ? optionName.Substring(0, optionName.IndexOf(':'))
                 : new string(optionName);
 
-            if ((o = MediaClass.Codec.FindOption(strippedOptionName, SearchFlags)) != null || (
+            if ((o = FFMediaClass.Codec.FindOption(strippedOptionName, SearchFlags)) != null || (
                 (optionName[0] == 'v' || optionName[0] == 'a' || optionName[0] == 's') &&
-                (o = MediaClass.Codec.FindOption(optionName.Substring(1))) != null))
+                (o = FFMediaClass.Codec.FindOption(optionName.Substring(1))) != null))
             {
                 CodecOptions.Set(o, optionName, optionValue);
                 isConsumed = true;
             }
 
-            if ((o = MediaClass.Format.FindOption(optionName, SearchFlags)) != null)
+            if ((o = FFMediaClass.Format.FindOption(optionName, SearchFlags)) != null)
             {
                 FormatOptions.Set(o, optionName, optionValue);
 
@@ -333,7 +333,7 @@
                 isConsumed = true;
             }
 
-            if (!isConsumed && (o = MediaClass.Format.FindOption(optionName, SearchFlags)) != null)
+            if (!isConsumed && (o = FFMediaClass.Format.FindOption(optionName, SearchFlags)) != null)
             {
                 var dummyScaler = ffmpeg.sws_alloc_context();
                 var setResult = ffmpeg.av_opt_set(dummyScaler, optionName, optionValue, 0);
@@ -357,7 +357,7 @@
                 isConsumed = true;
             }
 
-            if (!isConsumed && (o = MediaClass.Resampler.FindOption(optionName, SearchFlags)) != null)
+            if (!isConsumed && (o = FFMediaClass.Resampler.FindOption(optionName, SearchFlags)) != null)
             {
                 var dummyRescaler = ffmpeg.swr_alloc();
                 var setResult = ffmpeg.av_opt_set(dummyRescaler, optionName, optionValue, 0);

@@ -584,8 +584,8 @@
                     buf.Append($"aq={(audioQueueSize / 1024)}KB | ");
                     buf.Append($"vq={(videoQueueSize / 1024)}KB | ");
                     buf.Append($"sq={subtitleQueueSize}B | ");
-                    buf.Append($" f={(Container.HasVideo ? Container.Video.CodecContext->pts_correction_num_faulty_dts : 0)} / ");
-                    buf.Append($"{(Container.HasVideo ? Container.Video.CodecContext->pts_correction_num_faulty_pts : 0)}");
+                    buf.Append($" f={(Container.HasVideo ? Container.Video.CodecContext.FaultyDtsCount : 0)} / ");
+                    buf.Append($"{(Container.HasVideo ? Container.Video.CodecContext.FaultyPtsCount : 0)}");
 
                     for (var i = buf.Length; i < 90; i++)
                         buf.Append(' ');
