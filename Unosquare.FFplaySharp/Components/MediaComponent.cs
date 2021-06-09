@@ -28,7 +28,7 @@
 
         public AVCodecContext* CodecContext { get; private set; }
 
-        public AVStream* Stream;
+        public Stream Stream;
 
         public int StreamIndex { get; set; }
 
@@ -49,14 +49,14 @@
         public bool IsPictureAttachmentStream =>
             MediaType == AVMediaType.AVMEDIA_TYPE_VIDEO &&
             Stream != null &&
-            Stream->disposition.HasFlag(ffmpeg.AV_DISPOSITION_ATTACHED_PIC);
+            Stream.Pointer->disposition.HasFlag(ffmpeg.AV_DISPOSITION_ATTACHED_PIC);
 
         public bool HasEnoughPackets
         {
             get
             {
                 var duration = Packets.DurationUnits > 0
-                    ? Stream->time_base.ToFactor() * Packets.DurationUnits
+                    ? Stream.TimeBase.ToFactor() * Packets.DurationUnits
                     : 0d;
 
                 return StreamIndex < 0
@@ -75,12 +75,12 @@
 
         public virtual void Close()
         {
-            if (StreamIndex < 0 || StreamIndex >= Container.InputContext.StreamCount)
+            if (StreamIndex < 0 || StreamIndex >= Container.InputContext.Streams.Count)
                 return;
 
             AbortDecoder();
             DisposeDecoder();
-            Container.InputContext.Pointer->streams[StreamIndex]->discard = AVDiscard.AVDISCARD_ALL;
+            Container.InputContext.Streams[StreamIndex].DiscardFlags = AVDiscard.AVDISCARD_ALL;
             Stream = null;
             StreamIndex = -1;
         }
@@ -225,7 +225,7 @@
         public virtual int InitializeDecoder(AVCodecContext* codecContext, int streamIndex)
         {
             StreamIndex = streamIndex;
-            Stream = Container.InputContext.Pointer->streams[streamIndex];
+            Stream = Container.InputContext.Streams[streamIndex];
             CodecContext = codecContext;
             PacketGroupIndex = -1;
             return 0;

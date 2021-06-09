@@ -322,7 +322,7 @@
 
         public override void Close()
         {
-            if (StreamIndex < 0 || StreamIndex >= Container.InputContext.StreamCount)
+            if (StreamIndex < 0 || StreamIndex >= Container.InputContext.Streams.Count)
                 return;
 
             AbortDecoder();
@@ -338,7 +338,7 @@
             ResampledOutputBufferSize = 0;
             OutputBuffer = null;
 
-            Container.InputContext.Pointer->streams[StreamIndex]->discard = AVDiscard.AVDISCARD_ALL;
+            Container.InputContext.Streams[StreamIndex].DiscardFlags = AVDiscard.AVDISCARD_ALL;
             Stream = null;
             StreamIndex = -1;
         }
@@ -375,8 +375,8 @@
 
             if (Container.IsSeekMethodUnknown)
             {
-                StartPts = Stream->start_time;
-                StartPtsTimeBase = Stream->time_base;
+                StartPts = Stream.StartTime;
+                StartPtsTimeBase = Stream.TimeBase;
             }
             else
             {

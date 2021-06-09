@@ -429,7 +429,7 @@
             ret = ffmpeg.avcodec_parameters_to_context(codecContext, ic.Pointer->streams[streamIndex]->codecpar);
 
             if (ret < 0) goto fail;
-            codecContext->pkt_timebase = ic.Pointer->streams[streamIndex]->time_base;
+            codecContext->pkt_timebase = ic.Streams[streamIndex].TimeBase;
 
             var codec = ffmpeg.avcodec_find_decoder(codecContext->codec_id);
             var targetMediaType = codecContext->codec_type;
@@ -473,7 +473,7 @@
             const string ThreadsOptionKey = "threads";
             const string ThreadsOptionValue = "auto";
 
-            var codecOptions = Helpers.FilterCodecOptions(Options.CodecOptions, codecContext->codec_id, ic, ic.Pointer->streams[streamIndex], codec);
+            var codecOptions = Helpers.FilterCodecOptions(Options.CodecOptions, codecContext->codec_id, ic, ic.Streams[streamIndex], codec);
             if (!codecOptions.ContainsKey(ThreadsOptionKey))
                 codecOptions[ThreadsOptionKey] = ThreadsOptionValue;
 
@@ -756,9 +756,9 @@
             ShowMode = o.ShowMode;
             if (streamIndexes[AVMediaType.AVMEDIA_TYPE_VIDEO] >= 0)
             {
-                AVStream* st = ic.Pointer->streams[streamIndexes[AVMediaType.AVMEDIA_TYPE_VIDEO]];
-                AVCodecParameters* codecpar = st->codecpar;
-                AVRational sar = ic.GuessAspectRatio(st, null);
+                var st = ic.Streams[streamIndexes[AVMediaType.AVMEDIA_TYPE_VIDEO]];
+                var codecpar = st.Pointer->codecpar;
+                var sar = ic.GuessAspectRatio(st, null);
                 if (codecpar->width != 0)
                     Renderer.Video.set_default_window_size(codecpar->width, codecpar->height, sar);
             }
@@ -824,7 +824,7 @@
                 {
                     if (Video.IsPictureAttachmentStream)
                     {
-                        var copy = Packet.Clone(&Video.Stream->attached_pic);
+                        var copy = Packet.Clone(&Video.Stream.Pointer->attached_pic);
                         Video.Packets.Enqueue(copy);
                         Video.Packets.EnqueueNull();
                     }
@@ -951,7 +951,7 @@
             }
 
             // check if packet is in play range specified by user, then queue, otherwise discard.
-            var streamStartPts = InputContext.Pointer->streams[readPacket.StreamIndex]->start_time;
+            var streamStartPts = InputContext.Streams[readPacket.StreamIndex].StartTime;
 
             var isPacketInPlayRange = !Options.Duration.IsValidPts() ||
                     (readPacket.Pts - (streamStartPts.IsValidPts() ? streamStartPts : 0)) *

@@ -91,9 +91,9 @@
         /// </summary>
         /// <param name="stream"></param>
         /// <returns></returns>
-        public static unsafe double ComputeDisplayRotation(AVStream* stream)
+        public static unsafe double ComputeDisplayRotation(Stream stream)
         {
-            var displayMatrix = ffmpeg.av_stream_get_side_data(stream, AVPacketSideDataType.AV_PKT_DATA_DISPLAYMATRIX, null);
+            var displayMatrix = ffmpeg.av_stream_get_side_data(stream.Pointer, AVPacketSideDataType.AV_PKT_DATA_DISPLAYMATRIX, null);
             var theta = displayMatrix != null ? -ComputeMatrixRotation((int*)displayMatrix) : 0d;
             theta -= 360 * Math.Floor(theta / 360 + 0.9 / 360);
 
@@ -145,9 +145,9 @@
         /// <param name="stream">The associated stream.</param>
         /// <param name="specifier">The specifier string.</param>
         /// <returns>A non-negative number on success. A negative error code on failure.</returns>
-        public static unsafe int CheckStreamSpecifier(FormatContext formatContext, AVStream* stream, string specifier)
+        public static unsafe int CheckStreamSpecifier(FormatContext formatContext, Stream stream, string specifier)
         {
-            var resultCode = ffmpeg.avformat_match_stream_specifier(formatContext.Pointer, stream, specifier);
+            var resultCode = ffmpeg.avformat_match_stream_specifier(formatContext.Pointer, stream.Pointer, specifier);
             if (resultCode < 0)
                 Log(formatContext.Pointer, ffmpeg.AV_LOG_ERROR, $"Invalid stream specifier: {specifier}.\n");
 
@@ -168,7 +168,7 @@
         /// <param name="codec"></param>
         /// <returns></returns>
         public static unsafe FFDictionary FilterCodecOptions(StringDictionary opts, AVCodecID codec_id,
-                                    FormatContext s, AVStream* st, AVCodec* codec)
+                                    FormatContext s, Stream st, AVCodec* codec)
         {
 
             var filteredOptions = new FFDictionary();
@@ -183,7 +183,7 @@
             // option
 
             var prefix = string.Empty;
-            switch (st->codecpar->codec_type)
+            switch (st.Pointer->codecpar->codec_type)
             {
                 case AVMediaType.AVMEDIA_TYPE_VIDEO:
                     prefix = "v";
@@ -287,7 +287,7 @@
 
             for (var i = 0; i < s.StreamCount; i++)
             {
-                var streamOptions = FilterCodecOptions(codecOptions, s.Pointer->streams[i]->codecpar->codec_id, s, s.Pointer->streams[i], null);
+                var streamOptions = FilterCodecOptions(codecOptions, s.Streams[i].Pointer->codecpar->codec_id, s, s.Streams[i], null);
                 result.Add(streamOptions);
             }
 

@@ -11,6 +11,7 @@
             : base(filePath, lineNumber)
         {
             Update(ffmpeg.avformat_alloc_context());
+            Streams = new(this);
         }
 
         public AVIOInterruptCB_callback_func InterruptCallback
@@ -18,6 +19,8 @@
             get => Pointer->interrupt_callback.callback;
             set => Pointer->interrupt_callback.callback = value;
         }
+
+        public StreamCollection Streams { get; }
 
         public int StreamCount => Convert.ToInt32(Pointer->nb_streams);
 
@@ -32,10 +35,10 @@
         public AVProgram* FindProgramFromStream(int streamIndex) =>
             ffmpeg.av_find_program_from_stream(Pointer, null, streamIndex);
 
-        public AVRational GuessFrameRate(AVStream* stream) => ffmpeg.av_guess_frame_rate(Pointer, stream, null);
+        public AVRational GuessFrameRate(Stream stream) => ffmpeg.av_guess_frame_rate(Pointer, stream.Pointer, null);
 
-        public AVRational GuessAspectRatio(AVStream* stream, AVFrame* frame) =>
-            ffmpeg.av_guess_sample_aspect_ratio(Pointer, stream, frame);
+        public AVRational GuessAspectRatio(Stream stream, AVFrame* frame) =>
+            ffmpeg.av_guess_sample_aspect_ratio(Pointer, stream.Pointer, frame);
 
         public int OpenInput(string filePath, InputFormat format, FFDictionary formatOptions)
         {

@@ -164,7 +164,7 @@
             {
                 if (frame->pts.IsValidPts())
                 {
-                    var frameTime = Stream->time_base.ToFactor() * frame->pts;
+                    var frameTime = Stream.TimeBase.ToFactor() * frame->pts;
                     var frameDelay = frameTime - Container.MasterTime;
 
                     if (!frameDelay.IsNaN() && Math.Abs(frameDelay) < Constants.AV_NOSYNC_THRESHOLD &&
@@ -221,7 +221,7 @@
             AVFilterContext* outputFilter = null;
             AVFilterContext* lastFilter = null;
 
-            var codecParameters = Stream->codecpar;
+            var codecParameters = Stream.Pointer->codecpar;
             var frameRate = Container.InputContext.GuessFrameRate(Stream);
             var outputPixelFormats = Container.Renderer.Video.RetrieveSupportedPixelFormats().Cast<int>();
             var softwareScalerFlags = string.Empty;
@@ -243,7 +243,7 @@
             var sourceFilterArguments =
                 $"video_size={decoderFrame->width}x{decoderFrame->height}" +
                 $":pix_fmt={decoderFrame->format}" +
-                $":time_base={Stream->time_base.num}/{Stream->time_base.den}" +
+                $":time_base={Stream.TimeBase.num}/{Stream.TimeBase.den}" +
                 $":pixel_aspect={codecParameters->sample_aspect_ratio.num}/{Math.Max(codecParameters->sample_aspect_ratio.den, 1)}";
 
             if (frameRate.num != 0 && frameRate.den != 0)
