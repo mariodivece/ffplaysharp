@@ -23,6 +23,10 @@
 
         public int ChapterCount => Convert.ToInt32(Pointer->nb_chapters);
 
+        public long Duration => Pointer->duration;
+
+        public double DurationSeconds => Duration / Clock.TimeBaseMicros;
+
         public void InjectGlobalSideData() => ffmpeg.av_format_inject_global_side_data(Pointer);
 
         public AVProgram* FindProgramFromStream(int streamIndex) =>

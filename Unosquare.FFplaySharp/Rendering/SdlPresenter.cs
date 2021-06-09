@@ -225,7 +225,7 @@
                                 break;
                             mouseX = sdlEvent.motion.x;
                         }
-                        if (Container.Options.IsByteSeekingEnabled != 0 || Container.InputContext.Pointer->duration <= 0)
+                        if (Container.Options.IsByteSeekingEnabled != 0 || Container.InputContext.Duration <= 0)
                         {
                             var fileSize = ffmpeg.avio_size(Container.InputContext.Pointer->pb);
                             Container.SeekByPosition(Convert.ToInt64(fileSize * mouseX / Container.width));
@@ -233,10 +233,10 @@
                         else
                         {
                             var seekPercent = (mouseX / Container.width);
-                            var durationSecs = Container.InputContext.Pointer->duration / Clock.TimeBaseMicros;
+                            var durationSecs = Container.InputContext.DurationSeconds;
                             var totalDuration = TimeSpan.FromSeconds(durationSecs);
                             var targetTime = TimeSpan.FromSeconds(seekPercent * durationSecs);
-                            var targetPosition = Convert.ToInt64(seekPercent * Container.InputContext.Pointer->duration);
+                            var targetPosition = Convert.ToInt64(seekPercent * Container.InputContext.Duration);
 
                             Helpers.LogInfo($"Seek to {(seekPercent * 100):0.00} ({targetTime}) of total duration ({totalDuration})       \n");
 
