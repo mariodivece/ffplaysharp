@@ -665,16 +665,16 @@
 
             if (o.IsStreamInfoEnabled)
             {
-                var opts = Helpers.FindStreamInfoOptions(ic, o.CodecOptions);
-                var optsArg = (AVDictionary**)ffmpeg.av_mallocz_array((ulong)opts.Count, (ulong)sizeof(IntPtr));
-                for (var optionIndex = 0; optionIndex < opts.Count; optionIndex++)
-                    optsArg[optionIndex] = opts[optionIndex].Pointer;
+                var perStreamOptionsList = Helpers.FindStreamInfoOptions(ic, o.CodecOptions);
+                var perStreamOptions = (AVDictionary**)ffmpeg.av_mallocz_array((ulong)perStreamOptionsList.Count, (ulong)sizeof(IntPtr));
+                for (var optionIndex = 0; optionIndex < perStreamOptionsList.Count; optionIndex++)
+                    perStreamOptions[optionIndex] = perStreamOptionsList[optionIndex].Pointer;
 
-                err = ffmpeg.avformat_find_stream_info(ic, optsArg);
-                ffmpeg.av_freep(&optsArg);
+                err = ffmpeg.avformat_find_stream_info(ic, perStreamOptions);
+                ffmpeg.av_freep(&perStreamOptions);
 
-                foreach (var optionDict in opts)
-                    optionDict.Release();
+                foreach (var optionsDictionary in perStreamOptionsList)
+                    optionsDictionary.Release();
 
                 if (err < 0)
                 {
