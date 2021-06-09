@@ -49,7 +49,19 @@
             return entry != null ? new(entry) : null;
         }
 
-        protected override unsafe void ReleaseInternal(AVDictionary* pointer) =>
+        public static AVDictionary* Set(AVDictionary* dictionary, string key, string value, int flags)
+        {
+            var resultCode = ffmpeg.av_dict_set(&dictionary, key, value, flags);
+            if (resultCode < 0)
+                throw new FFmpegException(resultCode);
+
+            return dictionary;
+        }
+
+        public static AVDictionary* Set(AVDictionary* dictionary, string key, string value) =>
+            Set(dictionary, key, value, 0);
+
+        protected override void ReleaseInternal(AVDictionary* pointer) =>
              ffmpeg.av_dict_free(&pointer);
     }
 }

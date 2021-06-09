@@ -469,13 +469,13 @@
 
             var codecOptions = Helpers.filter_codec_opts(Options.CodecOptions, codecContext->codec_id, ic, ic->streams[streamIndex], codec);
             if (Dictionary.Find(codecOptions, ThreadsOptionKey) == null)
-                ffmpeg.av_dict_set(&codecOptions, ThreadsOptionKey, ThreadsOptionValue, 0);
+                codecOptions = Dictionary.Set(codecOptions, ThreadsOptionKey, ThreadsOptionValue);
 
             if (lowResFactor != 0)
-                ffmpeg.av_dict_set_int(&codecOptions, "lowres", lowResFactor, 0);
+                codecOptions = Dictionary.Set(codecOptions, "lowres", $"{lowResFactor}");
 
             if (targetMediaType == AVMediaType.AVMEDIA_TYPE_VIDEO || targetMediaType == AVMediaType.AVMEDIA_TYPE_AUDIO)
-                ffmpeg.av_dict_set(&codecOptions, "refcounted_frames", "1", 0);
+                codecOptions = Dictionary.Set(codecOptions, "refcounted_frames", "1");
 
             if ((ret = ffmpeg.avcodec_open2(codecContext, codec, &codecOptions)) < 0)
             {
@@ -619,9 +619,7 @@
 
             if (Dictionary.Find(o.FormatOptions, "scan_all_pmts", true) == null)
             {
-                var formatOptions = o.FormatOptions;
-                ffmpeg.av_dict_set(&formatOptions, "scan_all_pmts", "1", ffmpeg.AV_DICT_DONT_OVERWRITE);
-                o.FormatOptions = formatOptions;
+                o.FormatOptions = Dictionary.Set(o.FormatOptions, "scan_all_pmts", "1", ffmpeg.AV_DICT_DONT_OVERWRITE);
                 scan_all_pmts_set = true;
             }
 
@@ -639,11 +637,7 @@
             }
 
             if (scan_all_pmts_set)
-            {
-                var formatOptions = o.FormatOptions;
-                ffmpeg.av_dict_set(&formatOptions, "scan_all_pmts", null, ffmpeg.AV_DICT_MATCH_CASE);
-                o.FormatOptions = formatOptions;
-            }
+                o.FormatOptions = Dictionary.Set(o.FormatOptions, "scan_all_pmts", null, ffmpeg.AV_DICT_MATCH_CASE);
 
             DictionaryEntry formatOption = null;
             if ((formatOption = Dictionary.First(o.FormatOptions)) != null)

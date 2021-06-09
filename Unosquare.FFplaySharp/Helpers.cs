@@ -162,7 +162,7 @@
                                     AVFormatContext* s, AVStream* st, AVCodec* codec)
         {
 
-            AVDictionary* ret = null;
+            AVDictionary* filteredOptions = null;
 
             int flags = s->oformat != null ? ffmpeg.AV_OPT_FLAG_ENCODING_PARAM : ffmpeg.AV_OPT_FLAG_DECODING_PARAM;
             if (codec == null)
@@ -205,13 +205,13 @@
                     codec == null ||
                     (codec->priv_class != null &&
                      MediaClass.FromPrivateClass(codec->priv_class).FindOption(optionName, flags, ffmpeg.AV_OPT_SEARCH_FAKE_OBJ) != null))
-                    ffmpeg.av_dict_set(&ret, optionName, t.Value, 0);
+                    filteredOptions = Dictionary.Set(filteredOptions, optionName, t.Value);
                 else if (prefix != string.Empty && optionName.StartsWith(prefix) && optionName.Length > 1 &&
                          MediaClass.Codec.FindOption(optionName.Substring(1), flags, ffmpeg.AV_OPT_SEARCH_FAKE_OBJ) != null)
-                    ffmpeg.av_dict_set(&ret, optionName.Substring(1), t.Value, 0);
+                    filteredOptions = Dictionary.Set(filteredOptions, optionName.Substring(1), t.Value);
             }
 
-            return ret;
+            return filteredOptions;
         }
 
 

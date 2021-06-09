@@ -333,17 +333,13 @@
                 (optionName[0] == 'v' || optionName[0] == 'a' || optionName[0] == 's') &&
                 (o = MediaClass.Codec.FindOption(optionName.Substring(1))) != null))
             {
-                var codecOptions = CodecOptions;
-                ffmpeg.av_dict_set(&codecOptions, optionName, optionValue, FlagSetMode(o, optionValue));
-                CodecOptions = codecOptions;
+                CodecOptions = Dictionary.Set(CodecOptions, optionName, optionValue, FlagSetMode(o, optionValue));
                 isConsumed = true;
             }
 
             if ((o = MediaClass.Format.FindOption(optionName, SearchFlags)) != null)
             {
-                var formatOptions = FormatOptions;
-                ffmpeg.av_dict_set(&formatOptions, optionName, optionValue, FlagSetMode(o, optionValue));
-                FormatOptions = formatOptions;
+                FormatOptions = Dictionary.Set(FormatOptions, optionName, optionValue, FlagSetMode(o, optionValue));
 
                 if (isConsumed)
                     ffmpeg.av_log(null, ffmpeg.AV_LOG_VERBOSE, $"Routing option {optionName} to both codec and muxer layer\n");
@@ -371,10 +367,7 @@
                     return setResult;
                 }
 
-                var scalerOptions = ScalerOptions;
-                ffmpeg.av_dict_set(&scalerOptions, optionName, optionValue, FlagSetMode(o, optionValue));
-                ScalerOptions = scalerOptions;
-
+                ScalerOptions = Dictionary.Set(ScalerOptions, optionName, optionValue, FlagSetMode(o, optionValue));
                 isConsumed = true;
             }
 
@@ -389,9 +382,7 @@
                     return setResult;
                 }
 
-                var resamplerOptions = ResamplerOptions;
-                ffmpeg.av_dict_set(&resamplerOptions, optionName, optionValue, FlagSetMode(o, optionValue));
-                ResamplerOptions = resamplerOptions;
+                ResamplerOptions = Dictionary.Set(ResamplerOptions, optionName, optionValue, FlagSetMode(o, optionValue));
                 isConsumed = true;
             }
 
