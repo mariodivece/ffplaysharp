@@ -49,20 +49,21 @@
         protected UnmanagedCountedReference(string filePath, int lineNumber)
             : base()
         {
-            ObjectId = ReferenceCounter.Add(this,
-                $"{Path.GetFileName(filePath)}: {lineNumber}");
+            Source = $"{Path.GetFileName(filePath)}: {lineNumber}";
+            ObjectId = ReferenceCounter.Add(this, Source);
         }
 
-        public ulong ObjectId { get; }
+        public ulong ObjectId { get; protected set; }
 
         public T Value => *Pointer;
 
+        protected string Source { get; }
+
         public void Release()
         {
-            if (Address == IntPtr.Zero)
-                return;
+            if (Address != IntPtr.Zero)
+                ReleaseInternal(Pointer);
 
-            ReleaseInternal(Pointer);
             Update(IntPtr.Zero);
             ReferenceCounter.Remove(this);
         }

@@ -186,6 +186,8 @@
 
         public static MediaContainer Open(ProgramOptions options, IPresenter renderer)
         {
+            var d = new FFDictionary();
+
             var container = new MediaContainer(options, renderer);
             renderer.Initialize(container);
 
@@ -467,25 +469,31 @@
             const string ThreadsOptionKey = "threads";
             const string ThreadsOptionValue = "auto";
 
-            var codecOptions = Helpers.filter_codec_opts(Options.CodecOptions, codecContext->codec_id, ic, ic->streams[streamIndex], codec);
-            if (Dictionary.Find(codecOptions, ThreadsOptionKey) == null)
-                codecOptions = Dictionary.Set(codecOptions, ThreadsOptionKey, ThreadsOptionValue);
+            var codecOptions = Helpers.FilterCodecOptions(Options.CodecOptions, codecContext->codec_id, ic, ic->streams[streamIndex], codec);
+            if (!codecOptions.ContainsKey(ThreadsOptionKey))
+                codecOptions[ThreadsOptionKey] = ThreadsOptionValue;
 
             if (lowResFactor != 0)
-                codecOptions = Dictionary.Set(codecOptions, "lowres", $"{lowResFactor}");
+                codecOptions["lowres"] = $"{lowResFactor}";
 
             if (targetMediaType == AVMediaType.AVMEDIA_TYPE_VIDEO || targetMediaType == AVMediaType.AVMEDIA_TYPE_AUDIO)
-                codecOptions = Dictionary.Set(codecOptions, "refcounted_frames", "1");
+                codecOptions["refcounted_frames"] = "1";
 
-            if ((ret = ffmpeg.avcodec_open2(codecContext, codec, &codecOptions)) < 0)
             {
-                goto fail;
+                var codecOptionsArg = codecOptions.Pointer;
+                ret = ffmpeg.avcodec_open2(codecContext, codec, &codecOptionsArg);
+                codecOptions.Update(codecOptionsArg);
             }
 
-            var t = Dictionary.First(codecOptions);
-            if (t != null)
+            var invalidKey = codecOptions.First?.Key;
+            codecOptions.Release();
+
+            if (ret < 0)
+                goto fail;
+
+            if (invalidKey != null)
             {
-                Helpers.LogError($"Option {t.Key} not found.\n");
+                Helpers.LogError($"Option {invalidKey} not found.\n");
                 ret = ffmpeg.AVERROR_OPTION_NOT_FOUND;
                 goto fail;
             }
@@ -507,8 +515,6 @@
         fail:
             ffmpeg.avcodec_free_context(&codecContext);
         exit:
-            ffmpeg.av_dict_free(&codecOptions);
-
             return ret;
         }
 
@@ -617,16 +623,17 @@
             var ic = ffmpeg.avformat_alloc_context();
             ic->interrupt_callback.callback = InputInterruptCallback;
 
-            if (Dictionary.Find(o.FormatOptions, "scan_all_pmts", true) == null)
+            var formatOptions = o.FormatOptions.ToUnmanaged();
+            if (!formatOptions.ContainsKey("scan_all_pmts"))
             {
-                o.FormatOptions = Dictionary.Set(o.FormatOptions, "scan_all_pmts", "1", ffmpeg.AV_DICT_DONT_OVERWRITE);
+                formatOptions["scan_all_pmts"] = "1";
                 scan_all_pmts_set = true;
             }
 
             {
-                var formatOptions = o.FormatOptions;
-                err = ffmpeg.avformat_open_input(&ic, FileName, InputFormat.Pointer, &formatOptions);
-                o.FormatOptions = formatOptions;
+                var formatOptionsArg = formatOptions.Pointer;
+                err = ffmpeg.avformat_open_input(&ic, FileName, InputFormat.Pointer, &formatOptionsArg);
+                formatOptions.Update(formatOptionsArg);
             }
 
             if (err < 0)
@@ -637,12 +644,14 @@
             }
 
             if (scan_all_pmts_set)
-                o.FormatOptions = Dictionary.Set(o.FormatOptions, "scan_all_pmts", null, ffmpeg.AV_DICT_MATCH_CASE);
+                formatOptions.Remove("scan_all_pmts");
 
-            DictionaryEntry formatOption = null;
-            if ((formatOption = Dictionary.First(o.FormatOptions)) != null)
+            var invalidOptionKey = formatOptions.First?.Key;
+            formatOptions.Release();
+
+            if (invalidOptionKey != null)
             {
-                Helpers.LogError($"Option {formatOption.Key} not found.\n");
+                Helpers.LogError($"Option {invalidOptionKey} not found.\n");
                 ret = ffmpeg.AVERROR_OPTION_NOT_FOUND;
                 goto fail;
             }
@@ -656,15 +665,16 @@
 
             if (o.IsStreamInfoEnabled)
             {
-                var opts = Helpers.setup_find_stream_info_opts(ic, o.CodecOptions);
-                var orig_nb_streams = (int)ic->nb_streams;
+                var opts = Helpers.FindStreamInfoOptions(ic, o.CodecOptions);
+                var optsArg = (AVDictionary**)ffmpeg.av_mallocz_array((ulong)opts.Count, (ulong)sizeof(IntPtr));
+                for (var optionIndex = 0; optionIndex < opts.Count; optionIndex++)
+                    optsArg[optionIndex] = opts[optionIndex].Pointer;
 
-                err = ffmpeg.avformat_find_stream_info(ic, opts);
+                err = ffmpeg.avformat_find_stream_info(ic, optsArg);
+                ffmpeg.av_freep(&optsArg);
 
-                for (i = 0; i < orig_nb_streams; i++)
-                    ffmpeg.av_dict_free(&opts[i]);
-
-                ffmpeg.av_freep(&opts);
+                foreach (var optionDict in opts)
+                    optionDict.Release();
 
                 if (err < 0)
                 {
@@ -682,8 +692,9 @@
 
             MaxPictureDuration = ic->iformat->flags.HasFlag(ffmpeg.AVFMT_TS_DISCONT) ? 10.0 : 3600.0;
 
-            if (string.IsNullOrWhiteSpace(Renderer.Video.WindowTitle) && (formatOption = Dictionary.Find(ic->metadata, "title")) != null)
-                Renderer.Video.WindowTitle = $"{formatOption.Value} - {o.InputFileName}";
+            var metadata = FFDictionary.Extract(ic->metadata);
+            if (string.IsNullOrWhiteSpace(Renderer.Video.WindowTitle) && metadata.ContainsKey("title"))
+                Renderer.Video.WindowTitle = $"{metadata["title"]} - {o.InputFileName}";
 
             /* if seeking requested, we execute it */
             if (o.StartOffset.IsValidPts())

@@ -389,8 +389,7 @@
 
         private string RetrieveResamplerOptions()
         {
-            var options = Dictionary.Extract(Container.Options.ResamplerOptions);
-            var result = string.Join(":", options.Select(kvp => $"{kvp.Key}={kvp.Value}").ToArray());
+            var result = string.Join(":", Container.Options.ResamplerOptions.Select(kvp => $"{kvp.Key}={kvp.Value}").ToArray());
             return string.IsNullOrWhiteSpace(result) ? null : result;
         }
 

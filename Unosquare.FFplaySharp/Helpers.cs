@@ -158,11 +158,20 @@
 
         public static unsafe string PtrToString(IntPtr ptr) => Marshal.PtrToStringUTF8(ptr);
 
-        public static unsafe AVDictionary* filter_codec_opts(AVDictionary* opts, AVCodecID codec_id,
+        /// <summary>
+        /// Port of filter_codec_opts.
+        /// </summary>
+        /// <param name="opts"></param>
+        /// <param name="codec_id"></param>
+        /// <param name="s"></param>
+        /// <param name="st"></param>
+        /// <param name="codec"></param>
+        /// <returns></returns>
+        public static unsafe FFDictionary FilterCodecOptions(StringDictionary opts, AVCodecID codec_id,
                                     AVFormatContext* s, AVStream* st, AVCodec* codec)
         {
 
-            AVDictionary* filteredOptions = null;
+            var filteredOptions = new FFDictionary();
 
             int flags = s->oformat != null ? ffmpeg.AV_OPT_FLAG_ENCODING_PARAM : ffmpeg.AV_OPT_FLAG_DECODING_PARAM;
             if (codec == null)
@@ -190,8 +199,7 @@
                     break;
             }
 
-            DictionaryEntry t = null;
-            while ((t = Dictionary.Next(opts, t)) != null)
+            foreach (var t in opts)
             {
                 var keyParts = t.Key.Split(':', 2);
                 var optionName = keyParts[0];
@@ -205,10 +213,10 @@
                     codec == null ||
                     (codec->priv_class != null &&
                      MediaClass.FromPrivateClass(codec->priv_class).FindOption(optionName, flags, ffmpeg.AV_OPT_SEARCH_FAKE_OBJ) != null))
-                    filteredOptions = Dictionary.Set(filteredOptions, optionName, t.Value);
+                    filteredOptions[optionName] = t.Value;
                 else if (prefix != string.Empty && optionName.StartsWith(prefix) && optionName.Length > 1 &&
                          MediaClass.Codec.FindOption(optionName.Substring(1), flags, ffmpeg.AV_OPT_SEARCH_FAKE_OBJ) != null)
-                    filteredOptions = Dictionary.Set(filteredOptions, optionName.Substring(1), t.Value);
+                    filteredOptions[optionName.Substring(1)] = t.Value;
             }
 
             return filteredOptions;
@@ -265,27 +273,25 @@
 
         /// <summary>
         /// Port of setup_find_stream_info_opts.
-        /// Gets an array of dictionaries, each associated with a stream.
+        /// Gets an array of dictionaries, each associated with a stream, and unsed for calling
+        /// <see cref="ffmpeg.avformat_find_stream_info(AVFormatContext*, AVDictionary**)"/>.
         /// </summary>
         /// <param name="s"></param>
         /// <param name="codecOptions"></param>
         /// <returns></returns>
-        public static unsafe AVDictionary** setup_find_stream_info_opts(AVFormatContext* s, AVDictionary* codecOptions)
+        public static unsafe IReadOnlyList<FFDictionary> FindStreamInfoOptions(AVFormatContext* s, StringDictionary codecOptions)
         {
+            var result = new List<FFDictionary>(32);
             if (s->nb_streams == 0)
                 return null;
 
-            var opts = (AVDictionary**)ffmpeg.av_mallocz_array(s->nb_streams, (ulong)sizeof(IntPtr));
-            if (opts == null)
+            for (var i = 0; i < s->nb_streams; i++)
             {
-                LogError("Could not alloc memory for stream options.\n");
-                return null;
+                var streamOptions = FilterCodecOptions(codecOptions, s->streams[i]->codecpar->codec_id, s, s->streams[i], null);
+                result.Add(streamOptions);
             }
 
-            for (var i = 0; i < s->nb_streams; i++)
-                opts[i] = filter_codec_opts(codecOptions, s->streams[i]->codecpar->codec_id, s, s->streams[i], null);
-
-            return opts;
+            return result;
         }
 
         public static bool IsValidPts(this long pts) => pts != ffmpeg.AV_NOPTS_VALUE;

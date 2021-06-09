@@ -26,6 +26,9 @@
         {
             lock (SyncLock)
             {
+                if (!Graph.ContainsKey(item.ObjectId))
+                    return;
+
                 Graph.Remove(item.ObjectId);
                 m_Count--;
             }

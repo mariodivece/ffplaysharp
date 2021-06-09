@@ -224,10 +224,9 @@
             var codecParameters = Stream->codecpar;
             var frameRate = GuessFrameRate();
             var outputPixelFormats = Container.Renderer.Video.RetrieveSupportedPixelFormats().Cast<int>();
-            var softwareScalerOptions = Dictionary.Extract(Container.Options.ScalerOptions);
             var softwareScalerFlags = string.Empty;
 
-            foreach (var kvp in softwareScalerOptions)
+            foreach (var kvp in Container.Options.ScalerOptions)
             {
                 softwareScalerFlags = (kvp.Key == "sws_flags")
                     ? $"flags={kvp.Value}:{softwareScalerFlags}"

@@ -18,7 +18,7 @@
             set => Pointer->interrupt_callback.callback = value;
         }
 
-        public int OpenInput(string filePath, InputFormat format, Dictionary formatOptions)
+        public int OpenInput(string filePath, InputFormat format, FFDictionary formatOptions)
         {
             var context = Pointer;
             var formatOptionsPtr = formatOptions.Pointer;

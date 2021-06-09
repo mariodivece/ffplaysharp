@@ -198,10 +198,13 @@
         public int FilteringThreadCount { get; set; } = 0;
 
         // Internal option dictionaries
-        public AVDictionary* ScalerOptions;
-        public AVDictionary* ResamplerOptions;
-        public AVDictionary* FormatOptions;
-        public AVDictionary* CodecOptions;
+        public StringDictionary ScalerOptions { get; } = new();
+        
+        public StringDictionary ResamplerOptions { get; } = new();
+        
+        public StringDictionary FormatOptions { get; } = new();
+        
+        public StringDictionary CodecOptions { get; } = new();
 
         public ProgramOptions()
         {
@@ -215,20 +218,7 @@
 
         public void uninit_opts()
         {
-            var r_swr_opts = ResamplerOptions;
-            var r_sws_dict = ScalerOptions;
-            var r_format_opts = FormatOptions;
-            var r_codec_opts = CodecOptions;
-
-            ffmpeg.av_dict_free(&r_swr_opts);
-            ffmpeg.av_dict_free(&r_sws_dict);
-            ffmpeg.av_dict_free(&r_format_opts);
-            ffmpeg.av_dict_free(&r_codec_opts);
-
-            ResamplerOptions = null;
-            ScalerOptions = null;
-            FormatOptions = null;
-            CodecOptions = null;
+            // no need to release managed dictionaries
         }
 
         public static ProgramOptions FromCommandLineArguments(string[] args)
@@ -304,10 +294,6 @@
         private static OptionDef<ProgramOptions> Option(string name, bool hasArgument, string help, Action<ProgramOptions, string> apply)
             => new OptionDef<ProgramOptions>(name, hasArgument ? OptionFlags.HAS_ARG : OptionFlags.OPT_BOOL, apply, help);
 
-        private static int FlagSetMode(AVOption* option, string flagName) =>
-            option->type == AVOptionType.AV_OPT_TYPE_FLAGS && (flagName.StartsWith('-') || flagName.StartsWith('+'))
-                ? ffmpeg.AV_DICT_APPEND : 0;
-
         /// <summary>
         /// Port of opt_default
         /// </summary>
@@ -333,13 +319,13 @@
                 (optionName[0] == 'v' || optionName[0] == 'a' || optionName[0] == 's') &&
                 (o = MediaClass.Codec.FindOption(optionName.Substring(1))) != null))
             {
-                CodecOptions = Dictionary.Set(CodecOptions, optionName, optionValue, FlagSetMode(o, optionValue));
+                CodecOptions.Set(o, optionName, optionValue);
                 isConsumed = true;
             }
 
             if ((o = MediaClass.Format.FindOption(optionName, SearchFlags)) != null)
             {
-                FormatOptions = Dictionary.Set(FormatOptions, optionName, optionValue, FlagSetMode(o, optionValue));
+                FormatOptions.Set(o, optionName, optionValue);
 
                 if (isConsumed)
                     ffmpeg.av_log(null, ffmpeg.AV_LOG_VERBOSE, $"Routing option {optionName} to both codec and muxer layer\n");
@@ -367,7 +353,7 @@
                     return setResult;
                 }
 
-                ScalerOptions = Dictionary.Set(ScalerOptions, optionName, optionValue, FlagSetMode(o, optionValue));
+                ScalerOptions.Set(o, optionName, optionValue);
                 isConsumed = true;
             }
 
@@ -382,7 +368,7 @@
                     return setResult;
                 }
 
-                ResamplerOptions = Dictionary.Set(ResamplerOptions, optionName, optionValue, FlagSetMode(o, optionValue));
+                ResamplerOptions.Set(o, optionName, optionValue);
                 isConsumed = true;
             }
 

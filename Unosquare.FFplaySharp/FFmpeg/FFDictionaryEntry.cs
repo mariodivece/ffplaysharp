@@ -4,9 +4,9 @@
     using Unosquare.FFplaySharp;
     using Unosquare.FFplaySharp.Primitives;
 
-    public unsafe class DictionaryEntry : UnmanagedReference<AVDictionaryEntry>
+    public unsafe class FFDictionaryEntry : UnmanagedReference<AVDictionaryEntry>
     {
-        public DictionaryEntry(AVDictionaryEntry* pointer)
+        public FFDictionaryEntry(AVDictionaryEntry* pointer)
             : base(pointer)
         {
             if (pointer == null)
