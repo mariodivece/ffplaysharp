@@ -173,8 +173,8 @@
                                     if (pos.IsNaN())
                                         pos = Container.SeekAbsoluteTarget / Clock.TimeBaseMicros;
                                     pos += incr;
-                                    if (Container.InputContext.Pointer->start_time.IsValidPts() && pos < Container.InputContext.Pointer->start_time / Clock.TimeBaseMicros)
-                                        pos = Container.InputContext.Pointer->start_time / Clock.TimeBaseMicros;
+                                    if (Container.InputContext.StartTime.IsValidPts() && pos < Container.InputContext.StartTime / Clock.TimeBaseMicros)
+                                        pos = Container.InputContext.StartTime / Clock.TimeBaseMicros;
                                     Container.SeekByTimestamp(Convert.ToInt64(pos * Clock.TimeBaseMicros), Convert.ToInt64(incr * Clock.TimeBaseMicros));
                                 }
                                 break;
@@ -227,7 +227,7 @@
                         }
                         if (Container.Options.IsByteSeekingEnabled != 0 || Container.InputContext.Duration <= 0)
                         {
-                            var fileSize = ffmpeg.avio_size(Container.InputContext.Pointer->pb);
+                            var fileSize = Container.InputContext.IO.Size;
                             Container.SeekByPosition(Convert.ToInt64(fileSize * mouseX / Container.width));
                         }
                         else
@@ -240,8 +240,8 @@
 
                             Helpers.LogInfo($"Seek to {(seekPercent * 100):0.00} ({targetTime}) of total duration ({totalDuration})       \n");
 
-                            if (Container.InputContext.Pointer->start_time.IsValidPts())
-                                targetPosition += Container.InputContext.Pointer->start_time;
+                            if (Container.InputContext.StartTime.IsValidPts())
+                                targetPosition += Container.InputContext.StartTime;
 
                             Container.SeekByTimestamp(targetPosition);
                         }

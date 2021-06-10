@@ -23,6 +23,14 @@
         public AVRational TimeBase => Pointer->time_base;
 
         public long StartTime => Pointer->start_time;
+
+        public int DispositionFlags => Pointer->disposition;
+
+        public FFPacket CloneAttachedPicture()
+        {
+            var packet = &Pointer->attached_pic;
+            return FFPacket.Clone(packet);
+        }
     }
 
     public unsafe sealed class StreamCollection

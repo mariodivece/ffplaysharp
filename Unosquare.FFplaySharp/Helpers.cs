@@ -295,7 +295,7 @@
         {
             var result = new List<FFDictionary>(inputContext.Streams.Count);
             if (inputContext.Streams.Count == 0)
-                return null;
+                return result;
 
             for (var i = 0; i < inputContext.Streams.Count; i++)
             {

@@ -49,7 +49,7 @@
         public bool IsPictureAttachmentStream =>
             MediaType == AVMediaType.AVMEDIA_TYPE_VIDEO &&
             Stream != null &&
-            Stream.Pointer->disposition.HasFlag(ffmpeg.AV_DISPOSITION_ATTACHED_PIC);
+            Stream.DispositionFlags.HasFlag(ffmpeg.AV_DISPOSITION_ATTACHED_PIC);
 
         public bool HasEnoughPackets
         {

@@ -448,7 +448,7 @@
         /* called to display each frame */
         public void Present(ref double remainingTime)
         {
-            if (!Container.IsPaused && Container.MasterSyncMode == ClockSync.External && Container.IsRealtime)
+            if (!Container.IsPaused && Container.MasterSyncMode == ClockSync.External && Container.IsRealTime)
                 Container.SyncExternalClockSpeed();
 
             if (Container.HasVideo)

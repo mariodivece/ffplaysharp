@@ -1,16 +1,21 @@
 ﻿namespace FFmpeg
 {
     using FFmpeg.AutoGen;
+    using Unosquare.FFplaySharp;
     using Unosquare.FFplaySharp.Primitives;
 
     public unsafe sealed class FFInputFormat : UnmanagedReference<AVInputFormat>
     {
         public static readonly FFInputFormat None = new(null);
 
-        private FFInputFormat(AVInputFormat* pointer)
+        public FFInputFormat(AVInputFormat* pointer)
         {
             Update(pointer);
         }
+
+        public int Flags => Pointer->flags;
+
+        public string Name => Helpers.PtrToString(Pointer->name);
 
         public static FFInputFormat Find(string shortName)
         {
