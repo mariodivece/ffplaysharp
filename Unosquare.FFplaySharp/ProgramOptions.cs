@@ -137,7 +137,7 @@
         
         public bool IsSubtitleDisabled { get; set; }
         
-        public Dictionary<AVMediaType, string> WantedStreams { get; private set; }
+        public Dictionary<AVMediaType, string> WantedStreams { get; }
         
         public ThreeState IsByteSeekingEnabled { get; set; } = ThreeState.Auto;
         
@@ -304,9 +304,6 @@
         {
             const int SearchFlags = ffmpeg.AV_OPT_SEARCH_CHILDREN | ffmpeg.AV_OPT_SEARCH_FAKE_OBJ;
 
-            AVOption* o;
-            bool isConsumed = false;
-
             if (optionName == "debug" || optionName == "fdebug")
                 ffmpeg.av_log_set_level(ffmpeg.AV_LOG_DEBUG);
 
@@ -315,8 +312,11 @@
                 ? optionName.Substring(0, optionName.IndexOf(':'))
                 : new string(optionName);
 
-            if ((o = FFMediaClass.Codec.FindOption(strippedOptionName, SearchFlags)) != null || (
-                (optionName[0] == 'v' || optionName[0] == 'a' || optionName[0] == 's') &&
+            FFOption o = null;
+            bool isConsumed = false;
+
+            if ((o = FFMediaClass.Codec.FindOption(strippedOptionName, default, SearchFlags)) != null || (
+                (optionName.StartsWith("v") || optionName.StartsWith("a") || optionName.StartsWith("s")) &&
                 (o = FFMediaClass.Codec.FindOption(optionName.Substring(1))) != null))
             {
                 CodecOptions.Set(o, optionName, optionValue);

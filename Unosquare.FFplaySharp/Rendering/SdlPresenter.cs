@@ -128,7 +128,7 @@
                                 }
                                 break;
                             case SDL.SDL_Keycode.SDLK_PAGEUP:
-                                if (Container.InputContext.ChapterCount <= 1)
+                                if (Container.InputContext.Chapters.Count <= 1)
                                 {
                                     incr = 600.0;
                                     goto do_seek;
@@ -136,7 +136,7 @@
                                 Container.ChapterSeek(1);
                                 break;
                             case SDL.SDL_Keycode.SDLK_PAGEDOWN:
-                                if (Container.InputContext.ChapterCount <= 1)
+                                if (Container.InputContext.Chapters.Count <= 1)
                                 {
                                     incr = -600.0;
                                     goto do_seek;

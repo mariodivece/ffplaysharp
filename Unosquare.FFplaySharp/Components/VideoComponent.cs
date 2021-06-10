@@ -1,6 +1,5 @@
 ﻿namespace Unosquare.FFplaySharp.Components
 {
-    using FFmpeg;
     using FFmpeg.AutoGen;
     using SDL2;
     using System;
@@ -274,7 +273,7 @@
             lastFilter = outputFilter;
             if (Container.Options.IsAutorotateEnabled)
             {
-                var theta = Helpers.ComputeDisplayRotation(Stream);
+                var theta = Stream.ComputeDisplayRotation();
 
                 if (Math.Abs(theta - 90) < 1.0)
                 {

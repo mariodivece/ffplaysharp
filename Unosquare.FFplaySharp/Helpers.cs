@@ -65,46 +65,10 @@
 
         public static double ToDouble(this int m) => Convert.ToDouble(m);
 
-        public static double ComputeHypotenuse(double s1, double s2) => Math.Sqrt((s1 * s1) + (s2 * s2));
 
-        /// <summary>
-        /// Port of av_display_rotation_get.
-        /// </summary>
-        /// <param name="matrix"></param>
-        /// <returns></returns>
-        public static unsafe double ComputeMatrixRotation(int* matrix)
-        {
-            var scale = new double[2];
-            scale[0] = ComputeHypotenuse(matrix[0].ToDouble(), matrix[3].ToDouble());
-            scale[1] = ComputeHypotenuse(matrix[1].ToDouble(), matrix[4].ToDouble());
 
-            if (scale[0] == 0.0 || scale[1] == 0.0)
-                return double.NaN;
 
-            var rotation = Math.Atan2(matrix[1].ToDouble() / scale[1], matrix[0].ToDouble() / scale[0]) * 180 / Math.PI;
 
-            return -rotation;
-        }
-
-        /// <summary>
-        /// Port of get_rotation
-        /// </summary>
-        /// <param name="stream"></param>
-        /// <returns></returns>
-        public static unsafe double ComputeDisplayRotation(FFStream stream)
-        {
-            var displayMatrix = ffmpeg.av_stream_get_side_data(stream.Pointer, AVPacketSideDataType.AV_PKT_DATA_DISPLAYMATRIX, null);
-            var theta = displayMatrix != null ? -ComputeMatrixRotation((int*)displayMatrix) : 0d;
-            theta -= 360 * Math.Floor(theta / 360 + 0.9 / 360);
-
-            if (Math.Abs(theta - 90 * Math.Round(theta / 90, 0)) > 2)
-                LogWarning("Odd rotation angle.\n" +
-                    "If you want to help, upload a sample " +
-                    "of this file to https://streams.videolan.org/upload/ " +
-                    "and contact the ffmpeg-devel mailing list. (ffmpeg-devel@ffmpeg.org)");
-
-            return theta;
-        }
 
         public static unsafe int av_opt_set_int_list(void* obj, string name, int[] val, int flags)
         {
@@ -124,22 +88,9 @@
             return ffmpeg.av_opt_set_bin(obj, name, (byte*)pinnedValues, val.Length * sizeof(long), flags);
         }
 
-        public static unsafe byte* strchr(byte* str, char search)
-        {
-            var byteSearch = Convert.ToByte(search);
-            var ptr = str;
-            while (true)
-            {
-                if (*ptr == byteSearch)
-                    return ptr;
-
-                if (*ptr == 0)
-                    return null;
-            }
-        }
-
         /// <summary>
-        /// Port of check_stream_specifier
+        /// Port of check_stream_specifier.
+        /// Returns 0 for no match, 1 for match and a negative number on error.
         /// </summary>
         /// <param name="formatContext">The format context.</param>
         /// <param name="stream">The associated stream.</param>
@@ -177,7 +128,7 @@
 
             var filteredOptions = new FFDictionary();
 
-            int flags = formatContext.Pointer->oformat != null
+            int optionFlags = formatContext.Pointer->oformat != null
                 ? ffmpeg.AV_OPT_FLAG_ENCODING_PARAM
                 : ffmpeg.AV_OPT_FLAG_DECODING_PARAM;
 
@@ -199,15 +150,15 @@
             {
                 case AVMediaType.AVMEDIA_TYPE_VIDEO:
                     prefix = "v";
-                    flags |= ffmpeg.AV_OPT_FLAG_VIDEO_PARAM;
+                    optionFlags |= ffmpeg.AV_OPT_FLAG_VIDEO_PARAM;
                     break;
                 case AVMediaType.AVMEDIA_TYPE_AUDIO:
                     prefix = "a";
-                    flags |= ffmpeg.AV_OPT_FLAG_AUDIO_PARAM;
+                    optionFlags |= ffmpeg.AV_OPT_FLAG_AUDIO_PARAM;
                     break;
                 case AVMediaType.AVMEDIA_TYPE_SUBTITLE:
                     prefix = "s";
-                    flags |= ffmpeg.AV_OPT_FLAG_SUBTITLE_PARAM;
+                    optionFlags |= ffmpeg.AV_OPT_FLAG_SUBTITLE_PARAM;
                     break;
             }
 
@@ -217,18 +168,23 @@
                 var optionName = keyParts[0];
                 var specifier = keyParts.Length > 1 ? keyParts[1] : null;
 
-                var checkResult = specifier != null ? CheckStreamSpecifier(formatContext, stream, specifier) : -1;
+                var checkResult = specifier != null
+                    ? CheckStreamSpecifier(formatContext, stream, specifier)
+                    : -1;
+
                 if (checkResult <= 0)
                     continue;
 
-                if (FFMediaClass.Codec.FindOption(optionName, flags, ffmpeg.AV_OPT_SEARCH_FAKE_OBJ) != null ||
-                    codec == null ||
-                    (codec.PrivateClass != null &&
-                     codec.PrivateClass.FindOption(optionName, flags, ffmpeg.AV_OPT_SEARCH_FAKE_OBJ) != null))
+                if (FFMediaClass.Codec.HasOption(optionName, optionFlags) || codec == null ||
+                    codec.PrivateClass.HasOption(optionName, optionFlags))
+                {
                     filteredOptions[optionName] = t.Value;
-                else if (prefix != string.Empty && optionName.StartsWith(prefix) && optionName.Length > 1 &&
-                         FFMediaClass.Codec.FindOption(optionName.Substring(1), flags, ffmpeg.AV_OPT_SEARCH_FAKE_OBJ) != null)
-                    filteredOptions[optionName.Substring(1)] = t.Value;
+                }
+                else if (prefix.Length > 0 && optionName.Length > 1 && optionName.StartsWith(prefix) &&
+                    FFMediaClass.Codec.HasOption(optionName[1..], optionFlags))
+                {
+                    filteredOptions[optionName[1..]] = t.Value;
+                }
             }
 
             return filteredOptions;

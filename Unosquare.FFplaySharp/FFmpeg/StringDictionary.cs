@@ -15,9 +15,9 @@
         public FFDictionary ToUnmanaged() =>
             FFDictionary.FromManaged(this);
 
-        public unsafe void Set(AVOption* option, string key, string value)
+        public unsafe void Set(FFOption option, string key, string value)
         {
-            var performAppend = option->type == AVOptionType.AV_OPT_TYPE_FLAGS
+            var performAppend = option.Type == AVOptionType.AV_OPT_TYPE_FLAGS
                 && (value.StartsWith('-') || value.StartsWith('+'));
 
             this[key] = ContainsKey(key) && performAppend

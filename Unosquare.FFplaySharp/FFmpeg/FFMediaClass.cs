@@ -23,7 +23,7 @@
         /// <param name="optionName"></param>
         /// <param name="searchFlags"></param>
         /// <returns></returns>
-        public AVOption* FindOption(string optionName, int optionFlags, int searchFlags)
+        public FFOption FindOption(string optionName, int optionFlags = default, int searchFlags = ffmpeg.AV_OPT_SEARCH_FAKE_OBJ)
         {
             if (Pointer == null)
                 return null;
@@ -32,14 +32,12 @@
             if (option != null && option->flags == 0)
                 return null;
 
-            return option;
+            return option != null ? new(option) : null;
         }
 
-        public AVOption* FindOption(string optionName, int searchFlags) =>
-            FindOption(optionName, 0, searchFlags);
+        public bool HasOption(string optionName, int optionFlags = default, int searchFlags = ffmpeg.AV_OPT_SEARCH_FAKE_OBJ) =>
+            FindOption(optionName, optionFlags, searchFlags) != null;
 
-        public AVOption* FindOption(string optionName) =>
-            FindOption(optionName, 0, ffmpeg.AV_OPT_SEARCH_FAKE_OBJ);
 
         public static FFMediaClass FromPrivateClass(AVClass* pointer) =>
             pointer == null ? null : new FFMediaClass(pointer);

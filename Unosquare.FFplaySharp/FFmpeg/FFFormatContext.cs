@@ -14,6 +14,7 @@
         {
             Update(ffmpeg.avformat_alloc_context());
             Streams = new(this);
+            Chapters = new(this);
         }
 
         public AVIOInterruptCB_callback_func InterruptCallback
@@ -24,20 +25,24 @@
 
         public StreamCollection Streams { get; }
 
-        public int Flags
-        {
-            get => Pointer->flags;
-            set => Pointer->flags = value;
-        }
+        public ChapterCollection Chapters { get; }
 
         public FFInputFormat InputFormat => Pointer->iformat != null
             ? new(Pointer->iformat)
             : null;
 
+        public FFIOContext IO => Pointer->pb != null
+            ? new(Pointer->pb)
+            : null;
+
         public IReadOnlyDictionary<string, string> Metadata =>
             FFDictionary.Extract(Pointer->metadata);
 
-        public int ChapterCount => Convert.ToInt32(Pointer->nb_chapters);
+        public int Flags
+        {
+            get => Pointer->flags;
+            set => Pointer->flags = value;
+        }
 
         public long Duration => Pointer->duration;
 
@@ -74,10 +79,6 @@
             packet = new FFPacket();
             return ffmpeg.av_read_frame(Pointer, packet.Pointer);
         }
-
-        public FFIOContext IO => Pointer->pb != null
-            ? new(Pointer->pb)
-            : null;
 
         public FFProgram FindProgramByStream(int streamIndex)
         {
@@ -131,6 +132,5 @@
 
         protected override unsafe void ReleaseInternal(AVFormatContext* pointer) =>
             ffmpeg.avformat_close_input(&pointer);
-
     }
 }
