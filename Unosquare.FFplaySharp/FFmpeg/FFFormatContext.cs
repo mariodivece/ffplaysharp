@@ -74,6 +74,9 @@
 
         public void InjectGlobalSideData() => ffmpeg.av_format_inject_global_side_data(Pointer);
 
+        public int SeekFile(long seekTargetMin, long seekTarget, long seekTargetMax, int seekFlags = 0) =>
+            ffmpeg.avformat_seek_file(Pointer, -1, seekTargetMin, seekTarget, seekTargetMax, seekFlags);
+
         public int ReadFrame(out FFPacket packet)
         {
             packet = new FFPacket();

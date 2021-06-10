@@ -183,7 +183,7 @@
 
         private bool HasEnoughPacketCount => Components.All(c => c.HasEnoughPackets);
 
-        private bool HasEnoughPacketSize => Components.Sum(c => c.Packets.ByteSize) > Constants.MAX_QUEUE_SIZE;
+        private bool HasEnoughPacketBuffer => Components.Sum(c => c.Packets.ByteSize) > Constants.MAX_QUEUE_SIZE;
 
         public static MediaContainer Open(ProgramOptions options, IPresenter renderer)
         {
@@ -678,7 +678,7 @@
                 if (ic.StartTime.IsValidPts())
                     startTimestamp += ic.StartTime;
 
-                ret = ffmpeg.avformat_seek_file(ic.Pointer, -1, long.MinValue, startTimestamp, long.MaxValue, 0);
+                ret = ic.SeekFile(long.MinValue, startTimestamp, long.MaxValue);
                 if (ret < 0)
                     Helpers.LogWarning($"{FileName}: could not seek to position {(startTimestamp / Clock.TimeBaseMicros)}\n");
             }
@@ -813,7 +813,7 @@
                 }
 
                 /* if the queue are full, no need to read more */
-                if (o.IsInfiniteBufferEnabled != ThreeState.On && (HasEnoughPacketSize || HasEnoughPacketCount))
+                if (o.IsInfiniteBufferEnabled != ThreeState.On && (HasEnoughPacketBuffer || HasEnoughPacketCount))
                 {
                     /* wait 10 ms */
                     NeedsMorePacketsEvent.WaitOne(10);
@@ -865,7 +865,7 @@
             // FIXME the +-2 is due to rounding being not done in the correct direction in generation
             //      of the seek_pos/seek_rel variables
 
-            resultCode = ffmpeg.avformat_seek_file(InputContext.Pointer, -1, seekTargetMin, seekTarget, seekTargetMax, SeekFlags);
+            resultCode = InputContext.SeekFile(seekTargetMin, seekTarget, seekTargetMax, SeekFlags);
             if (resultCode < 0)
             {
                 Helpers.LogError($"{InputContext.Url}: error while seeking\n");
