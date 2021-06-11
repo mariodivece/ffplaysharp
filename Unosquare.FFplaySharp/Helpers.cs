@@ -17,7 +17,6 @@
 
         public static int AV_CEIL_RSHIFT(int a, int b) => ((a) + (1 << (b)) - 1) >> (b);
 
-
         /// <summary>
         /// Parses a hexagesimal (HOURS:MM:SS.MILLISECONDS) or simple second
         /// and decimal string representing time and returns total microseconds.
@@ -58,17 +57,11 @@
             return Convert.ToInt64(totalSeconds) * ffmpeg.AV_TIME_BASE;
         }
 
-
         public static int Clamp(this int number, int min, int max) => number < min ? min : number > max ? max : number;
 
         public static double ToFactor(this AVRational r) => ffmpeg.av_q2d(r);
 
         public static double ToDouble(this int m) => Convert.ToDouble(m);
-
-
-
-
-
 
         public static unsafe int av_opt_set_int_list(void* obj, string name, int[] val, int flags)
         {
@@ -224,43 +217,6 @@
 
         public static unsafe void LogQuiet(string message) =>
             Log(null, ffmpeg.AV_LOG_QUIET, message);
-
-        /// <summary>
-        /// Port of print_error. Gets a string representation of an FFmpeg error code.
-        /// </summary>
-        /// <param name="errorCode">The FFmpeg error code.</param>
-        /// <returns>The text representation of the rror code.</returns>
-        public static unsafe string print_error(int errorCode)
-        {
-            var bufferSize = 1024;
-            var buffer = stackalloc byte[bufferSize];
-            ffmpeg.av_strerror(errorCode, buffer, (ulong)bufferSize);
-            var message = PtrToString(buffer);
-            return message;
-        }
-
-        /// <summary>
-        /// Port of setup_find_stream_info_opts.
-        /// Gets an array of dictionaries, each associated with a stream, and unsed for calling
-        /// <see cref="ffmpeg.avformat_find_stream_info(AVFormatContext*, AVDictionary**)"/>.
-        /// </summary>
-        /// <param name="inputContext"></param>
-        /// <param name="codecOptions"></param>
-        /// <returns></returns>
-        public static unsafe IReadOnlyList<FFDictionary> FindStreamInfoOptions(FFFormatContext inputContext, StringDictionary codecOptions)
-        {
-            var result = new List<FFDictionary>(inputContext.Streams.Count);
-            if (inputContext.Streams.Count == 0)
-                return result;
-
-            for (var i = 0; i < inputContext.Streams.Count; i++)
-            {
-                var streamOptions = FilterCodecOptions(codecOptions, inputContext.Streams[i].CodecParameters.CodecId, inputContext, inputContext.Streams[i], null);
-                result.Add(streamOptions);
-            }
-
-            return result;
-        }
 
         public static bool IsValidPts(this long pts) => pts != ffmpeg.AV_NOPTS_VALUE;
 

@@ -52,7 +52,7 @@
 
         public AudioParams HardwareSpec { get; private set; } = new();
 
-        public override AVMediaType MediaType => AVMediaType.AVMEDIA_TYPE_AUDIO;
+        public override AVMediaType MediaType { get; } = AVMediaType.AVMEDIA_TYPE_AUDIO;
 
         public int ConfigureFilters(FFCodecContext codecContext)
         {
@@ -68,7 +68,7 @@
             var resamplerOptions = RetrieveResamplerOptions();
             int resultCode;
 
-            ffmpeg.av_opt_set(FilterGraph, "aresample_swr_opts", resamplerOptions, 0);
+            FilterGraph.SetOption("aresample_swr_opts", resamplerOptions);
             var sourceBufferOptions = $"sample_rate={FilterSpec.Frequency}:sample_fmt={FilterSpec.SampleFormatName}:" +
                 $"channels={FilterSpec.Channels}:time_base={1}/{FilterSpec.Frequency}";
 
@@ -79,7 +79,7 @@
             var sourceBuffer = ffmpeg.avfilter_get_by_name("abuffer");
             AVFilterContext* inputFilterContext = null;
             resultCode = ffmpeg.avfilter_graph_create_filter(
-                &inputFilterContext, sourceBuffer, SourceBufferName, sourceBufferOptions, null, FilterGraph);
+                &inputFilterContext, sourceBuffer, SourceBufferName, sourceBufferOptions, null, FilterGraph.Pointer);
 
             if (resultCode < 0)
                 goto end;
@@ -88,7 +88,7 @@
             var sinkBuffer = ffmpeg.avfilter_get_by_name("abuffersink");
             AVFilterContext* outputFilterContext = null;
             resultCode = ffmpeg.avfilter_graph_create_filter(
-                &outputFilterContext, sinkBuffer, SinkBufferName, null, null, FilterGraph);
+                &outputFilterContext, sinkBuffer, SinkBufferName, null, null, FilterGraph.Pointer);
 
             if (resultCode < 0)
                 goto end;
@@ -119,8 +119,8 @@
 
             if (resultCode < 0) goto end;
 
-            InputFilter = inputFilterContext;
-            OutputFilter = outputFilterContext;
+            InputFilter = new(inputFilterContext);
+            OutputFilter = new(outputFilterContext);
 
             end:
             if (resultCode < 0)
@@ -147,7 +147,8 @@
             {
                 while (Frames.PendingCount == 0)
                 {
-                    if ((Clock.SystemTime - Container.Renderer.Audio.AudioCallbackTime) > HardwareBufferSize / HardwareSpec.BytesPerSecond / 2)
+                    var threshold = Clock.TimeBaseMicros * HardwareBufferSize / HardwareSpec.BytesPerSecond / 2.0;
+                    if ((Clock.SystemTime - Container.Renderer.Audio.AudioCallbackTime) > threshold)
                         return -1;
 
                     ffmpeg.av_usleep(1000);

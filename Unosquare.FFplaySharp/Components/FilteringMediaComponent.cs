@@ -1,12 +1,13 @@
 ﻿namespace Unosquare.FFplaySharp.Components
 {
+    using FFmpeg;
     using FFmpeg.AutoGen;
 
     public abstract unsafe class FilteringMediaComponent : MediaComponent
     {
-        protected AVFilterGraph* FilterGraph = null;
-        protected AVFilterContext* InputFilter = null;
-        protected AVFilterContext* OutputFilter = null;
+        protected FFFilterGraph FilterGraph = null;
+        protected FFFilterContext InputFilter = null;
+        protected FFFilterContext OutputFilter = null;
 
         protected FilteringMediaComponent(MediaContainer container)
             : base(container)
@@ -14,13 +15,13 @@
             // placeholder
         }
 
-        protected AVRational OutputFilterTimeBase => ffmpeg.av_buffersink_get_time_base(OutputFilter);
+        protected AVRational OutputFilterTimeBase => OutputFilter.TimeBase;
 
         protected int MaterializeFilterGraph(string filterGraphLiteral,
                          AVFilterContext* inputFilterContext, AVFilterContext* outputFilterContext)
         {
             var resultCode = 0;
-            var initialFilterCount = (int)FilterGraph->nb_filters;
+            var initialFilterCount = FilterGraph.Filters.Count;
             AVFilterInOut* outputs = null;
             AVFilterInOut* inputs = null;
 
@@ -38,7 +39,8 @@
                 inputs->pad_idx = 0;
                 inputs->next = null;
 
-                if ((resultCode = ffmpeg.avfilter_graph_parse_ptr(FilterGraph, filterGraphLiteral, &inputs, &outputs, null)) < 0)
+                resultCode = FilterGraph.ParseLiteral(filterGraphLiteral, &inputs, &outputs);
+                if (resultCode < 0)
                     goto fail;
             }
             else
@@ -48,10 +50,10 @@
             }
 
             // Reorder the filters to ensure that inputs of the custom filters are merged first
-            for (var i = 0; i < FilterGraph->nb_filters - initialFilterCount; i++)
-                SwapFilters(i, i + initialFilterCount);
+            for (var i = 0; i < FilterGraph.Filters.Count - initialFilterCount; i++)
+                FilterGraph.SwapFilters(i, i + initialFilterCount);
 
-            resultCode = ffmpeg.avfilter_graph_config(FilterGraph, null);
+            resultCode = FilterGraph.Commit();
 
         fail:
             ffmpeg.avfilter_inout_free(&outputs);
@@ -60,26 +62,15 @@
         }
 
 
-        /// <summary>
-        /// Port of FFSWAP
-        /// </summary>
-        /// <param name="indexA"></param>
-        /// <param name="indexB"></param>
-        private void SwapFilters(int indexA, int indexB)
-        {
-            var tempItem = FilterGraph->filters[indexB];
-            FilterGraph->filters[indexB] = FilterGraph->filters[indexA];
-            FilterGraph->filters[indexA] = tempItem;
-        }
 
-        protected int EnqueueInputFilter(AVFrame* decodedFrame) => ffmpeg.av_buffersrc_add_frame(InputFilter, decodedFrame);
 
-        protected int DequeueOutputFilter(AVFrame* decodedFrame) => ffmpeg.av_buffersink_get_frame_flags(OutputFilter, decodedFrame, 0);
+        protected int EnqueueInputFilter(AVFrame* decodedFrame) => InputFilter.AddFrame(decodedFrame);
+
+        protected int DequeueOutputFilter(AVFrame* decodedFrame) => OutputFilter.GetSinkFlags(decodedFrame);
 
         protected void ReleaseFilterGraph()
         {
-            var filterGraph = FilterGraph;
-            ffmpeg.avfilter_graph_free(&filterGraph);
+            FilterGraph?.Release();
             FilterGraph = null;
             InputFilter = null;
             OutputFilter = null;
@@ -88,8 +79,8 @@
         protected void ReallocateFilterGraph()
         {
             ReleaseFilterGraph();
-            FilterGraph = ffmpeg.avfilter_graph_alloc();
-            FilterGraph->nb_threads = Container.Options.FilteringThreadCount;
+            FilterGraph = new();
+            FilterGraph.ThreadCount = Container.Options.FilteringThreadCount;
         }
     }
 }

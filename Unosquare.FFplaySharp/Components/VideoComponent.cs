@@ -81,7 +81,7 @@
                     lastFormat = decodedFrame->format;
                     lastGroupIndex = PacketGroupIndex;
                     lastFilterIndex = CurrentFilterIndex;
-                    frameRate = ffmpeg.av_buffersink_get_frame_rate(OutputFilter);
+                    frameRate = OutputFilter.FrameRate;
                 }
 
                 resultCode = EnqueueInputFilter(decodedFrame);
@@ -198,7 +198,7 @@
             AVFilterContext* insertedFilterContext;
 
             resultCode = ffmpeg.avfilter_graph_create_filter(
-                &insertedFilterContext, insertedFilter, $"ff_{filterName}", filterArgs, null, FilterGraph);
+                &insertedFilterContext, insertedFilter, $"ff_{filterName}", filterArgs, null, FilterGraph.Pointer);
 
             if (resultCode < 0)
                 return false;
@@ -235,9 +235,7 @@
             if (string.IsNullOrWhiteSpace(softwareScalerFlags))
                 softwareScalerFlags = null;
 
-            FilterGraph->scale_sws_opts = softwareScalerFlags != null
-                ? ffmpeg.av_strdup(softwareScalerFlags)
-                : null;
+            FilterGraph.SoftwareScalerOptions = softwareScalerFlags;
 
             var sourceFilterArguments =
                 $"video_size={decoderFrame->width}x{decoderFrame->height}" +
@@ -255,13 +253,13 @@
             var sinkBuffer = ffmpeg.avfilter_get_by_name("buffersink");
 
             resultCode = ffmpeg.avfilter_graph_create_filter(
-                &sourceFilter, sourceBuffer, SourceBufferName, sourceFilterArguments, null, FilterGraph);
+                &sourceFilter, sourceBuffer, SourceBufferName, sourceFilterArguments, null, FilterGraph.Pointer);
 
             if (resultCode < 0)
                 goto fail;
 
             resultCode = ffmpeg.avfilter_graph_create_filter(
-                &outputFilter, sinkBuffer, SinkBufferName, null, null, FilterGraph);
+                &outputFilter, sinkBuffer, SinkBufferName, null, null, FilterGraph.Pointer);
 
             if (resultCode < 0)
                 goto fail;
@@ -303,8 +301,8 @@
             if ((resultCode = MaterializeFilterGraph(filterGraphLiteral, sourceFilter, lastFilter)) < 0)
                 goto fail;
 
-            InputFilter = sourceFilter;
-            OutputFilter = outputFilter;
+            InputFilter = new(sourceFilter);
+            OutputFilter = new(outputFilter);
 
             fail:
             return resultCode;

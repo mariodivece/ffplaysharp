@@ -56,14 +56,14 @@
         public bool IsDifferentTo(AVFrame* audioFrame) =>
             AreDifferent(SampleFormat, Channels, (AVSampleFormat)audioFrame->format, audioFrame->channels);
 
-        public static AudioParams FromFilterContext(AVFilterContext* filter)
+        public static AudioParams FromFilterContext(FFFilterContext filter)
         {
             var result = new AudioParams
             {
-                Frequency = ffmpeg.av_buffersink_get_sample_rate(filter),
-                Channels = ffmpeg.av_buffersink_get_channels(filter),
-                Layout = (long)ffmpeg.av_buffersink_get_channel_layout(filter),
-                SampleFormat = (AVSampleFormat)ffmpeg.av_buffersink_get_format(filter)
+                Frequency = filter.SampleRate,
+                Channels = filter.Channels,
+                Layout = filter.ChannelLayout,
+                SampleFormat = filter.SampleFormat
             };
 
             return result;
@@ -88,7 +88,7 @@
 
         public static long ComputeChannelLayout(AVFrame* frame)
         {
-            return frame->channel_layout != 0 && frame->channels == AudioParams.ChannelCountFor(frame->channel_layout)
+            return frame->channel_layout != 0 && frame->channels == ChannelCountFor(frame->channel_layout)
                 ? (long)frame->channel_layout
                 : DefaultChannelLayoutFor(frame->channels);
         }

@@ -621,7 +621,7 @@
 
             if (err < 0)
             {
-                Helpers.LogError($"{FileName}: {Helpers.print_error(err)}\n");
+                Helpers.LogError($"{FileName}: {FFmpegException.DescribeError(err)}\n");
                 ret = -1;
                 goto fail;
             }

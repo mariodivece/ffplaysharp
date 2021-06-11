@@ -119,7 +119,7 @@
 
         public int FindStreamInfo(StringDictionary codecOptions)
         {
-            var perStreamOptionsList = Helpers.FindStreamInfoOptions(this, codecOptions);
+            var perStreamOptionsList = FindStreamInfoOptions(codecOptions);
             var perStreamOptions = (AVDictionary**)ffmpeg.av_mallocz_array((ulong)perStreamOptionsList.Count, (ulong)sizeof(IntPtr));
             for (var optionIndex = 0; optionIndex < perStreamOptionsList.Count; optionIndex++)
                 perStreamOptions[optionIndex] = perStreamOptionsList[optionIndex].Pointer;
@@ -135,5 +135,30 @@
 
         protected override unsafe void ReleaseInternal(AVFormatContext* pointer) =>
             ffmpeg.avformat_close_input(&pointer);
+
+        /// <summary>
+        /// Port of setup_find_stream_info_opts.
+        /// Gets an array of dictionaries, each associated with a stream, and unsed for calling
+        /// <see cref="ffmpeg.avformat_find_stream_info(AVFormatContext*, AVDictionary**)"/>.
+        /// </summary>
+        /// <param name="inputContext"></param>
+        /// <param name="codecOptions"></param>
+        /// <returns></returns>
+        private IReadOnlyList<FFDictionary> FindStreamInfoOptions(StringDictionary codecOptions)
+        {
+            var result = new List<FFDictionary>(Streams.Count);
+            if (Streams.Count == 0)
+                return result;
+
+            for (var i = 0; i < Streams.Count; i++)
+            {
+                var stream = Streams[i];
+                var codecId = stream.CodecParameters.CodecId;
+                var streamOptions = Helpers.FilterCodecOptions(codecOptions, codecId, this, stream, null);
+                result.Add(streamOptions);
+            }
+
+            return result;
+        }
     }
 }
