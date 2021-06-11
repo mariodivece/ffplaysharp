@@ -19,7 +19,15 @@
         void Release();
     }
 
-    public abstract unsafe class UnmanagedReference<T> : IUnmanagedReference
+    public unsafe interface IUnmanagedReference<T> : IUnmanagedReference
+        where T : unmanaged
+    {
+        T* Pointer { get; }
+
+        void Update(T* pointer);
+    }
+
+    public abstract unsafe class UnmanagedReference<T> : IUnmanagedReference<T>
         where T : unmanaged
     {
         protected UnmanagedReference(T* pointer)

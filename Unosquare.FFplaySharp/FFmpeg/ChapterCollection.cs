@@ -2,20 +2,20 @@
 {
     using System;
 
-    public unsafe sealed class ChapterCollection
+    public unsafe sealed class ChapterCollection : ChildCollection<FFFormatContext, FFChapter>
     {
-        private readonly FFFormatContext Parent;
-
         public ChapterCollection(FFFormatContext parent)
+            : base(parent)
         {
-            Parent = parent;
+            // placeholder
         }
 
-        public FFChapter this[int index]
+        public override FFChapter this[int index]
         {
             get => new(Parent.Pointer->chapters[index]);
+            set => Parent.Pointer->chapters[index] = value.Pointer;
         }
 
-        public int Count => Convert.ToInt32(Parent.Pointer->nb_chapters);
+        public override int Count => Convert.ToInt32(Parent.Pointer->nb_chapters);
     }
 }

@@ -3,7 +3,7 @@
     using FFmpeg;
     using FFmpeg.AutoGen;
 
-    public abstract unsafe class FilteringMediaComponent : MediaComponent
+    public unsafe abstract class FilteringMediaComponent : MediaComponent
     {
         protected FFFilterGraph FilterGraph = null;
         protected FFFilterContext InputFilter = null;
@@ -18,51 +18,52 @@
         protected AVRational OutputFilterTimeBase => OutputFilter.TimeBase;
 
         protected int MaterializeFilterGraph(string filterGraphLiteral,
-                         AVFilterContext* inputFilterContext, AVFilterContext* outputFilterContext)
+                         FFFilterContext inputFilterContext, FFFilterContext outputFilterContext)
         {
             var resultCode = 0;
             var initialFilterCount = FilterGraph.Filters.Count;
-            AVFilterInOut* outputs = null;
-            AVFilterInOut* inputs = null;
 
             if (!string.IsNullOrWhiteSpace(filterGraphLiteral))
             {
-                outputs = ffmpeg.avfilter_inout_alloc();
-                outputs->name = ffmpeg.av_strdup("in");
-                outputs->filter_ctx = inputFilterContext;
-                outputs->pad_idx = 0;
-                outputs->next = null;
+                var output = new FFFilterInOut
+                {
+                    Name = "in",
+                    Filter = inputFilterContext,
+                    PadIndex = 0,
+                    Next = null
+                };
 
-                inputs = ffmpeg.avfilter_inout_alloc();
-                inputs->name = ffmpeg.av_strdup("out");
-                inputs->filter_ctx = outputFilterContext;
-                inputs->pad_idx = 0;
-                inputs->next = null;
+                var input = new FFFilterInOut
+                {
+                    Name = "out",
+                    Filter = outputFilterContext,
+                    PadIndex = 0,
+                    Next = null
+                };
 
-                resultCode = FilterGraph.ParseLiteral(filterGraphLiteral, &inputs, &outputs);
+                resultCode = FilterGraph.ParseLiteral(filterGraphLiteral, input, output);
                 if (resultCode < 0)
+                {
+                    output.Release();
+                    input.Release();
                     goto fail;
+                }
             }
             else
             {
-                if ((resultCode = ffmpeg.avfilter_link(inputFilterContext, 0, outputFilterContext, 0)) < 0)
+                if ((resultCode = FFFilterContext.Link(inputFilterContext, outputFilterContext)) < 0)
                     goto fail;
             }
 
             // Reorder the filters to ensure that inputs of the custom filters are merged first
             for (var i = 0; i < FilterGraph.Filters.Count - initialFilterCount; i++)
-                FilterGraph.SwapFilters(i, i + initialFilterCount);
+                FilterGraph.Filters.Swap(i, i + initialFilterCount);
 
             resultCode = FilterGraph.Commit();
 
         fail:
-            ffmpeg.avfilter_inout_free(&outputs);
-            ffmpeg.avfilter_inout_free(&inputs);
             return resultCode;
         }
-
-
-
 
         protected int EnqueueInputFilter(AVFrame* decodedFrame) => InputFilter.AddFrame(decodedFrame);
 

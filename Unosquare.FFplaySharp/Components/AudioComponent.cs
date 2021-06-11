@@ -62,7 +62,6 @@
 
         public int ConfigureFilters(bool forceOutputFormat)
         {
-            const int SearhChildrenFlags = ffmpeg.AV_OPT_SEARCH_CHILDREN;
             var outputSampleFormats = new[] { (int)AVSampleFormat.AV_SAMPLE_FMT_S16 };
             ReallocateFilterGraph();
             var resamplerOptions = RetrieveResamplerOptions();
@@ -75,28 +74,24 @@
             if (FilterSpec.Layout != 0)
                 sourceBufferOptions = $"{sourceBufferOptions}:channel_layout=0x{FilterSpec.Layout:x16}";
 
-            const string SourceBufferName = "audioSourceBuffer";
-            var sourceBuffer = ffmpeg.avfilter_get_by_name("abuffer");
-            AVFilterContext* inputFilterContext = null;
-            resultCode = ffmpeg.avfilter_graph_create_filter(
-                &inputFilterContext, sourceBuffer, SourceBufferName, sourceBufferOptions, null, FilterGraph.Pointer);
+            FFFilterContext inputFilterContext;
+            (inputFilterContext, resultCode) = FFFilterContext.Create(
+                FilterGraph, FFFilter.FromName("abuffer"), "audioSourceBuffer", sourceBufferOptions);
 
             if (resultCode < 0)
                 goto end;
 
-            const string SinkBufferName = "audioSinkBuffer";
-            var sinkBuffer = ffmpeg.avfilter_get_by_name("abuffersink");
-            AVFilterContext* outputFilterContext = null;
-            resultCode = ffmpeg.avfilter_graph_create_filter(
-                &outputFilterContext, sinkBuffer, SinkBufferName, null, null, FilterGraph.Pointer);
+            FFFilterContext outputFilterContext;
+            (outputFilterContext, resultCode) = FFFilterContext.Create(
+                FilterGraph, FFFilter.FromName("abuffersink"), "audioSinkBuffer", null);
 
             if (resultCode < 0)
                 goto end;
 
-            if ((resultCode = Helpers.av_opt_set_int_list(outputFilterContext, "sample_fmts", outputSampleFormats, SearhChildrenFlags)) < 0)
+            if ((resultCode = outputFilterContext.SetOptionList("sample_fmts", outputSampleFormats)) < 0)
                 goto end;
 
-            if ((resultCode = ffmpeg.av_opt_set_int(outputFilterContext, "all_channel_counts", 1, SearhChildrenFlags)) < 0)
+            if ((resultCode = outputFilterContext.SetOption("all_channel_counts", 1)) < 0)
                 goto end;
 
             if (forceOutputFormat)
@@ -105,13 +100,13 @@
                 var outputChannelCount = new[] { HardwareSpec.Layout != 0 ? -1 : HardwareSpec.Channels };
                 var outputSampleRates = new[] { HardwareSpec.Frequency };
 
-                if ((resultCode = ffmpeg.av_opt_set_int(outputFilterContext, "all_channel_counts", 0, SearhChildrenFlags)) < 0)
+                if ((resultCode = outputFilterContext.SetOption("all_channel_counts", 0)) < 0)
                     goto end;
-                if ((resultCode = Helpers.av_opt_set_int_list(outputFilterContext, "channel_layouts", outputChannelLayout, SearhChildrenFlags)) < 0)
+                if ((resultCode = outputFilterContext.SetOptionList("channel_layouts", outputChannelLayout)) < 0)
                     goto end;
-                if ((resultCode = Helpers.av_opt_set_int_list(outputFilterContext, "channel_counts", outputChannelCount, SearhChildrenFlags)) < 0)
+                if ((resultCode = outputFilterContext.SetOptionList("channel_counts", outputChannelCount)) < 0)
                     goto end;
-                if ((resultCode = Helpers.av_opt_set_int_list(outputFilterContext, "sample_rates", outputSampleRates, SearhChildrenFlags)) < 0)
+                if ((resultCode = outputFilterContext.SetOptionList("sample_rates", outputSampleRates)) < 0)
                     goto end;
             }
 
@@ -119,8 +114,8 @@
 
             if (resultCode < 0) goto end;
 
-            InputFilter = new(inputFilterContext);
-            OutputFilter = new(outputFilterContext);
+            InputFilter = inputFilterContext;
+            OutputFilter =outputFilterContext;
 
             end:
             if (resultCode < 0)

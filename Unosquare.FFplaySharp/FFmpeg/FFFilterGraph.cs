@@ -28,19 +28,11 @@
             set => Pointer->scale_sws_opts = value == null ? null : ffmpeg.av_strdup(value);
         }
 
-        public int ParseLiteral(string graphLiteral, AVFilterInOut** inputs, AVFilterInOut** outputs) =>
-            ffmpeg.avfilter_graph_parse_ptr(Pointer, graphLiteral, inputs, outputs, null);
-
-        /// <summary>
-        /// Port of FFSWAP
-        /// </summary>
-        /// <param name="indexA"></param>
-        /// <param name="indexB"></param>
-        public void SwapFilters(int indexA, int indexB)
+        public int ParseLiteral(string graphLiteral, FFFilterInOut input, FFFilterInOut output)
         {
-            var tempItem = Pointer->filters[indexB];
-            Pointer->filters[indexB] = Pointer->filters[indexA];
-            Pointer->filters[indexA] = tempItem;
+            var inputs = input.Pointer;
+            var outputs = output.Pointer;
+            return ffmpeg.avfilter_graph_parse_ptr(Pointer, graphLiteral, &inputs, &outputs, null);
         }
 
         public int Commit() =>

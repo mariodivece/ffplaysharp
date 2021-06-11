@@ -63,22 +63,14 @@
 
         public static double ToDouble(this int m) => Convert.ToDouble(m);
 
-        public static unsafe int av_opt_set_int_list(void* obj, string name, int[] val, int flags)
+        public static unsafe int av_opt_set_int_list<T>(void* obj, string name, T[] val, int flags)
+            where T : unmanaged
         {
-            var pinnedValues = stackalloc int[val.Length];
+            var pinnedValues = stackalloc T[val.Length];
             for (var i = 0; i < val.Length; i++)
                 pinnedValues[i] = val[i];
 
-            return ffmpeg.av_opt_set_bin(obj, name, (byte*)pinnedValues, val.Length * sizeof(int), flags);
-        }
-
-        public static unsafe int av_opt_set_int_list(void* obj, string name, long[] val, int flags)
-        {
-            var pinnedValues = stackalloc long[val.Length];
-            for (var i = 0; i < val.Length; i++)
-                pinnedValues[i] = val[i];
-
-            return ffmpeg.av_opt_set_bin(obj, name, (byte*)pinnedValues, val.Length * sizeof(long), flags);
+            return ffmpeg.av_opt_set_bin(obj, name, (byte*)pinnedValues, val.Length * sizeof(T), flags);
         }
 
         /// <summary>

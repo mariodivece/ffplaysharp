@@ -1,5 +1,6 @@
 ﻿namespace Unosquare.FFplaySharp.Components
 {
+    using FFmpeg;
     using FFmpeg.AutoGen;
     using SDL2;
     using System;
@@ -192,18 +193,18 @@
         /// <param name="lastFilterContext"></param>
         /// <returns></returns>
         private unsafe bool InsertFilter(
-            string filterName, string filterArgs, ref int resultCode, ref AVFilterContext* lastFilterContext)
+            string filterName, string filterArgs, ref int resultCode, ref FFFilterContext lastFilterContext)
         {
-            var insertedFilter = ffmpeg.avfilter_get_by_name(filterName);
-            AVFilterContext* insertedFilterContext;
+            var insertedFilter = FFFilter.FromName(filterName);
 
-            resultCode = ffmpeg.avfilter_graph_create_filter(
-                &insertedFilterContext, insertedFilter, $"ff_{filterName}", filterArgs, null, FilterGraph.Pointer);
+            FFFilterContext insertedFilterContext;
+            (insertedFilterContext, resultCode) = FFFilterContext.Create(
+                FilterGraph, FFFilter.FromName(filterName), $"ff_{filterName}", filterArgs);
 
             if (resultCode < 0)
                 return false;
 
-            resultCode = ffmpeg.avfilter_link(insertedFilterContext, 0, lastFilterContext, 0);
+            resultCode = FFFilterContext.Link(insertedFilterContext, lastFilterContext);
 
             if (resultCode < 0)
                 return false;
@@ -216,10 +217,7 @@
         private int ConfigureFilters(string filterGraphLiteral, AVFrame* decoderFrame)
         {
             var resultCode = 0;
-            AVFilterContext* sourceFilter = null;
-            AVFilterContext* outputFilter = null;
-            AVFilterContext* lastFilter = null;
-
+            
             var codecParameters = Stream.CodecParameters;
             var frameRate = Container.InputContext.GuessFrameRate(Stream);
             var outputPixelFormats = Container.Renderer.Video.RetrieveSupportedPixelFormats().Cast<int>();
@@ -246,29 +244,30 @@
             if (frameRate.num != 0 && frameRate.den != 0)
                 sourceFilterArguments = $"{sourceFilterArguments}:frame_rate={frameRate.num}/{frameRate.den}";
 
-            const string SourceBufferName = "videoSourceBuffer";
+
             const string SinkBufferName = "videoSinkBuffer";
 
-            var sourceBuffer = ffmpeg.avfilter_get_by_name("buffer");
-            var sinkBuffer = ffmpeg.avfilter_get_by_name("buffersink");
+            var sinkBuffer = FFFilter.FromName("buffersink");
 
-            resultCode = ffmpeg.avfilter_graph_create_filter(
-                &sourceFilter, sourceBuffer, SourceBufferName, sourceFilterArguments, null, FilterGraph.Pointer);
-
-            if (resultCode < 0)
-                goto fail;
-
-            resultCode = ffmpeg.avfilter_graph_create_filter(
-                &outputFilter, sinkBuffer, SinkBufferName, null, null, FilterGraph.Pointer);
+            FFFilterContext sourceFilter = null;
+            (sourceFilter, resultCode) = FFFilterContext.Create(
+                FilterGraph, FFFilter.FromName("buffer"), "videoSourceBuffer", sourceFilterArguments);
 
             if (resultCode < 0)
                 goto fail;
 
-            resultCode = Helpers.av_opt_set_int_list(outputFilter, "pix_fmts", outputPixelFormats.ToArray(), ffmpeg.AV_OPT_SEARCH_CHILDREN);
+            FFFilterContext outputFilter;
+            (outputFilter, resultCode) = FFFilterContext.Create(
+                FilterGraph, sinkBuffer, SinkBufferName, null);
+
             if (resultCode < 0)
                 goto fail;
 
-            lastFilter = outputFilter;
+            resultCode = outputFilter.SetOptionList("pix_fmts", outputPixelFormats.ToArray());
+            if (resultCode < 0)
+                goto fail;
+
+            var lastFilter = outputFilter;
             if (Container.Options.IsAutorotateEnabled)
             {
                 var theta = Stream.ComputeDisplayRotation();
@@ -301,8 +300,8 @@
             if ((resultCode = MaterializeFilterGraph(filterGraphLiteral, sourceFilter, lastFilter)) < 0)
                 goto fail;
 
-            InputFilter = new(sourceFilter);
-            OutputFilter = new(outputFilter);
+            InputFilter = sourceFilter;
+            OutputFilter = outputFilter;
 
             fail:
             return resultCode;

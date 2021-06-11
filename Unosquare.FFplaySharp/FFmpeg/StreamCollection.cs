@@ -2,20 +2,20 @@
 {
     using System;
 
-    public unsafe sealed class StreamCollection
+    public unsafe sealed class StreamCollection : ChildCollection<FFFormatContext, FFStream>
     {
-        private readonly FFFormatContext Parent;
-
         public StreamCollection(FFFormatContext parent)
+            : base(parent)
         {
-            Parent = parent;
+            // placeholder
         }
 
-        public FFStream this[int index]
+        public override FFStream this[int index]
         {
             get => new(Parent.Pointer->streams[index]);
+            set => Parent.Pointer->streams[index] = value.Pointer;
         }
 
-        public int Count => Convert.ToInt32(Parent.Pointer->nb_streams);
+        public override int Count => Convert.ToInt32(Parent.Pointer->nb_streams);
     }
 }
