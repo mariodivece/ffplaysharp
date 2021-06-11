@@ -670,11 +670,11 @@
             if (string.IsNullOrWhiteSpace(Renderer.Video.WindowTitle) && metadata.ContainsKey("title"))
                 Renderer.Video.WindowTitle = $"{metadata["title"]} - {o.InputFileName}";
 
-            /* if seeking requested, we execute it */
+            // if seeking requested, we execute it
             if (o.StartOffset.IsValidPts())
             {
                 var startTimestamp = o.StartOffset;
-                /* add the stream start time */
+                // add the stream start time
                 if (ic.StartTime.IsValidPts())
                     startTimestamp += ic.StartTime;
 
@@ -930,12 +930,14 @@
             }
 
             // check if packet is in play range specified by user, then queue, otherwise discard.
+            var startOffset = Options.StartOffset.IsValidPts() ? Options.StartOffset : 0;
+            var streamTimeBase = InputContext.Streams[readPacket.StreamIndex].TimeBase.ToFactor();
             var streamStartPts = InputContext.Streams[readPacket.StreamIndex].StartTime;
+            streamStartPts = streamStartPts.IsValidPts() ? streamStartPts : 0;
+            var packetPtsOffset = readPacket.Pts - streamStartPts;
 
             var isPacketInPlayRange = !Options.Duration.IsValidPts() ||
-                    (readPacket.Pts - (streamStartPts.IsValidPts() ? streamStartPts : 0)) *
-                    InputContext.Streams[readPacket.StreamIndex].TimeBase.ToFactor() -
-                    (Options.StartOffset.IsValidPts() ? Options.StartOffset : 0) / Clock.TimeBaseMicros
+                    (packetPtsOffset * streamTimeBase) - (startOffset / Clock.TimeBaseMicros)
                     <= (Options.Duration / Clock.TimeBaseMicros);
 
             var component = FindComponentByStreamIndex(readPacket.StreamIndex);
