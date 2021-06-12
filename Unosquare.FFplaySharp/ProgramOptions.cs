@@ -310,7 +310,7 @@
             // Example: codec:a:1 ac3
             var strippedOptionName = optionName.Contains(':')
                 ? optionName.Substring(0, optionName.IndexOf(':'))
-                : new string(optionName);
+                : optionName;
 
             FFOption o = null;
             bool isConsumed = false;

@@ -6,6 +6,7 @@
     using System.Collections.Generic;
     using System.Linq;
     using System.Runtime.InteropServices;
+    using System.Text;
 
     public static class Helpers
     {
@@ -25,9 +26,10 @@
         /// <returns>Total microseconds.</returns>
         public static long ParseTime(this string timeString)
         {
+            var semicolonSeparator = new char[] { ':' };
             // HOURS:MM:SS.MILLISECONDS
             var timeStr = timeString.Trim();
-            var segments = timeStr.Split(':', StringSplitOptions.TrimEntries).Reverse().ToArray();
+            var segments = timeStr.Split(semicolonSeparator).Select(c => c.Trim()).Reverse().ToArray();
             var spanParts = (Hours: 0M, Minutes: 0M, Seconds: 0M);
             for (var segmentIndex = 0; segmentIndex < segments.Length; segmentIndex++)
             {
@@ -92,7 +94,23 @@
 
         public static unsafe string PtrToString(byte* ptr) => PtrToString((IntPtr)ptr);
 
-        public static unsafe string PtrToString(IntPtr ptr) => Marshal.PtrToStringUTF8(ptr);
+        public static unsafe string PtrToString(IntPtr address)
+        {
+            if (address == IntPtr.Zero)
+                return null;
+
+            var source = (byte*)address.ToPointer();
+            var length = 0;
+            while (source[length] != 0)
+                ++length;
+
+            if (length == 0)
+                return string.Empty;
+
+            var target = stackalloc byte[length];
+            Buffer.MemoryCopy(source, target, length, length);
+            return Encoding.UTF8.GetString(target, length);
+        } 
 
         /// <summary>
         /// Port of filter_codec_opts.
@@ -147,9 +165,10 @@
                     break;
             }
 
+            var semicolonSeprator = new char[] { ':' };
             foreach (var t in allOptions)
             {
-                var keyParts = t.Key.Split(':', 2);
+                var keyParts = t.Key.Split(semicolonSeprator, 2);
                 var optionName = keyParts[0];
                 var specifier = keyParts.Length > 1 ? keyParts[1] : null;
 
@@ -166,9 +185,9 @@
                     filteredOptions[optionName] = t.Value;
                 }
                 else if (prefix.Length > 0 && optionName.Length > 1 && optionName.StartsWith(prefix) &&
-                    FFMediaClass.Codec.HasOption(optionName[1..], optionFlags))
+                    FFMediaClass.Codec.HasOption(optionName.Substring(1), optionFlags))
                 {
-                    filteredOptions[optionName[1..]] = t.Value;
+                    filteredOptions[optionName.Substring(1)] = t.Value;
                 }
             }
 

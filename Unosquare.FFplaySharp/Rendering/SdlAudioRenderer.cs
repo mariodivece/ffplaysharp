@@ -3,6 +3,7 @@
     using FFmpeg.AutoGen;
     using SDL2;
     using System;
+    using System.Threading.Tasks;
     using Unosquare.FFplaySharp.Primitives;
 
     public unsafe class SdlAudioRenderer : IAudioRenderer
@@ -186,21 +187,26 @@
                 if (readByteCount > pendingByteCount)
                     readByteCount = pendingByteCount;
 
-                var outputStream = (byte*)audioStream;
-                var inputStream = Container.Audio.OutputBuffer + ReadBufferIndex;
+                var outputStreamPointer = (byte*)audioStream.ToPointer();
+                var inputStreamPointer = Container.Audio.OutputBuffer + ReadBufferIndex;
 
                 if (!Container.IsMuted && Container.Audio.OutputBuffer != null && Volume == SDL.SDL_MIX_MAXVOLUME)
                 {
-                    for (var b = 0; b < readByteCount; b++)
-                        outputStream[b] = inputStream[b];
+                    Buffer.MemoryCopy(inputStreamPointer, outputStreamPointer, readByteCount, readByteCount);
                 }
                 else
                 {
-                    for (var b = 0; b < readByteCount; b++)
-                        outputStream[b] = 0;
+                    Parallel.For(0, readByteCount, (i) => {
+                        outputStreamPointer[i] = 0;
+                    });
 
                     if (!Container.IsMuted && Container.Audio.OutputBuffer != null)
-                        SDL.SDL_MixAudioFormat(outputStream, inputStream, SDL.AUDIO_S16SYS, (uint)readByteCount, Volume);
+                        SDL.SDL_MixAudioFormat(
+                            outputStreamPointer,
+                            inputStreamPointer,
+                            SDL.AUDIO_S16SYS,
+                            (uint)readByteCount,
+                            Volume);
                 }
 
                 pendingByteCount -= readByteCount;

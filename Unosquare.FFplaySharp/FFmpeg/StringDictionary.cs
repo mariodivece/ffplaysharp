@@ -18,7 +18,7 @@
         public unsafe void Set(FFOption option, string key, string value)
         {
             var performAppend = option.Type == AVOptionType.AV_OPT_TYPE_FLAGS
-                && (value.StartsWith('-') || value.StartsWith('+'));
+                && (value.StartsWith("-") || value.StartsWith("+"));
 
             this[key] = ContainsKey(key) && performAppend
                 ? $"{this[key]}{value}"
