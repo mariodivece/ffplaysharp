@@ -140,10 +140,12 @@
 
             do
             {
+                var callbackTimeout = (double)HardwareBufferSize / HardwareSpec.BytesPerSecond / 2.0;
+
                 while (Frames.PendingCount == 0)
                 {
-                    var threshold = Clock.TimeBaseMicros * HardwareBufferSize / HardwareSpec.BytesPerSecond / 2.0;
-                    if ((Clock.SystemTime - Container.Renderer.Audio.AudioCallbackTime) > threshold)
+                    var elapsedCallback = Clock.SystemTime - Container.Renderer.Audio.AudioCallbackTime;
+                    if (elapsedCallback > callbackTimeout)
                         return -1;
 
                     ffmpeg.av_usleep(1000);
@@ -162,19 +164,19 @@
 
             if (af.SampleFormat != StreamSpec.SampleFormat ||
                 frameChannelLayout != StreamSpec.Layout ||
-                af.Frequency != StreamSpec.SampleRate ||
+                af.SampleRate != StreamSpec.SampleRate ||
                 (wantedSampleCount != af.SampleCount && ConvertContext == null))
             {
                 ReleaseConvertContext();
                 ConvertContext = ffmpeg.swr_alloc_set_opts(null,
                     HardwareSpec.Layout, HardwareSpec.SampleFormat, HardwareSpec.SampleRate,
-                    frameChannelLayout, af.SampleFormat, af.Frequency,
+                    frameChannelLayout, af.SampleFormat, af.SampleRate,
                     0, null);
 
                 if (ConvertContext == null || ffmpeg.swr_init(ConvertContext) < 0)
                 {
                     Helpers.LogError(
-                           $"Cannot create sample rate converter for conversion of {af.Frequency} Hz " +
+                           $"Cannot create sample rate converter for conversion of {af.SampleRate} Hz " +
                            $"{af.SampleFormatName} {af.Channels} channels to " +
                            $"{HardwareSpec.SampleRate} Hz {HardwareSpec.SampleFormatName} {HardwareSpec.Channels} channels!\n");
 
@@ -190,7 +192,7 @@
 
             if (ConvertContext != null)
             {
-                var wantedOutputSize = wantedSampleCount * HardwareSpec.SampleRate / af.Frequency + 256;
+                var wantedOutputSize = wantedSampleCount * HardwareSpec.SampleRate / af.SampleRate + 256;
                 var outputBufferSize = ffmpeg.av_samples_get_buffer_size(null, HardwareSpec.Channels, wantedOutputSize, HardwareSpec.SampleFormat, 0);
 
                 if (outputBufferSize < 0)
@@ -200,8 +202,8 @@
                 }
                 if (wantedSampleCount != af.SampleCount)
                 {
-                    if (ffmpeg.swr_set_compensation(ConvertContext, (wantedSampleCount - af.SampleCount) * HardwareSpec.SampleRate / af.Frequency,
-                                                wantedSampleCount * HardwareSpec.SampleRate / af.Frequency) < 0)
+                    if (ffmpeg.swr_set_compensation(ConvertContext, (wantedSampleCount - af.SampleCount) * HardwareSpec.SampleRate / af.SampleRate,
+                                                wantedSampleCount * HardwareSpec.SampleRate / af.SampleRate) < 0)
                     {
                         Helpers.LogError("swr_set_compensation() failed\n");
                         return -1;
@@ -253,7 +255,7 @@
             var currentFrameTime = FrameTime;
 
             // update the audio clock with the pts
-            FrameTime = af.HasValidTime ? af.Time + (double)af.SampleCount / af.Frequency : double.NaN;
+            FrameTime = af.HasValidTime ? af.Time + (double)af.SampleCount / af.SampleRate : double.NaN;
 
             GroupIndex = af.GroupIndex;
             if (Debugger.IsAttached)

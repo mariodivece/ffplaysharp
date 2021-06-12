@@ -74,7 +74,7 @@
 
         public int Channels => FramePtr.Channels;
 
-        public int Frequency => FramePtr.SampleRate;
+        public int SampleRate => FramePtr.SampleRate;
 
         public int SampleCount => FramePtr.SampleCount;
 
