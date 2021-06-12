@@ -6,7 +6,7 @@
 
     public unsafe class AudioParams
     {
-        public int Frequency { get; set; }
+        public int SampleRate { get; set; }
         
         public int Channels { get; set; }
         
@@ -18,23 +18,23 @@
 
         public int FrameSize => ffmpeg.av_samples_get_buffer_size(null, Channels, 1, SampleFormat, 1);
 
-        public int BytesPerSecond => ffmpeg.av_samples_get_buffer_size(null, Channels, Frequency, SampleFormat, 1);
+        public int BytesPerSecond => ffmpeg.av_samples_get_buffer_size(null, Channels, SampleRate, SampleFormat, 1);
 
         public int BytesPerSample => ffmpeg.av_get_bytes_per_sample(SampleFormat);
 
         public string SampleFormatName => GetSampleFormatName(SampleFormat);
 
-        public void ImportFrom(AVFrame* frame)
+        public void ImportFrom(FFFrame frame)
         {
-            SampleFormat = (AVSampleFormat)frame->format;
-            Channels = frame->channels;
-            Layout = ValidateChannelLayout(frame->channel_layout, frame->channels);
-            Frequency = frame->sample_rate;
+            SampleFormat = frame.SampleFormat;
+            Channels = frame.Channels;
+            Layout = ValidateChannelLayout(frame.ChannelLayout, frame.Channels);
+            SampleRate = frame.SampleRate;
         }
 
         public void ImportFrom(FFCodecContext codecContext)
         {
-            Frequency = codecContext.SampleRate;
+            SampleRate = codecContext.SampleRate;
             Channels = codecContext.Channels;
             Layout = ValidateChannelLayout(codecContext.ChannelLayout, codecContext.Channels);
             SampleFormat = codecContext.SampleFormat;
@@ -45,7 +45,7 @@
             var result = new AudioParams
             {
                 Channels = Channels,
-                Frequency = Frequency,
+                SampleRate = SampleRate,
                 Layout = Layout,
                 SampleFormat = SampleFormat
             };
@@ -53,14 +53,14 @@
             return result;
         }
 
-        public bool IsDifferentTo(AVFrame* audioFrame) =>
-            AreDifferent(SampleFormat, Channels, (AVSampleFormat)audioFrame->format, audioFrame->channels);
+        public bool IsDifferentTo(FFFrame audioFrame) =>
+            AreDifferent(SampleFormat, Channels, audioFrame.SampleFormat, audioFrame.Channels);
 
         public static AudioParams FromFilterContext(FFFilterContext filter)
         {
             var result = new AudioParams
             {
-                Frequency = filter.SampleRate,
+                SampleRate = filter.SampleRate,
                 Channels = filter.Channels,
                 Layout = filter.ChannelLayout,
                 SampleFormat = filter.SampleFormat
@@ -82,25 +82,22 @@
 
         public static string GetSampleFormatName(AVSampleFormat format) => ffmpeg.av_get_sample_fmt_name(format);
 
-        public static string GetSampleFormatName(int format) => GetSampleFormatName((AVSampleFormat)format);
-
         public static long DefaultChannelLayoutFor(int channelCount) => ffmpeg.av_get_default_channel_layout(channelCount);
 
-        public static long ComputeChannelLayout(AVFrame* frame)
+        public static long ComputeChannelLayout(FFFrame frame)
         {
-            return frame->channel_layout != 0 && frame->channels == ChannelCountFor(frame->channel_layout)
-                ? (long)frame->channel_layout
-                : DefaultChannelLayoutFor(frame->channels);
+            return frame.ChannelLayout != 0 && frame.Channels == ChannelCountFor(frame.ChannelLayout)
+                ? frame.ChannelLayout
+                : DefaultChannelLayoutFor(frame.Channels);
         }
 
-        public static int ChannelCountFor(ulong channelLayout) => ffmpeg.av_get_channel_layout_nb_channels(channelLayout);
+        public static int ChannelCountFor(long channelLayout) =>
+            ffmpeg.av_get_channel_layout_nb_channels(Convert.ToUInt64(channelLayout));
 
-        public static int ChannelCountFor(long channelLayout) => ChannelCountFor((ulong)channelLayout);
-
-        public static long ValidateChannelLayout(ulong channelLayout, int channelCount)
+        public static long ValidateChannelLayout(long channelLayout, int channelCount)
         {
-            if (channelLayout != 0 && AudioParams.ChannelCountFor(channelLayout) == channelCount)
-                return (long)channelLayout;
+            if (channelLayout != 0 && ChannelCountFor(channelLayout) == channelCount)
+                return channelLayout;
             else
                 return 0;
         }

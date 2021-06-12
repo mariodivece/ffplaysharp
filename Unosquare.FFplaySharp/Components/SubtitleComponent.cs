@@ -19,7 +19,7 @@
 
         protected override FrameQueue CreateFrameQueue() => new(Packets, Constants.SubtitleFrameQueueCapacity, false);
 
-        private int DecodeFrame(out AVSubtitle* frame) => DecodeFrame(out _, out frame);
+        private int DecodeFrame(out AVSubtitle* frame) => DecodeFrame(null, out frame);
 
         protected override void DecodingThreadMethod()
         {

@@ -91,8 +91,8 @@
 
         public AVRational GuessFrameRate(FFStream stream) => ffmpeg.av_guess_frame_rate(Pointer, stream.Pointer, null);
 
-        public AVRational GuessAspectRatio(FFStream stream, AVFrame* frame) =>
-            ffmpeg.av_guess_sample_aspect_ratio(Pointer, stream.Pointer, frame);
+        public AVRational GuessAspectRatio(FFStream stream, FFFrame frame) =>
+            ffmpeg.av_guess_sample_aspect_ratio(Pointer, stream.Pointer, frame != null ? frame.Pointer : null);
 
         public int OpenInput(string filePath, FFInputFormat format, FFDictionary formatOptions)
         {

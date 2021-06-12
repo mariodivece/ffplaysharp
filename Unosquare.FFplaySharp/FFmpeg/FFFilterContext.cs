@@ -53,8 +53,8 @@
             return ffmpeg.av_opt_set_bin(Pointer, name, (byte*)pinnedValues, values.Length * sizeof(T), SearhChildrenFlags);
         }
 
-        public int GetSinkFlags(AVFrame* decodedFrame) => ffmpeg.av_buffersink_get_frame_flags(Pointer, decodedFrame, 0);
+        public int GetSinkFlags(FFFrame decodedFrame) => ffmpeg.av_buffersink_get_frame_flags(Pointer, decodedFrame.Pointer, 0);
 
-        public int AddFrame(AVFrame* decodedFrame) => ffmpeg.av_buffersrc_add_frame(Pointer, decodedFrame);
+        public int AddFrame(FFFrame decodedFrame) => ffmpeg.av_buffersrc_add_frame(Pointer, decodedFrame.Pointer);
     }
 }

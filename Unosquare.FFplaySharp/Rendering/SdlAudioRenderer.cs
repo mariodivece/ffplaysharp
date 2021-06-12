@@ -47,7 +47,7 @@
 
 
         public int Open(AudioParams wantedSpec, out AudioParams audioDeviceSpec) =>
-            Open(wantedSpec.Layout, wantedSpec.Channels, wantedSpec.Frequency, out audioDeviceSpec);
+            Open(wantedSpec.Layout, wantedSpec.Channels, wantedSpec.SampleRate, out audioDeviceSpec);
 
         private int Open(long wantedChannelLayout, int wantedChannelCount, int wantedSampleRate, out AudioParams audioDeviceSpec)
         {
@@ -132,7 +132,7 @@
             }
 
             audioDeviceSpec.SampleFormat = AVSampleFormat.AV_SAMPLE_FMT_S16;
-            audioDeviceSpec.Frequency = deviceSpec.freq;
+            audioDeviceSpec.SampleRate = deviceSpec.freq;
             audioDeviceSpec.Layout = wantedChannelLayout;
             audioDeviceSpec.Channels = deviceSpec.channels;
 

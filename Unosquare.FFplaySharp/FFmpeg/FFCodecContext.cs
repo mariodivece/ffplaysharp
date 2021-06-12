@@ -1,6 +1,7 @@
 ﻿namespace FFmpeg
 {
     using FFmpeg.AutoGen;
+    using System;
     using System.Runtime.CompilerServices;
     using Unosquare.FFplaySharp.Primitives;
 
@@ -52,7 +53,7 @@
 
         public int Channels => Pointer->channels;
 
-        public ulong ChannelLayout => Pointer->channel_layout;
+        public long ChannelLayout => Convert.ToInt64(Pointer->channel_layout);
 
         public AVSampleFormat SampleFormat => Pointer->sample_fmt;
 

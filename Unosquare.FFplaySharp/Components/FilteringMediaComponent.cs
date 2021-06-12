@@ -65,9 +65,9 @@
             return resultCode;
         }
 
-        protected int EnqueueInputFilter(AVFrame* decodedFrame) => InputFilter.AddFrame(decodedFrame);
+        protected int EnqueueInputFilter(FFFrame decodedFrame) => InputFilter.AddFrame(decodedFrame);
 
-        protected int DequeueOutputFilter(AVFrame* decodedFrame) => OutputFilter.GetSinkFlags(decodedFrame);
+        protected int DequeueOutputFilter(FFFrame decodedFrame) => OutputFilter.GetSinkFlags(decodedFrame);
 
         protected void ReleaseFilterGraph()
         {

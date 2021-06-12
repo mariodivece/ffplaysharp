@@ -85,11 +85,10 @@
             StreamIndex = -1;
         }
 
-        protected int DecodeFrame(out AVFrame* decodedFrame, out AVSubtitle* decodedSubtitle)
+        protected int DecodeFrame(FFFrame decodedFrame, out AVSubtitle* decodedSubtitle)
         {
             var resultCode = ffmpeg.AVERROR(ffmpeg.EAGAIN);
             decodedSubtitle = null;
-            decodedFrame = null;
 
             while (true)
             {
@@ -105,23 +104,18 @@
                         switch (CodecContext.CodecType)
                         {
                             case AVMediaType.AVMEDIA_TYPE_VIDEO:
-                                if (decodedFrame == null)
-                                    decodedFrame = ffmpeg.av_frame_alloc();
-
-                                resultCode = ffmpeg.avcodec_receive_frame(CodecContext.Pointer, decodedFrame);
+                                resultCode = ffmpeg.avcodec_receive_frame(CodecContext.Pointer, decodedFrame.Pointer);
                                 if (resultCode >= 0)
                                 {
                                     if (ReorderPts.IsAuto())
-                                        decodedFrame->pts = decodedFrame->best_effort_timestamp;
+                                        decodedFrame.Pts = decodedFrame.BestEffortPts;
                                     else if (ReorderPts == 0)
-                                        decodedFrame->pts = decodedFrame->pkt_dts;
+                                        decodedFrame.Pts = decodedFrame.PacketDts;
                                 }
 
                                 break;
                             case AVMediaType.AVMEDIA_TYPE_AUDIO:
-                                if (decodedFrame == null) decodedFrame = ffmpeg.av_frame_alloc();
-
-                                resultCode = ffmpeg.avcodec_receive_frame(CodecContext.Pointer, decodedFrame);
+                                resultCode = ffmpeg.avcodec_receive_frame(CodecContext.Pointer, decodedFrame.Pointer);
                                 break;
                         }
 

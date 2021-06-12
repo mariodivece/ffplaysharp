@@ -11,10 +11,10 @@
         /// </summary>
         public FrameHolder()
         {
-            FramePtr = ffmpeg.av_frame_alloc();
+            FramePtr = new FFFrame();
         }
 
-        public AVFrame* FramePtr { get; private set; }
+        public FFFrame FramePtr { get; private set; }
 
         public AVSubtitle* SubtitlePtr { get; private set; }
 
@@ -35,7 +35,7 @@
         /// Gets the byte position of the frame in the input file.
         /// This is extracted from the packet position.
         /// </summary>
-        public long Position => FramePtr->pkt_pos;
+        public long Position => FramePtr.PacketPosition;
 
         /// <summary>
         /// Gets the video frame width in pixels.
@@ -50,7 +50,7 @@
         /// <summary>
         /// Gets the sample aspect ratio of the video frame.
         /// </summary>
-        public AVRational Sar => FramePtr->sample_aspect_ratio;
+        public AVRational Sar => FramePtr.SampleAspectRatio;
 
         /// <summary>
         /// Gets whether the frame has been marked as uploaded to the renderer.
@@ -60,23 +60,23 @@
         /// <summary>
         /// Gets whether the video frame is flipped vertically.
         /// </summary>
-        public bool FlipVertical => FramePtr != null && FramePtr->linesize[0] < 0;
+        public bool FlipVertical => FramePtr != null && FramePtr.LineSize[0] < 0;
 
-        public AVSampleFormat SampleFormat => (AVSampleFormat)FramePtr->format;
+        public AVSampleFormat SampleFormat => FramePtr.SampleFormat;
 
         public string SampleFormatName => AudioParams.GetSampleFormatName(SampleFormat);
 
-        public AVPixelFormat PixelFormat => (AVPixelFormat)FramePtr->format;
+        public AVPixelFormat PixelFormat => FramePtr.PixelFormat;
 
-        public byte_ptrArray8 PixelData => FramePtr->data;
+        public byte_ptrArray8 PixelData => FramePtr.Data;
 
-        public int_array8 PixelStride => FramePtr->linesize;
+        public int_array8 PixelStride => FramePtr.LineSize;
 
-        public int Channels => FramePtr->channels;
+        public int Channels => FramePtr.Channels;
 
-        public int Frequency => FramePtr->sample_rate;
+        public int Frequency => FramePtr.SampleRate;
 
-        public int SampleCount => FramePtr->nb_samples;
+        public int SampleCount => FramePtr.SampleCount;
 
         public bool HasValidTime => !Time.IsNaN();
 
@@ -90,15 +90,15 @@
 
         public void MarkUploaded() => IsUploaded = true;
 
-        public void Update(AVFrame* sourceFrame, int groupIndex, double time, double duration)
+        public void Update(FFFrame sourceFrame, int groupIndex, double time, double duration)
         {
-            ffmpeg.av_frame_move_ref(FramePtr, sourceFrame);
+            sourceFrame.MoveTo(FramePtr);
             IsUploaded = false;
             GroupIndex = groupIndex;
             Time = time;
             Duration = duration;
-            Width = FramePtr->width;
-            Height = FramePtr->height;
+            Width = FramePtr.Width;
+            Height = FramePtr.Height;
         }
 
         public void Update(AVSubtitle* sourceFrame, FFCodecContext codecContext, int groupIndex, double time)
@@ -123,8 +123,7 @@
 
         public void Unreference()
         {
-            if (FramePtr != null)
-                ffmpeg.av_frame_unref(FramePtr);
+            FramePtr?.Reset();
 
             if (SubtitlePtr != null)
             {
@@ -135,12 +134,8 @@
 
         public void Dispose()
         {
-            var framePtr = FramePtr;
-            if (framePtr != null)
-            {
-                ffmpeg.av_frame_free(&framePtr);
-                FramePtr = null;
-            }
+            FramePtr?.Release();
+            FramePtr = null;
 
             if (SubtitlePtr != null)
             {

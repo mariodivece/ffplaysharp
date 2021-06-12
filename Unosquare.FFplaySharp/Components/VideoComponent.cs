@@ -34,7 +34,7 @@
             int resultCode;
             var frameRate = Container.InputContext.GuessFrameRate(Stream);
 
-            AVFrame* decodedFrame;
+            var decodedFrame = new FFFrame();
             var lastWidth = 0;
             var lastHeight = 0;
             var lastFormat = -2;
@@ -43,7 +43,7 @@
 
             while (true)
             {
-                resultCode = DecodeFrame(out decodedFrame);
+                resultCode = DecodeFrame(decodedFrame);
 
                 if (resultCode < 0)
                     break;
@@ -51,17 +51,17 @@
                 if (resultCode == 0)
                     continue;
 
-                var isReconfigNeeded = lastWidth != decodedFrame->width || lastHeight != decodedFrame->height || lastFormat != decodedFrame->format ||
+                var isReconfigNeeded = lastWidth != decodedFrame.Width || lastHeight != decodedFrame.Height || lastFormat != (int)decodedFrame.PixelFormat ||
                     lastGroupIndex != PacketGroupIndex || lastFilterIndex != CurrentFilterIndex;
 
                 if (isReconfigNeeded)
                 {
                     var lastFormatName = ffmpeg.av_get_pix_fmt_name((AVPixelFormat)lastFormat) ?? "none";
-                    var frameFormatName = ffmpeg.av_get_pix_fmt_name((AVPixelFormat)decodedFrame->format) ?? "none";
+                    var frameFormatName = ffmpeg.av_get_pix_fmt_name(decodedFrame.PixelFormat) ?? "none";
 
                     Helpers.LogDebug(
                            $"Video frame changed from size:{lastWidth}x%{lastHeight} format:{lastFormatName} serial:{lastGroupIndex} to " +
-                           $"size:{decodedFrame->width}x{decodedFrame->height} format:{frameFormatName} serial:{PacketGroupIndex}\n");
+                           $"size:{decodedFrame.Width}x{decodedFrame.Height} format:{frameFormatName} serial:{PacketGroupIndex}\n");
 
                     ReallocateFilterGraph();
 
@@ -77,9 +77,9 @@
                         break;
                     }
 
-                    lastWidth = decodedFrame->width;
-                    lastHeight = decodedFrame->height;
-                    lastFormat = decodedFrame->format;
+                    lastWidth = decodedFrame.Width;
+                    lastHeight = decodedFrame.Height;
+                    lastFormat = (int)decodedFrame.PixelFormat;
                     lastGroupIndex = PacketGroupIndex;
                     lastFilterIndex = CurrentFilterIndex;
                     frameRate = OutputFilter.FrameRate;
@@ -111,12 +111,12 @@
                         ? ffmpeg.av_make_q(frameRate.den, frameRate.num).ToFactor()
                         : 0);
 
-                    var frameTime = decodedFrame->pts.IsValidPts()
-                        ? decodedFrame->pts * OutputFilterTimeBase.ToFactor()
+                    var frameTime = decodedFrame.Pts.IsValidPts()
+                        ? decodedFrame.Pts * OutputFilterTimeBase.ToFactor()
                         : double.NaN;
 
                     resultCode = EnqueueFrame(decodedFrame, frameTime, duration, PacketGroupIndex);
-                    ffmpeg.av_frame_unref(decodedFrame);
+                    decodedFrame.Reset();
 
                     if (Packets.GroupIndex != PacketGroupIndex)
                         break;
@@ -127,13 +127,11 @@
             }
 
             ReleaseFilterGraph();
-            ffmpeg.av_frame_free(&decodedFrame);
+            decodedFrame.Release();
             return; // 0;
         }
 
-        
-
-        private int EnqueueFrame(AVFrame* sourceFrame, double frameTime, double duration, int groupIndex)
+        private int EnqueueFrame(FFFrame sourceFrame, double frameTime, double duration, int groupIndex)
         {
             var queuedFrame = Frames.PeekWriteable();
 
@@ -147,10 +145,9 @@
             return 0;
         }
 
-        private int DecodeFrame(out AVFrame* frame)
+        private int DecodeFrame(FFFrame frame)
         {
-            frame = null;
-            var gotPicture = DecodeFrame(out frame, out _);
+            var gotPicture = DecodeFrame(frame, out _);
 
             if (gotPicture < 0)
                 return -1;
@@ -158,13 +155,13 @@
             if (gotPicture == 0)
                 return 0;
 
-            frame->sample_aspect_ratio = Container.InputContext.GuessAspectRatio(Stream, frame);
+            frame.SampleAspectRatio = Container.InputContext.GuessAspectRatio(Stream, frame);
 
             if (Container.Options.IsFrameDropEnabled > 0 || (Container.Options.IsFrameDropEnabled != 0 && Container.MasterSyncMode != ClockSync.Video))
             {
-                if (frame->pts.IsValidPts())
+                if (frame.Pts.IsValidPts())
                 {
-                    var frameTime = Stream.TimeBase.ToFactor() * frame->pts;
+                    var frameTime = Stream.TimeBase.ToFactor() * frame.Pts;
                     var frameDelay = frameTime - Container.MasterTime;
 
                     if (!frameDelay.IsNaN() && Math.Abs(frameDelay) < Constants.AV_NOSYNC_THRESHOLD &&
@@ -173,7 +170,7 @@
                         Packets.Count != 0)
                     {
                         DroppedFrameCount++;
-                        ffmpeg.av_frame_unref(frame);
+                        frame.Reset();
                         gotPicture = 0;
                     }
                 }
@@ -214,7 +211,7 @@
         }
 
 
-        private int ConfigureFilters(string filterGraphLiteral, AVFrame* decoderFrame)
+        private int ConfigureFilters(string filterGraphLiteral, FFFrame decoderFrame)
         {
             var resultCode = 0;
             
@@ -236,8 +233,8 @@
             FilterGraph.SoftwareScalerOptions = softwareScalerFlags;
 
             var sourceFilterArguments =
-                $"video_size={decoderFrame->width}x{decoderFrame->height}" +
-                $":pix_fmt={decoderFrame->format}" +
+                $"video_size={decoderFrame.Width}x{decoderFrame.Height}" +
+                $":pix_fmt={(int)decoderFrame.PixelFormat}" +
                 $":time_base={Stream.TimeBase.num}/{Stream.TimeBase.den}" +
                 $":pixel_aspect={codecParameters.SampleAspectRatio.num}/{Math.Max(codecParameters.SampleAspectRatio.den, 1)}";
 
