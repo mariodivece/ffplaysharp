@@ -141,13 +141,15 @@
             queuedFrame.Update(sourceFrame, groupIndex, frameTime, duration);
             Frames.Enqueue();
 
-            Container.Renderer.Video.set_default_window_size(queuedFrame.Width, queuedFrame.Height, queuedFrame.Sar);
+            Container.Renderer.Video.set_default_window_size(
+                queuedFrame.Width, queuedFrame.Height, queuedFrame.Frame.SampleAspectRatio);
+
             return 0;
         }
 
         private int DecodeFrame(FFFrame frame)
         {
-            var gotPicture = DecodeFrame(frame, out _);
+            var gotPicture = DecodeFrame(frame, null);
 
             if (gotPicture < 0)
                 return -1;

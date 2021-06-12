@@ -128,7 +128,7 @@
                     return;
                 }
 
-                Frames[ReadIndex].Unreference();
+                Frames[ReadIndex].Reset();
                 if (++ReadIndex >= Capacity)
                     ReadIndex = 0;
 
@@ -161,7 +161,7 @@
                 {
                     var currentFrame = Frames[ReadIndex];
                     if (IsReadIndexShown && currentFrame.GroupIndex == Packets.GroupIndex)
-                        return currentFrame.Position;
+                        return currentFrame.Frame.PacketPosition;
                     else
                         return -1;
                 }

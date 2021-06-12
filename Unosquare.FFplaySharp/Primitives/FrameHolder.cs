@@ -11,12 +11,12 @@
         /// </summary>
         public FrameHolder()
         {
-            FramePtr = new FFFrame();
+            Frame = new FFFrame();
         }
 
-        public FFFrame FramePtr { get; private set; }
+        public FFFrame Frame { get; private set; }
 
-        public AVSubtitle* SubtitlePtr { get; private set; }
+        public FFSubtitle Subtitle { get; private set; }
 
         public int GroupIndex { get; private set; }
 
@@ -32,12 +32,6 @@
         public double Duration { get; private set; }
 
         /// <summary>
-        /// Gets the byte position of the frame in the input file.
-        /// This is extracted from the packet position.
-        /// </summary>
-        public long Position => FramePtr.PacketPosition;
-
-        /// <summary>
         /// Gets the video frame width in pixels.
         /// </summary>
         public int Width { get; private set; }
@@ -48,11 +42,6 @@
         public int Height { get; private set; }
 
         /// <summary>
-        /// Gets the sample aspect ratio of the video frame.
-        /// </summary>
-        public AVRational Sar => FramePtr.SampleAspectRatio;
-
-        /// <summary>
         /// Gets whether the frame has been marked as uploaded to the renderer.
         /// </summary>
         public bool IsUploaded { get; private set; }
@@ -60,57 +49,43 @@
         /// <summary>
         /// Gets whether the video frame is flipped vertically.
         /// </summary>
-        public bool FlipVertical => FramePtr != null && FramePtr.LineSize[0] < 0;
+        public bool IsPictureVerticalFlipped => !Frame.IsNull && Frame.LineSize[0] < 0;
 
-        public AVSampleFormat SampleFormat => FramePtr.SampleFormat;
+        public byte_ptrArray8 PixelData => Frame.Data;
 
-        public string SampleFormatName => AudioParams.GetSampleFormatName(SampleFormat);
-
-        public AVPixelFormat PixelFormat => FramePtr.PixelFormat;
-
-        public byte_ptrArray8 PixelData => FramePtr.Data;
-
-        public int_array8 PixelStride => FramePtr.LineSize;
-
-        public int Channels => FramePtr.Channels;
-
-        public int SampleRate => FramePtr.SampleRate;
-
-        public int SampleCount => FramePtr.SampleCount;
+        public int_array8 PixelStride => Frame.LineSize;
 
         public bool HasValidTime => !Time.IsNaN();
 
-        public double StartDisplayTime => SubtitlePtr != null
-            ? Time + (SubtitlePtr->start_display_time / 1000d)
+        public double StartDisplayTime => Subtitle != null
+            ? Time + (Subtitle.StartDisplayTime / 1000d)
             : Time;
 
-        public double EndDisplayTime => SubtitlePtr != null
-            ? Time + (SubtitlePtr->end_display_time / 1000d)
+        public double EndDisplayTime => Subtitle != null
+            ? Time + (Subtitle.EndDisplayTime / 1000d)
             : Time + Duration;
 
         public void MarkUploaded() => IsUploaded = true;
 
         public void Update(FFFrame sourceFrame, int groupIndex, double time, double duration)
         {
-            sourceFrame.MoveTo(FramePtr);
+            sourceFrame.MoveTo(Frame);
             IsUploaded = false;
             GroupIndex = groupIndex;
             Time = time;
             Duration = duration;
-            Width = FramePtr.Width;
-            Height = FramePtr.Height;
+            Width = Frame.Width;
+            Height = Frame.Height;
         }
 
-        public void Update(AVSubtitle* sourceFrame, FFCodecContext codecContext, int groupIndex, double time)
+        public void Update(FFSubtitle sourceFrame, FFCodecContext codecContext, int groupIndex, double time)
         {
-            if (SubtitlePtr != null)
-                ffmpeg.avsubtitle_free(SubtitlePtr);
-            
-            SubtitlePtr = sourceFrame;
+            Subtitle?.Release();
+            Subtitle = sourceFrame;
             IsUploaded = false;
             GroupIndex = groupIndex;
             Time = time;
-            Duration = (SubtitlePtr->end_display_time - SubtitlePtr->start_display_time) / 1000d;
+            Duration = (Subtitle.EndDisplayTime - Subtitle.StartDisplayTime) / 1000d;
             Width = codecContext.Width;
             Height = codecContext.Height;
         }
@@ -121,29 +96,20 @@
             Height = height;
         }
 
-        public void Unreference()
+        public void Reset()
         {
-            FramePtr?.Reset();
-
-            if (SubtitlePtr != null)
-            {
-                ffmpeg.avsubtitle_free(SubtitlePtr);
-                SubtitlePtr = null;
-            }
+            Frame?.Reset();
+            Subtitle?.Release();
+            Subtitle = null;
         }
 
         public void Dispose()
         {
-            FramePtr?.Release();
-            FramePtr = null;
+            Frame?.Release();
+            Frame = null;
 
-            if (SubtitlePtr != null)
-            {
-                ffmpeg.avsubtitle_free(SubtitlePtr);
-                SubtitlePtr = null;
-            }
-
-            SubtitlePtr = null;
+            Subtitle?.Release();
+            Subtitle = null;
         }
     }
 }

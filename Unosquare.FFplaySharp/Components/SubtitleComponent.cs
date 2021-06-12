@@ -1,5 +1,6 @@
 ﻿namespace Unosquare.FFplaySharp.Components
 {
+    using FFmpeg;
     using FFmpeg.AutoGen;
     using Unosquare.FFplaySharp.Primitives;
 
@@ -19,31 +20,38 @@
 
         protected override FrameQueue CreateFrameQueue() => new(Packets, Constants.SubtitleFrameQueueCapacity, false);
 
-        private int DecodeFrame(out AVSubtitle* frame) => DecodeFrame(null, out frame);
+        private int DecodeSubtitleInto(FFSubtitle frame) => DecodeFrame(null, frame);
 
         protected override void DecodingThreadMethod()
         {
             while (true)
             {
-                var gotSubtitle = DecodeFrame(out var decodedFrame);
-                if (gotSubtitle < 0) break;
-                
-                if (gotSubtitle != 0 && decodedFrame->format == 0)
+                var frame = new FFSubtitle();
+                var gotSubtitle = DecodeSubtitleInto(frame);
+                if (gotSubtitle < 0)
                 {
-                    var queuedFrame = Frames.PeekWriteable();
-                    if (queuedFrame == null) break;
-
-                    var frameTime = decodedFrame->pts.IsValidPts()
-                        ? decodedFrame->pts / Clock.TimeBaseMicros : 0;
-
-                    // now we can update the picture count
-                    queuedFrame.Update(decodedFrame, CodecContext, PacketGroupIndex, frameTime);
-                    Frames.Enqueue();
+                    frame.Release();
+                    break;
                 }
-                else if (gotSubtitle != 0)
+                else if (gotSubtitle == 0 || frame.Format != 0)
                 {
-                    ffmpeg.avsubtitle_free(decodedFrame);
+                    frame.Release();
+                    continue;
                 }
+
+                var queuedFrame = Frames.PeekWriteable();
+                if (queuedFrame == null)
+                {
+                    frame.Release();
+                    break;
+                }
+
+                var frameTime = frame.Pts.IsValidPts()
+                    ? frame.Pts / Clock.TimeBaseMicros : 0;
+
+                // now we can update the picture count
+                queuedFrame.Update(frame, CodecContext, PacketGroupIndex, frameTime);
+                Frames.Enqueue();
             }
         }
     }

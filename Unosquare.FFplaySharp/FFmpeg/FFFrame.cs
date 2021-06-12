@@ -23,9 +23,13 @@
 
         public AVSampleFormat SampleFormat => (AVSampleFormat)Pointer->format;
 
+        public string SampleFormatName => AudioParams.GetSampleFormatName(SampleFormat);
+
         public AVPixelFormat PixelFormat => (AVPixelFormat)Pointer->format;
 
         public int_array8 LineSize => Pointer->linesize;
+
+        public int_array8 PixelStride => LineSize;
 
         public byte_ptrArray8 Data => Pointer->data;
 
@@ -38,6 +42,8 @@
         public int Channels => Pointer->channels;
 
         public int SampleRate => Pointer->sample_rate;
+
+        public double AudioComputedDuration => (double)SampleCount / SampleRate;
 
         public long Pts
         {
@@ -53,6 +59,12 @@
         {
             get => Pointer->extended_data;
             set => Pointer->extended_data = value;
+        }
+
+        public byte** AudioData
+        {
+            get => ExtendedData;
+            set => ExtendedData = value;
         }
 
         public long ChannelLayout => Convert.ToInt64(Pointer->channel_layout);

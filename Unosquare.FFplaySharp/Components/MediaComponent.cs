@@ -85,10 +85,9 @@
             StreamIndex = -1;
         }
 
-        protected int DecodeFrame(FFFrame decodedFrame, out AVSubtitle* decodedSubtitle)
+        protected int DecodeFrame(FFFrame decodedFrame, FFSubtitle decodedSubtitle)
         {
             var resultCode = ffmpeg.AVERROR(ffmpeg.EAGAIN);
-            decodedSubtitle = null;
 
             while (true)
             {
@@ -170,11 +169,11 @@
                     {
                         var gotSubtitle = 0;
 
-                        // TODO: ensure subtatile gets freed. Pretty sure there is a memory leak around here.
-                        if (decodedSubtitle == null)
-                            decodedSubtitle = (AVSubtitle*)ffmpeg.av_malloc((ulong)sizeof(AVSubtitle));
-
-                        resultCode = ffmpeg.avcodec_decode_subtitle2(CodecContext.Pointer, decodedSubtitle, &gotSubtitle, currentPacket.Pointer);
+                        resultCode = ffmpeg.avcodec_decode_subtitle2(
+                            CodecContext.Pointer,
+                            decodedSubtitle.Pointer,
+                            &gotSubtitle,
+                            currentPacket.Pointer);
 
                         if (resultCode < 0)
                         {
