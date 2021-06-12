@@ -28,7 +28,7 @@
 
         public FFCodecContext CodecContext { get; private set; }
 
-        public FFStream Stream;
+        public FFStream Stream { get; protected set; }
 
         public int StreamIndex { get; set; }
 
@@ -91,8 +91,6 @@
 
             while (true)
             {
-                FFPacket currentPacket = null;
-
                 if (Packets.GroupIndex == PacketGroupIndex)
                 {
                     do
@@ -121,7 +119,7 @@
                         if (resultCode == ffmpeg.AVERROR_EOF)
                         {
                             FinalPacketGroupIndex = PacketGroupIndex;
-                            ffmpeg.avcodec_flush_buffers(CodecContext.Pointer);
+                            CodecContext.FlushBuffers();
                             return 0;
                         }
 
@@ -131,6 +129,7 @@
                     } while (resultCode != ffmpeg.AVERROR(ffmpeg.EAGAIN));
                 }
 
+                FFPacket currentPacket;
                 do
                 {
                     if (Packets.Count == 0)
@@ -145,7 +144,10 @@
                     {
                         currentPacket = Packets.Dequeue(true);
                         if (Packets.IsClosed)
+                        {
+                            currentPacket?.Release();
                             return -1;
+                        }
 
                         if (currentPacket != null)
                             PacketGroupIndex = currentPacket.GroupIndex;
