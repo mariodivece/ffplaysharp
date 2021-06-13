@@ -356,7 +356,8 @@
         private int WriteTexture(ref IntPtr texture, FrameHolder video, ref SwsContext* convertContext)
         {
             var resultCode = 0;
-            (var sdlPixelFormat, var sdlBlendMode) = TranslateToSdlFormat(video.Frame.PixelFormat);
+            var frame = video.Frame;
+            (var sdlPixelFormat, var sdlBlendMode) = TranslateToSdlFormat(frame.PixelFormat);
             var textureFormat = sdlPixelFormat == SDL.SDL_PIXELFORMAT_UNKNOWN ? SDL.SDL_PIXELFORMAT_ARGB8888 : sdlPixelFormat;
 
             if (ReallocateTexture(ref texture, textureFormat, video.Width, video.Height, sdlBlendMode, false) < 0)
@@ -366,9 +367,9 @@
 
             if (sdlPixelFormat == SDL.SDL_PIXELFORMAT_UNKNOWN)
             {
-                /* This should only happen if we are not using avfilter... */
+                // This should only happen if we are not using avfilter...
                 convertContext = ffmpeg.sws_getCachedContext(convertContext,
-                    video.Width, video.Height, video.Frame.PixelFormat, video.Width, video.Height,
+                    video.Width, video.Height, frame.PixelFormat, video.Width, video.Height,
                     AVPixelFormat.AV_PIX_FMT_BGRA, Constants.sws_flags, null, null, null);
 
                 if (convertContext != null)
@@ -379,7 +380,7 @@
                         var targetScan = default(byte_ptrArray8);
                         targetScan[0] = (byte*)textureAddress;
 
-                        ffmpeg.sws_scale(convertContext, video.PixelData, video.PixelStride, 0, video.Height, targetScan, targetStride);
+                        ffmpeg.sws_scale(convertContext, frame.Data, frame.LineSize, 0, video.Height, targetScan, targetStride);
                         SDL.SDL_UnlockTexture(texture);
                     }
                 }
@@ -391,17 +392,17 @@
             }
             else if (sdlPixelFormat == SDL.SDL_PIXELFORMAT_IYUV)
             {
-                if (video.PixelStride[0] > 0 && video.PixelStride[1] > 0 && video.PixelStride[2] > 0)
+                if (frame.LineSize[0] > 0 && frame.LineSize[1] > 0 && frame.LineSize[2] > 0)
                 {
-                    resultCode = SDL.SDL_UpdateYUVTexture(texture, ref textureRect, (IntPtr)video.PixelData[0], video.PixelStride[0],
-                                                           (IntPtr)video.PixelData[1], video.PixelStride[1],
-                                                           (IntPtr)video.PixelData[2], video.PixelStride[2]);
+                    resultCode = SDL.SDL_UpdateYUVTexture(texture, ref textureRect, (IntPtr)frame.Data[0], frame.LineSize[0],
+                                                           (IntPtr)frame.Data[1], frame.LineSize[1],
+                                                           (IntPtr)frame.Data[2], frame.LineSize[2]);
                 }
-                else if (video.PixelStride[0] < 0 && video.PixelStride[1] < 0 && video.PixelStride[2] < 0)
+                else if (frame.LineSize[0] < 0 && frame.LineSize[1] < 0 && frame.LineSize[2] < 0)
                 {
-                    resultCode = SDL.SDL_UpdateYUVTexture(texture, ref textureRect, (IntPtr)video.PixelData[0] + video.PixelStride[0] * (video.Height - 1), -video.PixelStride[0],
-                                                           (IntPtr)video.PixelData[1] + video.PixelStride[1] * (Helpers.AV_CEIL_RSHIFT(video.Height, 1) - 1), -video.PixelStride[1],
-                                                           (IntPtr)video.PixelData[2] + video.PixelStride[2] * (Helpers.AV_CEIL_RSHIFT(video.Height, 1) - 1), -video.PixelStride[2]);
+                    resultCode = SDL.SDL_UpdateYUVTexture(texture, ref textureRect, (IntPtr)frame.Data[0] + frame.LineSize[0] * (video.Height - 1), -frame.LineSize[0],
+                                                           (IntPtr)frame.Data[1] + frame.LineSize[1] * (Helpers.AV_CEIL_RSHIFT(video.Height, 1) - 1), -frame.LineSize[1],
+                                                           (IntPtr)frame.Data[2] + frame.LineSize[2] * (Helpers.AV_CEIL_RSHIFT(video.Height, 1) - 1), -frame.LineSize[2]);
                 }
                 else
                 {
@@ -411,19 +412,19 @@
             }
             else
             {
-                if (video.PixelStride[0] < 0)
-                {
-                    resultCode = SDL.SDL_UpdateTexture(texture, ref textureRect, (IntPtr)video.PixelData[0] + video.PixelStride[0] * (video.Height - 1), -video.PixelStride[0]);
-                }
-                else
-                {
-                    resultCode = SDL.SDL_UpdateTexture(texture, ref textureRect, (IntPtr)video.PixelData[0], video.PixelStride[0]);
-                }
+                resultCode = (frame.LineSize[0] < 0)
+                    ? SDL.SDL_UpdateTexture(texture, ref textureRect, (IntPtr)frame.Data[0] + frame.LineSize[0] * (video.Height - 1), -frame.LineSize[0])
+                    : SDL.SDL_UpdateTexture(texture, ref textureRect, (IntPtr)frame.Data[0], frame.LineSize[0]);
+
             }
 
             return resultCode;
         }
 
+        /// <summary>
+        /// Port of video_open
+        /// </summary>
+        /// <returns></returns>
         public int video_open()
         {
             var w = screen_width != 0 ? screen_width : default_width;

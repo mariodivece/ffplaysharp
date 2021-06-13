@@ -354,9 +354,10 @@
 
             if (!isConsumed && (o = FFMediaClass.Resampler.FindOption(optionName, SearchFlags)) != null)
             {
-                var dummyRescaler = ffmpeg.swr_alloc();
-                var setResult = ffmpeg.av_opt_set(dummyRescaler, optionName, optionValue, 0);
-                ffmpeg.swr_free(&dummyRescaler);
+                var dummyResampler = new ResamplerContext();
+                var setResult = dummyResampler.SetOption(optionName, optionValue);
+                dummyResampler.Release();
+
                 if (setResult < 0)
                 {
                     ffmpeg.av_log(null, ffmpeg.AV_LOG_ERROR, $"Error setting option {optionName}.\n");

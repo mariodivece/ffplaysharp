@@ -4,7 +4,7 @@
     using FFmpeg.AutoGen;
     using System;
 
-    public unsafe sealed class FrameHolder : IDisposable, ISerialGroupable
+    public sealed class FrameHolder : IDisposable, ISerialGroupable
     {
         /// <summary>
         /// Initializes a new instance of the <see cref="FrameHolder" /> class.
@@ -50,10 +50,6 @@
         /// Gets whether the video frame is flipped vertically.
         /// </summary>
         public bool IsPictureVerticalFlipped => !Frame.IsNull && Frame.LineSize[0] < 0;
-
-        public byte_ptrArray8 PixelData => Frame.Data;
-
-        public int_array8 PixelStride => Frame.LineSize;
 
         public bool HasValidTime => !Time.IsNaN();
 

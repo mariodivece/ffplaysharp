@@ -3,6 +3,7 @@
     using FFmpeg.AutoGen;
     using System;
     using System.Runtime.CompilerServices;
+    using Unosquare.FFplaySharp;
     using Unosquare.FFplaySharp.Primitives;
 
     public unsafe sealed class FFFrame : UnmanagedCountedReference<AVFrame>
@@ -61,13 +62,11 @@
             set => Pointer->extended_data = value;
         }
 
-        public byte** AudioData
-        {
-            get => ExtendedData;
-            set => ExtendedData = value;
-        }
+        public long ChannelLayout =>
+            Convert.ToInt64(Pointer->channel_layout);
 
-        public long ChannelLayout => Convert.ToInt64(Pointer->channel_layout);
+        public int SamplesBufferSize =>
+            Helpers.ComputeSamplesBufferSize(Channels, SampleCount, SampleFormat, true);
 
         public void Reset()
         {

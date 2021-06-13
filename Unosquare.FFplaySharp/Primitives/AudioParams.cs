@@ -4,7 +4,7 @@
     using FFmpeg.AutoGen;
     using System;
 
-    public unsafe class AudioParams
+    public class AudioParams
     {
         public int SampleRate { get; set; }
         
@@ -16,9 +16,9 @@
 
         public AVSampleFormat SampleFormat { get; set; }
 
-        public int FrameSize => ffmpeg.av_samples_get_buffer_size(null, Channels, 1, SampleFormat, 1);
+        public int FrameSize => Helpers.ComputeSamplesBufferSize(Channels, 1, SampleFormat, true);
 
-        public int BytesPerSecond => ffmpeg.av_samples_get_buffer_size(null, Channels, SampleRate, SampleFormat, 1);
+        public int BytesPerSecond => Helpers.ComputeSamplesBufferSize(Channels, SampleRate, SampleFormat, true);
 
         public int BytesPerSample => ffmpeg.av_get_bytes_per_sample(SampleFormat);
 
@@ -69,20 +69,14 @@
             return result;
         }
 
-        public static string GetChannelLayoutString(long channelLayout)
-            => GetChannelLayoutString(Convert.ToUInt64(channelLayout));
+        public static string GetChannelLayoutString(long channelLayout) =>
+            GetChannelLayoutString(Convert.ToUInt64(channelLayout));
 
-        public static string GetChannelLayoutString(ulong channelLayout)
-        {
-            const int StringBufferLength = 1024;
-            var filterLayoutString = stackalloc byte[StringBufferLength];
-            ffmpeg.av_get_channel_layout_string(filterLayoutString, StringBufferLength, -1, channelLayout);
-            return Helpers.PtrToString(filterLayoutString);
-        }
+        public static string GetSampleFormatName(AVSampleFormat format) =>
+            ffmpeg.av_get_sample_fmt_name(format);
 
-        public static string GetSampleFormatName(AVSampleFormat format) => ffmpeg.av_get_sample_fmt_name(format);
-
-        public static long DefaultChannelLayoutFor(int channelCount) => ffmpeg.av_get_default_channel_layout(channelCount);
+        public static long DefaultChannelLayoutFor(int channelCount) =>
+            ffmpeg.av_get_default_channel_layout(channelCount);
 
         public static long ComputeChannelLayout(FFFrame frame)
         {
@@ -109,6 +103,14 @@
                 return ffmpeg.av_get_packed_sample_fmt(sampleFormatA) != ffmpeg.av_get_packed_sample_fmt(sampleFormatB);
             else
                 return channelCountA != channelCountB || sampleFormatA != sampleFormatB;
+        }
+
+        private static unsafe string GetChannelLayoutString(ulong channelLayout)
+        {
+            const int StringBufferLength = 1024;
+            var filterLayoutString = stackalloc byte[StringBufferLength];
+            ffmpeg.av_get_channel_layout_string(filterLayoutString, StringBufferLength, -1, channelLayout);
+            return Helpers.PtrToString(filterLayoutString);
         }
     }
 }

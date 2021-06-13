@@ -3,7 +3,7 @@
     using System;
     using System.Threading;
 
-    public unsafe sealed class FrameQueue : IDisposable
+    public sealed class FrameQueue : IDisposable
     {
         private readonly object SyncLock = new();
         private readonly AutoResetEvent ChangedEvent = new(false);

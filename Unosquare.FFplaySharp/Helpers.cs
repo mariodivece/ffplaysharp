@@ -192,7 +192,8 @@
             return filteredOptions;
         }
 
-
+        public static unsafe int ComputeSamplesBufferSize(int channels, int sampleRate, AVSampleFormat sampleFormat, bool align) =>
+            ffmpeg.av_samples_get_buffer_size(null, channels, sampleRate, sampleFormat, (align ? 1 : 0));
 
         public static unsafe void Log(void* opaque, int logLevel, string message) =>
             ffmpeg.av_log(opaque, logLevel, message);
