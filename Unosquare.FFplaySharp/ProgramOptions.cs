@@ -216,11 +216,6 @@
             };
         }
 
-        public void uninit_opts()
-        {
-            // no need to release managed dictionaries
-        }
-
         public static ProgramOptions FromCommandLineArguments(string[] args)
         {
             var options = new ProgramOptions();
@@ -283,16 +278,16 @@
         }
 
         private static OptionDef<ProgramOptions> Option(string name, OptionFlags flags, string help, string argName, Action<ProgramOptions, string> apply)
-            => new OptionDef<ProgramOptions>(name, flags, apply, help, argName);
+            => new(name, flags, apply, help, argName);
 
         private static OptionDef<ProgramOptions> Option(string name, bool hasArgument, string help, string argName, Action<ProgramOptions, string> apply)
-            => new OptionDef<ProgramOptions>(name, hasArgument ? OptionFlags.HAS_ARG : OptionFlags.OPT_BOOL, apply, help, argName);
+            => new(name, hasArgument ? OptionFlags.HAS_ARG : OptionFlags.OPT_BOOL, apply, help, argName);
 
         private static OptionDef<ProgramOptions> Option(string name, OptionFlags flags, string help, Action<ProgramOptions, string> apply)
-            => new OptionDef<ProgramOptions>(name, flags, apply, help);
+            => new(name, flags, apply, help);
 
         private static OptionDef<ProgramOptions> Option(string name, bool hasArgument, string help, Action<ProgramOptions, string> apply)
-            => new OptionDef<ProgramOptions>(name, hasArgument ? OptionFlags.HAS_ARG : OptionFlags.OPT_BOOL, apply, help);
+            => new(name, hasArgument ? OptionFlags.HAS_ARG : OptionFlags.OPT_BOOL, apply, help);
 
         /// <summary>
         /// Port of opt_default

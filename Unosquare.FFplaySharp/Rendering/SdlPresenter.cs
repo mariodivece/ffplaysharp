@@ -277,8 +277,6 @@
                 Container.Close();
 
             Video.Close();
-
-            Container.Options.uninit_opts();
             Container.Options.VideoFilterGraphs.Clear();
 
             ffmpeg.avformat_network_deinit();
