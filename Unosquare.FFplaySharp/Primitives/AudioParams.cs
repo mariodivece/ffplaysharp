@@ -10,9 +10,9 @@
         
         public int Channels { get; set; }
         
-        public long Layout { get; set; }
+        public long ChannelLayout { get; set; }
 
-        public string LayoutString => GetChannelLayoutString(Layout);
+        public string ChannelLayoutString => GetChannelLayoutString(ChannelLayout);
 
         public AVSampleFormat SampleFormat { get; set; }
 
@@ -28,7 +28,7 @@
         {
             SampleFormat = frame.SampleFormat;
             Channels = frame.Channels;
-            Layout = ValidateChannelLayout(frame.ChannelLayout, frame.Channels);
+            ChannelLayout = ValidateChannelLayout(frame.ChannelLayout, frame.Channels);
             SampleRate = frame.SampleRate;
         }
 
@@ -36,7 +36,7 @@
         {
             SampleRate = codecContext.SampleRate;
             Channels = codecContext.Channels;
-            Layout = ValidateChannelLayout(codecContext.ChannelLayout, codecContext.Channels);
+            ChannelLayout = ValidateChannelLayout(codecContext.ChannelLayout, codecContext.Channels);
             SampleFormat = codecContext.SampleFormat;
         }
 
@@ -46,7 +46,7 @@
             {
                 Channels = Channels,
                 SampleRate = SampleRate,
-                Layout = Layout,
+                ChannelLayout = ChannelLayout,
                 SampleFormat = SampleFormat
             };
 
@@ -62,7 +62,7 @@
             {
                 SampleRate = filter.SampleRate,
                 Channels = filter.Channels,
-                Layout = filter.ChannelLayout,
+                ChannelLayout = filter.ChannelLayout,
                 SampleFormat = filter.SampleFormat
             };
 

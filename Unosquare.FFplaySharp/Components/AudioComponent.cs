@@ -71,8 +71,8 @@
             var sourceBufferOptions = $"sample_rate={FilterSpec.SampleRate}:sample_fmt={FilterSpec.SampleFormatName}:" +
                 $"channels={FilterSpec.Channels}:time_base={1}/{FilterSpec.SampleRate}";
 
-            if (FilterSpec.Layout != 0)
-                sourceBufferOptions = $"{sourceBufferOptions}:channel_layout=0x{FilterSpec.Layout:x16}";
+            if (FilterSpec.ChannelLayout != 0)
+                sourceBufferOptions = $"{sourceBufferOptions}:channel_layout=0x{FilterSpec.ChannelLayout:x16}";
 
             FFFilterContext inputFilterContext;
             (inputFilterContext, resultCode) = FFFilterContext.Create(
@@ -96,8 +96,8 @@
 
             if (forceOutputFormat)
             {
-                var outputChannelLayout = new[] { HardwareSpec.Layout };
-                var outputChannelCount = new[] { HardwareSpec.Layout != 0 ? -1 : HardwareSpec.Channels };
+                var outputChannelLayout = new[] { HardwareSpec.ChannelLayout };
+                var outputChannelCount = new[] { HardwareSpec.ChannelLayout != 0 ? -1 : HardwareSpec.Channels };
                 var outputSampleRates = new[] { HardwareSpec.SampleRate };
 
                 if ((resultCode = outputFilterContext.SetOption("all_channel_counts", 0)) < 0)
@@ -158,20 +158,19 @@
 
             } while (audio.GroupIndex != Packets.GroupIndex);
 
-            var frameChannelLayout = AudioParams.ComputeChannelLayout(audio.Frame);
             var wantedSampleCount = SyncWantedSamples(audio.Frame.SampleCount);
 
             if (audio.Frame.SampleFormat != StreamSpec.SampleFormat ||
-                frameChannelLayout != StreamSpec.Layout ||
+                audio.Frame.ChannelLayout != StreamSpec.ChannelLayout ||
                 audio.Frame.SampleRate != StreamSpec.SampleRate ||
                 (wantedSampleCount != audio.Frame.SampleCount && ConvertContext == null))
             {
                 ReleaseConvertContext();
                 ConvertContext = new(
-                    HardwareSpec.Layout,
+                    HardwareSpec.ChannelLayout,
                     HardwareSpec.SampleFormat,
                     HardwareSpec.SampleRate,
-                    frameChannelLayout,
+                    audio.Frame.ChannelLayout,
                     audio.Frame.SampleFormat,
                     audio.Frame.SampleRate);
 
@@ -187,7 +186,7 @@
                 }
 
                 StreamSpec.ImportFrom(audio.Frame);
-                StreamSpec.Layout = frameChannelLayout;
+                StreamSpec.ChannelLayout = audio.Frame.ChannelLayout;
             }
 
             int resampledBufferSize;
@@ -457,7 +456,7 @@
 
                 var decoderChannelLayout = AudioParams.ValidateChannelLayout(decodedFrame.ChannelLayout, decodedFrame.Channels);
                 var needsDifferentSpec = FilterSpec.IsDifferentTo(decodedFrame) ||
-                    FilterSpec.Layout != decoderChannelLayout ||
+                    FilterSpec.ChannelLayout != decoderChannelLayout ||
                     FilterSpec.SampleRate != decodedFrame.SampleRate ||
                     PacketGroupIndex != lastPacketGroupIndex;
 
@@ -467,7 +466,7 @@
 
                     Helpers.LogDebug(
                        $"Audio frame changed from " +
-                       $"rate:{FilterSpec.SampleRate} ch:{FilterSpec.Channels} fmt:{FilterSpec.SampleFormatName} layout:{FilterSpec.LayoutString} serial:{lastPacketGroupIndex} to " +
+                       $"rate:{FilterSpec.SampleRate} ch:{FilterSpec.Channels} fmt:{FilterSpec.SampleFormatName} layout:{FilterSpec.ChannelLayoutString} serial:{lastPacketGroupIndex} to " +
                        $"rate:{decodedFrame.SampleRate} ch:{decodedFrame.Channels} fmt:{AudioParams.GetSampleFormatName(decodedFrame.SampleFormat)} layout:{decoderLayoutString} serial:{PacketGroupIndex}\n");
 
                     FilterSpec.ImportFrom(decodedFrame);

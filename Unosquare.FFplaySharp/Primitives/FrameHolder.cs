@@ -51,6 +51,8 @@
         /// </summary>
         public bool IsPictureVerticalFlipped => !Frame.IsNull && Frame.LineSize[0] < 0;
 
+        public long ChannelLayout { get; private set; }
+
         public bool HasValidTime => !Time.IsNaN();
 
         public double StartDisplayTime => Subtitle != null
@@ -72,6 +74,7 @@
             Duration = duration;
             Width = Frame.Width;
             Height = Frame.Height;
+            ChannelLayout = AudioParams.ComputeChannelLayout(Frame);
         }
 
         public void Update(FFSubtitle sourceFrame, FFCodecContext codecContext, int groupIndex, double time)
