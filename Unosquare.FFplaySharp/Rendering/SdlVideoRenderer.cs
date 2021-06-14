@@ -35,30 +35,32 @@
         };
 
         private int DroppedPictureCount;
-        private int default_width = 640;
-        private int default_height = 480;
+        private int DefaultWidth = 640;
+        private int DefaultHeight = 480;
 
         private IntPtr RenderingWindow;
         private IntPtr SdlRenderer;
-        public SDL.SDL_RendererInfo SdlRendererInfo;
+        private SDL.SDL_RendererInfo SdlRendererInfo;
 
         public string WindowTitle { get; set; }
 
-        private IntPtr subtitleTexture;
-        private IntPtr videoTexture;
+        private IntPtr SubtitleTexture;
+        private IntPtr VideoTexture;
 
         private int screen_left = SDL.SDL_WINDOWPOS_CENTERED;
         private int screen_top = SDL.SDL_WINDOWPOS_CENTERED;
         private bool is_full_screen;
 
-        public int screen_width { get; set; } = 0;
+        /// <summary>
+        /// Port of last_time_status
+        /// </summary>
+        private double LastStatusLogTime = 0;
 
-        public int screen_height { get; set; } = 0;
+        public int ScreenWidth { get; set; } = 0;
+
+        public int ScreenHeight { get; set; } = 0;
 
         public bool ForceRefresh { get; set; }
-
-        // inlined static variables
-        public double last_time_status = 0;
 
         public MediaContainer Container => Presenter.Container;
 
@@ -70,8 +72,8 @@
 
             // Initialize renderer values based on user options
             var o = Presenter.Container.Options;
-            screen_width = o.WindowWidth;
-            screen_height = o.WindowHeight;
+            ScreenWidth = o.WindowWidth;
+            ScreenHeight = o.WindowHeight;
             is_full_screen = o.IsFullScreen;
             WindowTitle = o.WindowTitle;
             screen_left = o.WindowLeft ?? screen_left;
@@ -91,7 +93,7 @@
                 parent.SdlInitFlags |= (uint)SDL.SDL_WindowFlags.SDL_WINDOW_RESIZABLE;
 
             RenderingWindow = SDL.SDL_CreateWindow(
-                Constants.program_name, SDL.SDL_WINDOWPOS_UNDEFINED, SDL.SDL_WINDOWPOS_UNDEFINED, default_width, default_height, (SDL.SDL_WindowFlags)parent.SdlInitFlags);
+                Constants.program_name, SDL.SDL_WINDOWPOS_UNDEFINED, SDL.SDL_WINDOWPOS_UNDEFINED, DefaultWidth, DefaultHeight, (SDL.SDL_WindowFlags)parent.SdlInitFlags);
 
             SDL.SDL_SetHint(SDL.SDL_HINT_RENDER_SCALE_QUALITY, "best");
 
@@ -138,44 +140,45 @@
         /// Port of realloc_texture.
         /// </summary>
         /// <param name="texture"></param>
-        /// <param name="new_format"></param>
-        /// <param name="new_width"></param>
-        /// <param name="new_height"></param>
-        /// <param name="blendmode"></param>
-        /// <param name="init_texture"></param>
+        /// <param name="sdlFormat"></param>
+        /// <param name="pixelWidth"></param>
+        /// <param name="pixelHeight"></param>
+        /// <param name="blendMode"></param>
+        /// <param name="zeroBytes"></param>
         /// <returns></returns>
-        private int ReallocateTexture(ref IntPtr texture, uint new_format, int new_width, int new_height, SDL.SDL_BlendMode blendmode, bool init_texture)
+        private int ReallocateTexture(
+            ref IntPtr texture, uint sdlFormat, int pixelWidth, int pixelHeight, SDL.SDL_BlendMode blendMode, bool zeroBytes)
         {
-            if (texture.IsNull() || SDL.SDL_QueryTexture(texture, out var format, out var _, out var w, out var h) < 0 || new_width != w || new_height != h || new_format != format)
+            if (texture.IsNull() || SDL.SDL_QueryTexture(texture, out var format, out var _, out var w, out var h) < 0 || pixelWidth != w || pixelHeight != h || sdlFormat != format)
             {
                 if (!texture.IsNull())
                     SDL.SDL_DestroyTexture(texture);
 
-                texture = SDL.SDL_CreateTexture(SdlRenderer, new_format, (int)SDL.SDL_TextureAccess.SDL_TEXTUREACCESS_STREAMING, new_width, new_height);
+                texture = SDL.SDL_CreateTexture(SdlRenderer, sdlFormat, (int)SDL.SDL_TextureAccess.SDL_TEXTUREACCESS_STREAMING, pixelWidth, pixelHeight);
                 if (texture.IsNull())
                     return -1;
 
-                if (SDL.SDL_SetTextureBlendMode(texture, blendmode) < 0)
+                if (SDL.SDL_SetTextureBlendMode(texture, blendMode) < 0)
                     return -1;
 
-                if (init_texture)
+                if (zeroBytes)
                 {
-                    SDL.SDL_Rect rect = new() { w = new_width, h = new_height, x = 0, y = 0 };
-                    rect.w = new_width;
-                    rect.h = new_height;
+                    SDL.SDL_Rect rect = new() { w = pixelWidth, h = pixelHeight, x = 0, y = 0 };
+                    rect.w = pixelWidth;
+                    rect.h = pixelHeight;
                     if (SDL.SDL_LockTexture(texture, ref rect, out var pixels, out var pitch) < 0)
                         return -1;
 
                     var ptr = (byte*)pixels;
-                    for (var i = 0; i < pitch * new_height; i++)
+                    for (var i = 0; i < pitch * pixelHeight; i++)
                     {
-                        ptr[i] = byte.MinValue;
+                        ptr[i] = default;
                     }
 
                     SDL.SDL_UnlockTexture(texture);
                 }
 
-                Helpers.LogVerbose($"Created {new_width}x{new_height} texture with {SDL.SDL_GetPixelFormatName(new_format)}.\n");
+                Helpers.LogVerbose($"Created {pixelWidth}x{pixelHeight} texture with {SDL.SDL_GetPixelFormatName(sdlFormat)}.\n");
             }
             return 0;
         }
@@ -200,7 +203,7 @@
                         if (subtitle.Width <= 0 || subtitle.Height <= 0)
                             subtitle.UpdateSubtitleArea(video.Width, video.Height);
 
-                        if (ReallocateTexture(ref subtitleTexture, SDL.SDL_PIXELFORMAT_ARGB8888, subtitle.Width, subtitle.Height, SDL.SDL_BlendMode.SDL_BLENDMODE_BLEND, true) < 0)
+                        if (ReallocateTexture(ref SubtitleTexture, SDL.SDL_PIXELFORMAT_ARGB8888, subtitle.Width, subtitle.Height, SDL.SDL_BlendMode.SDL_BLENDMODE_BLEND, true) < 0)
                             return;
 
                         for (var i = 0; i < subtitle.Subtitle.Rects.Count; i++)
@@ -217,7 +220,7 @@
                                 return;
                             }
 
-                            if (SDL.SDL_LockTexture(subtitleTexture, ref targetRect, out var pixels, out var pitch) == 0)
+                            if (SDL.SDL_LockTexture(SubtitleTexture, ref targetRect, out var pixels, out var pitch) == 0)
                             {
                                 Container.Subtitle.ConvertContext.Convert(
                                     subtitle.Subtitle.Rects[i].Data,
@@ -226,7 +229,7 @@
                                     pixels,
                                     pitch);
 
-                                SDL.SDL_UnlockTexture(subtitleTexture);
+                                SDL.SDL_UnlockTexture(SubtitleTexture);
                             }
                         }
 
@@ -245,14 +248,14 @@
 
             if (!video.IsUploaded)
             {
-                if (WriteTexture(ref videoTexture, video, Container.Video.ConvertContext) < 0)
+                if (WriteTexture(ref VideoTexture, video, Container.Video.ConvertContext) < 0)
                     return;
 
                 video.MarkUploaded();
             }
 
             var point = new SDL.SDL_Point();
-            SDL.SDL_RenderCopyEx(SdlRenderer, videoTexture, ref rect, ref rect, 0, ref point, video.IsPictureVerticalFlipped ? SDL.SDL_RendererFlip.SDL_FLIP_VERTICAL : SDL.SDL_RendererFlip.SDL_FLIP_NONE);
+            SDL.SDL_RenderCopyEx(SdlRenderer, VideoTexture, ref rect, ref rect, 0, ref point, video.IsPictureVerticalFlipped ? SDL.SDL_RendererFlip.SDL_FLIP_VERTICAL : SDL.SDL_RendererFlip.SDL_FLIP_NONE);
 
             if (subtitle != null)
             {
@@ -279,7 +282,7 @@
                         h = (int)(sdlSourceRect.h * yratio)
                     };
 
-                    SDL.SDL_RenderCopy(SdlRenderer, subtitleTexture, ref sdlSourceRect, ref target);
+                    SDL.SDL_RenderCopy(SdlRenderer, SubtitleTexture, ref sdlSourceRect, ref target);
                 }
             }
         }
@@ -292,17 +295,17 @@
             if (!RenderingWindow.IsNull())
                 SDL.SDL_DestroyWindow(RenderingWindow);
 
-            if (!videoTexture.IsNull())
-                SDL.SDL_DestroyTexture(videoTexture);
+            if (!VideoTexture.IsNull())
+                SDL.SDL_DestroyTexture(VideoTexture);
 
-            if (!subtitleTexture.IsNull())
-                SDL.SDL_DestroyTexture(subtitleTexture);
+            if (!SubtitleTexture.IsNull())
+                SDL.SDL_DestroyTexture(SubtitleTexture);
         }
 
         private void Render()
         {
             if (Container.width <= 0)
-                video_open();
+                OpenVideo();
 
             _ = SDL.SDL_SetRenderDrawColor(SdlRenderer, 0, 0, 0, 255);
             _ = SDL.SDL_RenderClear(SdlRenderer);
@@ -414,10 +417,10 @@
         /// Port of video_open
         /// </summary>
         /// <returns></returns>
-        public int video_open()
+        public int OpenVideo()
         {
-            var w = screen_width != 0 ? screen_width : default_width;
-            var h = screen_height != 0 ? screen_height : default_height;
+            var w = ScreenWidth != 0 ? ScreenWidth : DefaultWidth;
+            var h = ScreenHeight != 0 ? ScreenHeight : DefaultHeight;
 
             if (string.IsNullOrWhiteSpace(WindowTitle))
                 WindowTitle = Container.Options.InputFileName;
@@ -483,7 +486,7 @@
                         Container.PictureDisplayTimer = currentTime;
 
                     if (currentPicture.HasValidTime)
-                        update_video_pts(Container, currentPicture.Time, currentPicture.GroupIndex);
+                        UpdateVideoPts(Container, currentPicture.Time, currentPicture.GroupIndex);
 
                     if (Container.Video.Frames.PendingCount > 1)
                     {
@@ -519,7 +522,7 @@
                                     {
                                         var sdlRect = CreateRect(sp.Subtitle.Rects[i]);
 
-                                        if (SDL.SDL_LockTexture(subtitleTexture, ref sdlRect, out var pixels, out var pitch) == 0)
+                                        if (SDL.SDL_LockTexture(SubtitleTexture, ref sdlRect, out var pixels, out var pitch) == 0)
                                         {
                                             var ptr = (byte*)pixels;
                                             for (var j = 0; j < sdlRect.h; j++, ptr += pitch)
@@ -530,7 +533,7 @@
                                                 }
                                             }
 
-                                            SDL.SDL_UnlockTexture(subtitleTexture);
+                                            SDL.SDL_UnlockTexture(SubtitleTexture);
                                         }
                                     }
                                 }
@@ -559,7 +562,7 @@
             if (Container.Options.ShowStatus != 0)
             {
                 var currentTime = Clock.SystemTime;
-                if (last_time_status == 0 || (currentTime - last_time_status) >= 0.03)
+                if (LastStatusLogTime == 0 || (currentTime - LastStatusLogTime) >= 0.03)
                 {
                     var audioQueueSize = Container.HasAudio ? Container.Audio.Packets.ByteSize : 0;
                     var videoQueueSize = Container.HasVideo ? Container.Video.Packets.ByteSize : 0;
@@ -586,7 +589,7 @@
                     else
                         Helpers.LogInfo($"{buf}\r");
 
-                    last_time_status = currentTime;
+                    LastStatusLogTime = currentTime;
                 }
             }
         }
@@ -643,16 +646,22 @@
             return (sdlPixelFormat, sdlBlendMode);
         }
 
-        public void set_default_window_size(int width, int height, AVRational sar)
+        /// <summary>
+        /// Port of set_default_window_size
+        /// </summary>
+        /// <param name="width"></param>
+        /// <param name="height"></param>
+        /// <param name="sar"></param>
+        public void SetDefaultWindowSize(int width, int height, AVRational sar)
         {
-            var maxWidth = screen_width != 0 ? screen_width : int.MaxValue;
-            var maxHeight = screen_height != 0 ? screen_height : int.MaxValue;
+            var maxWidth = ScreenWidth != 0 ? ScreenWidth : int.MaxValue;
+            var maxHeight = ScreenHeight != 0 ? ScreenHeight : int.MaxValue;
             if (maxWidth == int.MaxValue && maxHeight == int.MaxValue)
                 maxHeight = height;
 
             var rect = CalculateDisplayRect(0, 0, maxWidth, maxHeight, width, height, sar);
-            default_width = rect.w;
-            default_height = rect.h;
+            DefaultWidth = rect.w;
+            DefaultHeight = rect.h;
         }
 
         static double ComputePictureDisplayDuration(double pictureDuration, MediaContainer container)
@@ -698,7 +707,13 @@
                 return pictureDuration;
         }
 
-        static void update_video_pts(MediaContainer container, double pts, int groupIndex)
+        /// <summary>
+        /// Port of update_video_pts
+        /// </summary>
+        /// <param name="container"></param>
+        /// <param name="pts"></param>
+        /// <param name="groupIndex"></param>
+        static void UpdateVideoPts(MediaContainer container, double pts, int groupIndex)
         {
             /* update current video pts */
             container.VideoClock.Set(pts, groupIndex);

@@ -330,9 +330,10 @@
 
             if (!isConsumed && (o = FFMediaClass.Format.FindOption(optionName, SearchFlags)) != null)
             {
-                var dummyScaler = ffmpeg.sws_alloc_context();
-                var setResult = ffmpeg.av_opt_set(dummyScaler, optionName, optionValue, 0);
-                ffmpeg.sws_freeContext(dummyScaler);
+
+                var dummyScaler = new RescalerContext();
+                var setResult = dummyScaler.SetOption(optionName, optionValue);
+                dummyScaler.Release();
 
                 var invalidOptions = new[] { "srcw", "srch", "dstw", "dsth", "src_format", "dst_format" };
 

@@ -43,6 +43,14 @@
         public int SetOption(string name, long value) =>
             ffmpeg.av_opt_set_int(Pointer, name, value, SearhChildrenFlags);
 
+
+        /// <summary>
+        /// Port of av_opt_set_int_list
+        /// </summary>
+        /// <typeparam name="T"></typeparam>
+        /// <param name="name"></param>
+        /// <param name="values"></param>
+        /// <returns></returns>
         public int SetOptionList<T>(string name, T[] values)
             where T : unmanaged
         {
@@ -53,8 +61,10 @@
             return ffmpeg.av_opt_set_bin(Pointer, name, (byte*)pinnedValues, values.Length * sizeof(T), SearhChildrenFlags);
         }
 
-        public int GetSinkFlags(FFFrame decodedFrame) => ffmpeg.av_buffersink_get_frame_flags(Pointer, decodedFrame.Pointer, 0);
+        public int GetSinkFlags(FFFrame decodedFrame) =>
+            ffmpeg.av_buffersink_get_frame_flags(Pointer, decodedFrame.Pointer, 0);
 
-        public int AddFrame(FFFrame decodedFrame) => ffmpeg.av_buffersrc_add_frame(Pointer, decodedFrame.Pointer);
+        public int AddFrame(FFFrame decodedFrame) =>
+            ffmpeg.av_buffersrc_add_frame(Pointer, decodedFrame.Pointer);
     }
 }

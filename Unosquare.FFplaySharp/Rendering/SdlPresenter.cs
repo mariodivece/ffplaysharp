@@ -250,8 +250,8 @@
                         switch (sdlEvent.window.windowEvent)
                         {
                             case SDL.SDL_WindowEventID.SDL_WINDOWEVENT_SIZE_CHANGED:
-                                Video.screen_width = Container.width = sdlEvent.window.data1;
-                                Video.screen_height = Container.height = sdlEvent.window.data2;
+                                Video.ScreenWidth = Container.width = sdlEvent.window.data1;
+                                Video.ScreenHeight = Container.height = sdlEvent.window.data2;
                                 break;
                             case SDL.SDL_WindowEventID.SDL_WINDOWEVENT_EXPOSED:
                                 Video.ForceRefresh = true;

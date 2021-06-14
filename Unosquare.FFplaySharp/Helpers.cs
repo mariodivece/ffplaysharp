@@ -66,16 +66,6 @@
 
         public static double ToDouble(this int m) => Convert.ToDouble(m);
 
-        public static unsafe int av_opt_set_int_list<T>(void* obj, string name, T[] val, int flags)
-            where T : unmanaged
-        {
-            var pinnedValues = stackalloc T[val.Length];
-            for (var i = 0; i < val.Length; i++)
-                pinnedValues[i] = val[i];
-
-            return ffmpeg.av_opt_set_bin(obj, name, (byte*)pinnedValues, val.Length * sizeof(T), flags);
-        }
-
         /// <summary>
         /// Port of check_stream_specifier.
         /// Returns 0 for no match, 1 for match and a negative number on error.

@@ -21,7 +21,7 @@
 
         public SdlAudioRenderer()
         {
-            AudioCallback = new(sdl_audio_callback);
+            AudioCallback = new(OnAudioDeviceCallback);
         }
 
         public void Initialize(IPresenter presenter)
@@ -159,9 +159,15 @@
             SDL.SDL_PauseAudioDevice(AudioDeviceId, 0);
         }
 
-        /* prepare a new audio buffer */
-        private void sdl_audio_callback(IntPtr opaque, IntPtr audioStream, int pendingByteCount)
+        /// <summary>
+        /// Port of sdl_audio_callback
+        /// </summary>
+        /// <param name="opaque"></param>
+        /// <param name="audioStream"></param>
+        /// <param name="pendingByteCount"></param>
+        private void OnAudioDeviceCallback(IntPtr opaque, IntPtr audioStream, int pendingByteCount)
         {
+            // prepare a new audio buffer
             AudioCallbackTime = Clock.SystemTime;
 
             while (pendingByteCount > 0)

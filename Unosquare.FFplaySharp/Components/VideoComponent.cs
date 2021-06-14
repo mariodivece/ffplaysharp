@@ -127,7 +127,7 @@
             }
 
             ReleaseFilterGraph();
-            decodedFrame.Release();
+            decodedFrame?.Release();
             return; // 0;
         }
 
@@ -141,7 +141,7 @@
             queuedFrame.Update(sourceFrame, groupIndex, frameTime, duration);
             Frames.Enqueue();
 
-            Container.Renderer.Video.set_default_window_size(
+            Container.Renderer.Video.SetDefaultWindowSize(
                 queuedFrame.Width, queuedFrame.Height, queuedFrame.Frame.SampleAspectRatio);
 
             return 0;
@@ -194,8 +194,6 @@
         private unsafe bool InsertFilter(
             string filterName, string filterArgs, ref int resultCode, ref FFFilterContext lastFilterContext)
         {
-            var insertedFilter = FFFilter.FromName(filterName);
-
             FFFilterContext insertedFilterContext;
             (insertedFilterContext, resultCode) = FFFilterContext.Create(
                 FilterGraph, FFFilter.FromName(filterName), $"ff_{filterName}", filterArgs);

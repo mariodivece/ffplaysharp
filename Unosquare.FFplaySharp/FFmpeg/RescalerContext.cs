@@ -30,6 +30,9 @@
             Update(updatedPointer);
         }
 
+        public int SetOption(string key, string value) =>
+            ffmpeg.av_opt_set(Pointer, key, value, 0);
+
         public int Convert(byte*[] inPlanes, int[] inStrides, int inH, IntPtr outPixels, int outStride)
         {
             var targetStride = new[] { outStride };

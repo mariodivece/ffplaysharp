@@ -439,14 +439,13 @@
         protected override void DecodingThreadMethod()
         {
             var lastPacketGroupIndex = -1;
-            var gotSamples = 0;
             var resultCode = 0;
 
             var decodedFrame = new FFFrame();
 
             do
             {
-                gotSamples = DecodeFrame(decodedFrame);
+                var gotSamples = DecodeFrame(decodedFrame);
 
                 if (gotSamples < 0)
                     break;

@@ -737,7 +737,7 @@
                 var codecpar = st.CodecParameters;
                 var sar = ic.GuessAspectRatio(st, null);
                 if (codecpar.Width != 0)
-                    Renderer.Video.set_default_window_size(codecpar.Width, codecpar.Height, sar);
+                    Renderer.Video.SetDefaultWindowSize(codecpar.Width, codecpar.Height, sar);
             }
 
             // open the streams
