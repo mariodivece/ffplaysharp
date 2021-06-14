@@ -32,7 +32,7 @@
         protected override void DecodingThreadMethod()
         {
             int resultCode;
-            var frameRate = Container.InputContext.GuessFrameRate(Stream);
+            var frameRate = Container.Input.GuessFrameRate(Stream);
 
             var decodedFrame = new FFFrame();
             var lastWidth = 0;
@@ -157,7 +157,7 @@
             if (gotPicture == 0)
                 return 0;
 
-            frame.SampleAspectRatio = Container.InputContext.GuessAspectRatio(Stream, frame);
+            frame.SampleAspectRatio = Container.Input.GuessAspectRatio(Stream, frame);
 
             if (Container.Options.IsFrameDropEnabled > 0 || (Container.Options.IsFrameDropEnabled != 0 && Container.MasterSyncMode != ClockSync.Video))
             {
@@ -218,7 +218,7 @@
             int resultCode;
             
             var codecParameters = Stream.CodecParameters;
-            var frameRate = Container.InputContext.GuessFrameRate(Stream);
+            var frameRate = Container.Input.GuessFrameRate(Stream);
             var outputPixelFormats = Container.Renderer.Video.RetrieveSupportedPixelFormats().Cast<int>();
             var softwareScalerFlags = string.Empty;
 

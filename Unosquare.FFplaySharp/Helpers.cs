@@ -16,6 +16,9 @@
 
         public static int AV_CEIL_RSHIFT(int a, int b) => ((a) + (1 << (b)) - 1) >> (b);
 
+        public static unsafe void DumpFormat(FFFormatContext context, string fileName) =>
+            ffmpeg.av_dump_format(context.Pointer, 0, fileName, 0);
+
         /// <summary>
         /// Parses a hexagesimal (HOURS:MM:SS.MILLISECONDS) or simple second
         /// and decimal string representing time and returns total microseconds.
@@ -83,12 +86,15 @@
         /// <returns>A non-negative number on success. A negative error code on failure.</returns>
         public static unsafe int CheckStreamSpecifier(FFFormatContext formatContext, FFStream stream, string specifier)
         {
-            var resultCode = ffmpeg.avformat_match_stream_specifier(formatContext.Pointer, stream.Pointer, specifier);
+            var resultCode = MatchStreamSpecifier(formatContext, stream, specifier);
             if (resultCode < 0)
                 Log(formatContext.Pointer, ffmpeg.AV_LOG_ERROR, $"Invalid stream specifier: {specifier}.\n");
 
             return resultCode;
         }
+
+        public static unsafe int MatchStreamSpecifier(FFFormatContext formatContext, FFStream stream, string specifier) =>
+            ffmpeg.avformat_match_stream_specifier(formatContext.Pointer, stream.Pointer, specifier);
 
         public static unsafe string PtrToString(byte* ptr) => PtrToString((IntPtr)ptr);
 

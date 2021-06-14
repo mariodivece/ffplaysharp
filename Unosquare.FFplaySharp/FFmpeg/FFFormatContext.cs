@@ -54,6 +54,21 @@
             ? Helpers.PtrToString(Pointer->url)
             : null;
 
+        public int FindBestStream(AVMediaType mediaType, int wantedStreamIndex, int relatedStreamIndex) =>
+            ffmpeg.av_find_best_stream(Pointer, mediaType, wantedStreamIndex, relatedStreamIndex, null, 0);
+
+        public int ReadPlay() =>
+            ffmpeg.av_read_play(Pointer);
+
+        public int ReadPause() =>
+            ffmpeg.av_read_pause(Pointer);
+
+        public bool IsSeekMethodUnknown =>
+            IsNull == false &&
+            InputFormat != null &&
+            InputFormat.Flags.HasFlag(Constants.SeekMethodUnknownFlags) &&
+            InputFormat.Pointer->read_seek.Pointer.IsNull();
+
         public bool IsRealTime
         {
             get

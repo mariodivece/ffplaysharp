@@ -75,12 +75,12 @@
 
         public virtual void Close()
         {
-            if (StreamIndex < 0 || StreamIndex >= Container.InputContext.Streams.Count)
+            if (StreamIndex < 0 || StreamIndex >= Container.Input.Streams.Count)
                 return;
 
             AbortDecoder();
             DisposeDecoder();
-            Container.InputContext.Streams[StreamIndex].DiscardFlags = AVDiscard.AVDISCARD_ALL;
+            Container.Input.Streams[StreamIndex].DiscardFlags = AVDiscard.AVDISCARD_ALL;
             Stream = null;
             StreamIndex = -1;
         }
@@ -220,7 +220,7 @@
         public virtual int InitializeDecoder(FFCodecContext codecContext, int streamIndex)
         {
             StreamIndex = streamIndex;
-            Stream = Container.InputContext.Streams[streamIndex];
+            Stream = Container.Input.Streams[streamIndex];
             CodecContext = codecContext;
             PacketGroupIndex = -1;
             return 0;

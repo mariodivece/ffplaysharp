@@ -4,7 +4,7 @@
     using FFmpeg.AutoGen;
     using Unosquare.FFplaySharp.Primitives;
 
-    public unsafe sealed class SubtitleComponent : MediaComponent
+    public sealed class SubtitleComponent : MediaComponent
     {
         public SubtitleComponent(MediaContainer container)
             : base(container)

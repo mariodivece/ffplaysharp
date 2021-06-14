@@ -3,7 +3,7 @@
     using FFmpeg;
     using FFmpeg.AutoGen;
 
-    public unsafe abstract class FilteringMediaComponent : MediaComponent
+    public abstract class FilteringMediaComponent : MediaComponent
     {
         protected FFFilterGraph FilterGraph = null;
         protected FFFilterContext InputFilter = null;
@@ -17,10 +17,10 @@
 
         protected AVRational OutputFilterTimeBase => OutputFilter.TimeBase;
 
-        protected int MaterializeFilterGraph(string filterGraphLiteral,
-                         FFFilterContext inputFilterContext, FFFilterContext outputFilterContext)
+        protected int MaterializeFilterGraph(
+            string filterGraphLiteral, FFFilterContext inputFilterContext, FFFilterContext outputFilterContext)
         {
-            var resultCode = 0;
+            int resultCode;
             var initialFilterCount = FilterGraph.Filters.Count;
 
             if (!string.IsNullOrWhiteSpace(filterGraphLiteral))
