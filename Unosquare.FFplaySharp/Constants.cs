@@ -53,7 +53,10 @@
 
         public const int USE_ONEPASS_SUBTITLE_RENDER = 1;
 
-        public static int sws_flags = ffmpeg.SWS_BICUBIC;
+        /// <summary>
+        /// Port of sws_flags. Represents the 
+        /// </summary>
+        public const int RescalerInterpolation = ffmpeg.SWS_BICUBIC;
 
         public const int VideoFrameQueueCapacity = 3;
         public const int SubtitleFrameQueueCapacity = 16;

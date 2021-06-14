@@ -207,11 +207,9 @@
                         {
                             var targetRect = CreateRect(subtitle.Subtitle.Rects[i], subtitle);
 
-                            Container.Subtitle.ConvertContext = ffmpeg.sws_getCachedContext(
-                                Container.Subtitle.ConvertContext,
+                            Container.Subtitle.ConvertContext.Reallocate(
                                 targetRect.w, targetRect.h, AVPixelFormat.AV_PIX_FMT_PAL8,
-                                targetRect.w, targetRect.h, AVPixelFormat.AV_PIX_FMT_BGRA,
-                                0, null, null, null);
+                                targetRect.w, targetRect.h, AVPixelFormat.AV_PIX_FMT_BGRA, 0);
 
                             if (Container.Subtitle.ConvertContext == null)
                             {
@@ -221,17 +219,12 @@
 
                             if (SDL.SDL_LockTexture(subtitleTexture, ref targetRect, out var pixels, out var pitch) == 0)
                             {
-                                var targetStride = new[] { pitch };
-                                var targetScan = default(byte_ptrArray8);
-                                targetScan[0] = (byte*)pixels;
-
-                                ffmpeg.sws_scale(Container.Subtitle.ConvertContext,
+                                Container.Subtitle.ConvertContext.Convert(
                                     subtitle.Subtitle.Rects[i].Data,
                                     subtitle.Subtitle.Rects[i].LineSize,
-                                    0,
                                     subtitle.Subtitle.Rects[i].H,
-                                    targetScan,
-                                    targetStride);
+                                    pixels,
+                                    pitch);
 
                                 SDL.SDL_UnlockTexture(subtitleTexture);
                             }
@@ -252,8 +245,9 @@
 
             if (!video.IsUploaded)
             {
-                if (WriteTexture(ref videoTexture, video, ref Container.Video.ConvertContext) < 0)
+                if (WriteTexture(ref videoTexture, video, Container.Video.ConvertContext) < 0)
                     return;
+
                 video.MarkUploaded();
             }
 
@@ -353,7 +347,7 @@
         /// <param name="video"></param>
         /// <param name="convertContext"></param>
         /// <returns></returns>
-        private int WriteTexture(ref IntPtr texture, FrameHolder video, ref SwsContext* convertContext)
+        private int WriteTexture(ref IntPtr texture, FrameHolder video, RescalerContext convertContext)
         {
             var resultCode = 0;
             var frame = video.Frame;
@@ -368,19 +362,14 @@
             if (sdlPixelFormat == SDL.SDL_PIXELFORMAT_UNKNOWN)
             {
                 // This should only happen if we are not using avfilter...
-                convertContext = ffmpeg.sws_getCachedContext(convertContext,
-                    video.Width, video.Height, frame.PixelFormat, video.Width, video.Height,
-                    AVPixelFormat.AV_PIX_FMT_BGRA, Constants.sws_flags, null, null, null);
+                convertContext.Reallocate(
+                    video.Width, video.Height, frame.PixelFormat, video.Width, video.Height, AVPixelFormat.AV_PIX_FMT_BGRA);
 
-                if (convertContext != null)
+                if (!convertContext.IsNull)
                 {
                     if (SDL.SDL_LockTexture(texture, ref textureRect, out var textureAddress, out var texturePitch) == 0)
                     {
-                        var targetStride = new[] { texturePitch };
-                        var targetScan = default(byte_ptrArray8);
-                        targetScan[0] = (byte*)textureAddress;
-
-                        ffmpeg.sws_scale(convertContext, frame.Data, frame.LineSize, 0, video.Height, targetScan, targetStride);
+                        convertContext.Convert(frame.Data, frame.LineSize, video.Height, textureAddress, texturePitch);
                         SDL.SDL_UnlockTexture(texture);
                     }
                 }

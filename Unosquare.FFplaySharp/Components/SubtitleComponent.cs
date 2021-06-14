@@ -12,7 +12,7 @@
             // placeholder
         }
 
-        public SwsContext* ConvertContext;
+        public RescalerContext ConvertContext { get; } = new();
 
         public override AVMediaType MediaType => AVMediaType.AVMEDIA_TYPE_SUBTITLE;
 

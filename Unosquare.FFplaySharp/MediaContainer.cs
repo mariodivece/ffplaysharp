@@ -550,8 +550,8 @@
             }
 
             NeedsMorePacketsEvent.Dispose();
-            ffmpeg.sws_freeContext(Video.ConvertContext);
-            ffmpeg.sws_freeContext(Subtitle.ConvertContext);
+            Video.ConvertContext?.Release();
+            Subtitle.ConvertContext?.Release();
         }
 
         private void StartReadThread()

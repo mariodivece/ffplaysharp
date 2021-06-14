@@ -21,7 +21,7 @@
 
         public int DroppedFrameCount { get; private set; }
 
-        public SwsContext* ConvertContext;
+        public RescalerContext ConvertContext { get; } = new();
 
         public override AVMediaType MediaType => AVMediaType.AVMEDIA_TYPE_VIDEO;
 
@@ -215,7 +215,7 @@
 
         private int ConfigureFilters(string filterGraphLiteral, FFFrame decoderFrame)
         {
-            var resultCode = 0;
+            int resultCode;
             
             var codecParameters = Stream.CodecParameters;
             var frameRate = Container.InputContext.GuessFrameRate(Stream);
@@ -248,7 +248,7 @@
 
             var sinkBuffer = FFFilter.FromName("buffersink");
 
-            FFFilterContext sourceFilter = null;
+            FFFilterContext sourceFilter;
             (sourceFilter, resultCode) = FFFilterContext.Create(
                 FilterGraph, FFFilter.FromName("buffer"), "videoSourceBuffer", sourceFilterArguments);
 
