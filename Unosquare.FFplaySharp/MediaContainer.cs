@@ -592,14 +592,9 @@
         /// </summary>
         private void ReadingThreadMethod()
         {
-            const int MediaTypeCount = (int)AVMediaType.AVMEDIA_TYPE_NB;
-
             var o = Options;
             int ret;
-            var streamIndexes = new Dictionary<AVMediaType, int>(MediaTypeCount);
-
-            for (var mediaType = 0; mediaType < MediaTypeCount; mediaType++)
-                streamIndexes[(AVMediaType)mediaType] = -1;
+            var streamIndexes = new MediaTypeDictionary<int>(-1);
 
             IsAtEndOfStream = false;
 
@@ -690,7 +685,7 @@
                 var hasStreamSpec = mediaType >= 0 &&
                     o.WantedStreams.ContainsKey(mediaType) &&
                     o.WantedStreams[mediaType] != null &&
-                    streamIndexes[mediaType] == -1;
+                    !streamIndexes.HasValue(mediaType);
 
                 var isStreamSpecMatch = hasStreamSpec &&
                     Helpers.MatchStreamSpecifier(ic, stream, o.WantedStreams[mediaType]) > 0;
@@ -699,13 +694,12 @@
                     streamIndexes[mediaType] = i;
             }
 
-            for (var i = 0; i < (int)AVMediaType.AVMEDIA_TYPE_NB; i++)
+            foreach (var mediaType in MediaTypeDictionary<int>.MediaTypes)
             {
-                var mediaType = (AVMediaType)i;
                 if (!o.WantedStreams.ContainsKey(mediaType) || o.WantedStreams[mediaType] == null)
                     continue;
 
-                if (streamIndexes[mediaType] != -1)
+                if (streamIndexes[mediaType] != streamIndexes.DefaultValue)
                     continue;
 
                 Helpers.LogError($"Stream specifier {o.WantedStreams[mediaType]} does not match any {ffmpeg.av_get_media_type_string(mediaType)} stream\n");
@@ -713,27 +707,24 @@
             }
 
             if (!o.IsVideoDisabled)
-                streamIndexes[AVMediaType.AVMEDIA_TYPE_VIDEO] = ic.FindBestStream(AVMediaType.AVMEDIA_TYPE_VIDEO,
-                    streamIndexes[AVMediaType.AVMEDIA_TYPE_VIDEO],
-                    -1);
+                streamIndexes.Video = ic.FindBestStream(AVMediaType.AVMEDIA_TYPE_VIDEO,
+                    streamIndexes.Video,
+                    streamIndexes.DefaultValue);
 
             if (!o.IsAudioDisabled)
-                streamIndexes[AVMediaType.AVMEDIA_TYPE_AUDIO] = ic.FindBestStream(AVMediaType.AVMEDIA_TYPE_AUDIO,
-                    streamIndexes[AVMediaType.AVMEDIA_TYPE_AUDIO],
-                    streamIndexes[AVMediaType.AVMEDIA_TYPE_VIDEO]);
+                streamIndexes.Audio = ic.FindBestStream(AVMediaType.AVMEDIA_TYPE_AUDIO,
+                    streamIndexes.Audio,
+                    streamIndexes.Video);
 
             if (!o.IsVideoDisabled && !o.IsSubtitleDisabled)
-                streamIndexes[AVMediaType.AVMEDIA_TYPE_SUBTITLE] =
-                    ic.FindBestStream(AVMediaType.AVMEDIA_TYPE_SUBTITLE,
-                    streamIndexes[AVMediaType.AVMEDIA_TYPE_SUBTITLE],
-                    (streamIndexes[AVMediaType.AVMEDIA_TYPE_AUDIO] >= 0
-                    ? streamIndexes[AVMediaType.AVMEDIA_TYPE_AUDIO]
-                    : streamIndexes[AVMediaType.AVMEDIA_TYPE_VIDEO]));
+                streamIndexes.Subtitle = ic.FindBestStream(AVMediaType.AVMEDIA_TYPE_SUBTITLE,
+                    streamIndexes.Subtitle,
+                    streamIndexes.HasAudio ? streamIndexes.Audio : streamIndexes.Video);
 
             ShowMode = o.ShowMode;
-            if (streamIndexes[AVMediaType.AVMEDIA_TYPE_VIDEO] >= 0)
+            if (streamIndexes.Video >= 0)
             {
-                var st = ic.Streams[streamIndexes[AVMediaType.AVMEDIA_TYPE_VIDEO]];
+                var st = ic.Streams[streamIndexes.Video];
                 var codecpar = st.CodecParameters;
                 var sar = ic.GuessAspectRatio(st, null);
                 if (codecpar.Width != 0)
@@ -741,18 +732,18 @@
             }
 
             // open the streams
-            if (streamIndexes[AVMediaType.AVMEDIA_TYPE_AUDIO] >= 0)
-                OpenComponent(streamIndexes[AVMediaType.AVMEDIA_TYPE_AUDIO]);
+            if (streamIndexes.HasAudio)
+                OpenComponent(streamIndexes.Audio);
 
             ret = -1;
-            if (streamIndexes[AVMediaType.AVMEDIA_TYPE_VIDEO] >= 0)
-                ret = OpenComponent(streamIndexes[AVMediaType.AVMEDIA_TYPE_VIDEO]);
+            if (streamIndexes.HasVideo)
+                ret = OpenComponent(streamIndexes.Video);
 
             if (ShowMode == ShowMode.None)
                 ShowMode = ret >= 0 ? ShowMode.Video : ShowMode.None;
 
-            if (streamIndexes[AVMediaType.AVMEDIA_TYPE_SUBTITLE] >= 0)
-                OpenComponent(streamIndexes[AVMediaType.AVMEDIA_TYPE_SUBTITLE]);
+            if (streamIndexes.HasSubtitle)
+                OpenComponent(streamIndexes.Subtitle);
 
             if (Video.StreamIndex < 0 && Audio.StreamIndex < 0)
             {
