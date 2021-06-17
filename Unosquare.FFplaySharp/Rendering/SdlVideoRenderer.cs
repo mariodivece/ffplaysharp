@@ -442,7 +442,7 @@
         /* called to display each frame */
         public void Present(ref double remainingTime)
         {
-            if (!Container.IsPaused && Container.MasterSyncMode == ClockSync.External && Container.IsRealTime)
+            if (!Container.IsPaused && Container.MasterSyncMode == ClockSource.External && Container.IsRealTime)
                 Container.SyncExternalClockSpeed();
 
             if (Container.HasVideo)
@@ -494,7 +494,7 @@
                         var duration = ComputePictureDuration(Container, currentPicture, nextPicture);
                         if (Container.IsInStepMode == false &&
                             (Container.Options.IsFrameDropEnabled > 0 ||
-                            (Container.Options.IsFrameDropEnabled != 0 && Container.MasterSyncMode != ClockSync.Video)) &&
+                            (Container.Options.IsFrameDropEnabled != 0 && Container.MasterSyncMode != ClockSource.Video)) &&
                             currentTime > Container.PictureDisplayTimer + duration)
                         {
                             DroppedPictureCount++;
@@ -669,7 +669,7 @@
             var clockDifference = 0d;
 
             /* update delay to follow master synchronisation source */
-            if (container.MasterSyncMode != ClockSync.Video)
+            if (container.MasterSyncMode != ClockSource.Video)
             {
                 /* if video is slave, we try to correct big delays by
                    duplicating or deleting a frame */

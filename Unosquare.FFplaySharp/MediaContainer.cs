@@ -94,27 +94,27 @@
 
         public bool IsAtEndOfStream { get; private set; }
 
-        public ClockSync MasterSyncMode
+        public ClockSource MasterSyncMode
         {
             get
             {
-                if (ClockSyncMode == ClockSync.Video)
+                if (ClockSyncMode == ClockSource.Video)
                 {
                     if (HasVideo)
-                        return ClockSync.Video;
+                        return ClockSource.Video;
                     else
-                        return ClockSync.Audio;
+                        return ClockSource.Audio;
                 }
-                else if (ClockSyncMode == ClockSync.Audio)
+                else if (ClockSyncMode == ClockSource.Audio)
                 {
                     if (HasAudio)
-                        return ClockSync.Audio;
+                        return ClockSource.Audio;
                     else
-                        return ClockSync.External;
+                        return ClockSource.External;
                 }
                 else
                 {
-                    return ClockSync.External;
+                    return ClockSource.External;
                 }
             }
         }
@@ -128,8 +128,8 @@
             {
                 return MasterSyncMode switch
                 {
-                    ClockSync.Video => VideoClock.Value,
-                    ClockSync.Audio => AudioClock.Value,
+                    ClockSource.Video => VideoClock.Value,
+                    ClockSource.Audio => AudioClock.Value,
                     _ => ExternalClock.Value,
                 };
             }
@@ -152,7 +152,7 @@
             }
         }
 
-        public ClockSync ClockSyncMode { get; private set; }
+        public ClockSource ClockSyncMode { get; private set; }
 
         public Clock AudioClock { get; private set; }
 

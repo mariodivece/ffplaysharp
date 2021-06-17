@@ -70,7 +70,7 @@
             Option("lowres", true, "set low resolution scaler. Higher 2 means half the resolution. 4 means a quarter", (t, a) =>
                 t.LowResolution = int.TryParse(a, out var v) ? v : t.LowResolution),
             Option("sync", true, "set audio-video sync. type (type=audio/video/ext)", "type", (t, a) =>
-                t.ClockSyncType = a == "audio" ? ClockSync.Audio : a == "video" ? ClockSync.Video : ClockSync.External),
+                t.ClockSyncType = a == "audio" ? ClockSource.Audio : a == "video" ? ClockSource.Video : ClockSource.External),
             Option("autoexit", false, "exit at the end", (t, a) =>
                 t.ExitOnFinish = true),
             Option("exitonkeydown", false, "exit on key down", (t, a) =>
@@ -153,7 +153,7 @@
         
         public ThreeState ShowStatus { get; set; } = ThreeState.Auto;
         
-        public ClockSync ClockSyncType { get; set; } = ClockSync.Audio;
+        public ClockSource ClockSyncType { get; set; } = ClockSource.Audio;
         
         public long StartOffset { get; set; } = ffmpeg.AV_NOPTS_VALUE;
         

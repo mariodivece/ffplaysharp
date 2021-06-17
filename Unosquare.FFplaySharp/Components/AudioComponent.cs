@@ -289,7 +289,7 @@
             var wantedSampleCount = sampleCount;
 
             // if not master, then we try to remove or add samples to correct the clock.
-            if (Container.MasterSyncMode == ClockSync.Audio)
+            if (Container.MasterSyncMode == ClockSource.Audio)
                 return wantedSampleCount;
 
             var clockDelay = Container.AudioClock.Value - Container.MasterTime;

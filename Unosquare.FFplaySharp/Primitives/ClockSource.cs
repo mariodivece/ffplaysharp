@@ -1,6 +1,6 @@
 ﻿namespace Unosquare.FFplaySharp.Primitives
 {
-    public enum ClockSync
+    public enum ClockSource
     {
         /// <summary>
         /// The default choice.

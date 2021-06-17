@@ -159,7 +159,7 @@
 
             frame.SampleAspectRatio = Container.Input.GuessAspectRatio(Stream, frame);
 
-            if (Container.Options.IsFrameDropEnabled > 0 || (Container.Options.IsFrameDropEnabled != 0 && Container.MasterSyncMode != ClockSync.Video))
+            if (Container.Options.IsFrameDropEnabled > 0 || (Container.Options.IsFrameDropEnabled != 0 && Container.MasterSyncMode != ClockSource.Video))
             {
                 if (frame.Pts.IsValidPts())
                 {
