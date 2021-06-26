@@ -1,11 +1,7 @@
 ﻿namespace Unosquare.FFplaySharp.Primitives
 {
     using FFmpeg.AutoGen;
-    using System;
     using System.Collections.Generic;
-    using System.Linq;
-    using System.Text;
-    using System.Threading.Tasks;
 
     public class MediaTypeDictionary<T> : Dictionary<AVMediaType, T>
     {

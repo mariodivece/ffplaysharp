@@ -66,6 +66,14 @@
 
         public static double ToDouble(this int m) => Convert.ToDouble(m);
 
+        public static bool IsAudio(this AVMediaType t) => t == AVMediaType.AVMEDIA_TYPE_AUDIO;
+
+        public static bool IsVideo(this AVMediaType t) => t == AVMediaType.AVMEDIA_TYPE_VIDEO;
+
+        public static bool IsSubtitle(this AVMediaType t) => t == AVMediaType.AVMEDIA_TYPE_SUBTITLE;
+
+        public static string ToText(this AVMediaType t) => ffmpeg.av_get_media_type_string(t);
+
         /// <summary>
         /// Port of check_stream_specifier.
         /// Returns 0 for no match, 1 for match and a negative number on error.

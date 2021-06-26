@@ -36,7 +36,7 @@
 
         public abstract AVMediaType MediaType { get; }
 
-        public string MediaTypeString => ffmpeg.av_get_media_type_string(MediaType);
+        public string MediaTypeString => MediaType.ToText();
 
         public bool IsAudio => MediaType == AVMediaType.AVMEDIA_TYPE_AUDIO;
 
@@ -47,7 +47,7 @@
         public abstract string WantedCodecName { get; }
 
         public bool IsPictureAttachmentStream =>
-            MediaType == AVMediaType.AVMEDIA_TYPE_VIDEO &&
+            MediaType.IsVideo() &&
             Stream != null &&
             Stream.DispositionFlags.HasFlag(ffmpeg.AV_DISPOSITION_ATTACHED_PIC);
 
@@ -167,7 +167,7 @@
                 }
                 else
                 {
-                    if (CodecContext.CodecType == AVMediaType.AVMEDIA_TYPE_SUBTITLE)
+                    if (CodecContext.CodecType.IsSubtitle())
                     {
                         var gotSubtitle = 0;
 

@@ -57,6 +57,15 @@
         public int FindBestStream(AVMediaType mediaType, int wantedStreamIndex, int relatedStreamIndex) =>
             ffmpeg.av_find_best_stream(Pointer, mediaType, wantedStreamIndex, relatedStreamIndex, null, 0);
 
+        public int FindBestVideoStream(int wantedStreamIndex) =>
+            FindBestStream(AVMediaType.AVMEDIA_TYPE_VIDEO, wantedStreamIndex, -1);
+
+        public int FindBestAudioStream(int wantedStreamIndex, int relatedStreamIndex) =>
+            FindBestStream(AVMediaType.AVMEDIA_TYPE_AUDIO, wantedStreamIndex, relatedStreamIndex);
+
+        public int FindBestSubtitleStream(int wantedStreamIndex, int relatedStreamIndex) =>
+            FindBestStream(AVMediaType.AVMEDIA_TYPE_SUBTITLE, wantedStreamIndex, relatedStreamIndex);
+
         public int ReadPlay() =>
             ffmpeg.av_read_play(Pointer);
 

@@ -136,8 +136,8 @@
         public bool IsVideoDisabled { get; set; }
         
         public bool IsSubtitleDisabled { get; set; }
-        
-        public Dictionary<AVMediaType, string> WantedStreams { get; }
+
+        public MediaTypeDictionary<string> WantedStreams { get; } = new();
         
         public ThreeState IsByteSeekingEnabled { get; set; } = ThreeState.Auto;
         
@@ -208,12 +208,7 @@
 
         public ProgramOptions()
         {
-            WantedStreams = new Dictionary<AVMediaType, string>
-            {
-                [AVMediaType.AVMEDIA_TYPE_AUDIO] = null,
-                [AVMediaType.AVMEDIA_TYPE_VIDEO] = null,
-                [AVMediaType.AVMEDIA_TYPE_SUBTITLE] = null
-            };
+            // placeholder
         }
 
         public static ProgramOptions FromCommandLineArguments(string[] args)

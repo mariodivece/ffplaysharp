@@ -302,7 +302,7 @@
             {
                 if (++nextStreamIndex >= streamCount)
                 {
-                    if (component.MediaType == AVMediaType.AVMEDIA_TYPE_SUBTITLE)
+                    if (component.MediaType.IsSubtitle())
                     {
                         nextStreamIndex = -1;
                         Subtitle.LastStreamIndex = -1;
@@ -480,7 +480,7 @@
             if (lowResFactor != 0)
                 codecOptions["lowres"] = $"{lowResFactor}";
 
-            if (targetMediaType == AVMediaType.AVMEDIA_TYPE_VIDEO || targetMediaType == AVMediaType.AVMEDIA_TYPE_AUDIO)
+            if (targetMediaType.IsVideo() || targetMediaType.IsAudio())
                 codecOptions["refcounted_frames"] = "1";
 
             ret = codecContext.Open(codec, codecOptions);
@@ -702,23 +702,18 @@
                 if (streamIndexes[mediaType] != streamIndexes.DefaultValue)
                     continue;
 
-                Helpers.LogError($"Stream specifier {o.WantedStreams[mediaType]} does not match any {ffmpeg.av_get_media_type_string(mediaType)} stream\n");
+                Helpers.LogError($"Stream specifier {o.WantedStreams[mediaType]} does not match any {mediaType.ToText()} stream\n");
                 streamIndexes[mediaType] = int.MaxValue;
             }
 
             if (!o.IsVideoDisabled)
-                streamIndexes.Video = ic.FindBestStream(AVMediaType.AVMEDIA_TYPE_VIDEO,
-                    streamIndexes.Video,
-                    streamIndexes.DefaultValue);
+                streamIndexes.Video = ic.FindBestVideoStream(streamIndexes.Video);
 
             if (!o.IsAudioDisabled)
-                streamIndexes.Audio = ic.FindBestStream(AVMediaType.AVMEDIA_TYPE_AUDIO,
-                    streamIndexes.Audio,
-                    streamIndexes.Video);
+                streamIndexes.Audio = ic.FindBestAudioStream(streamIndexes.Audio, streamIndexes.Video);
 
             if (!o.IsVideoDisabled && !o.IsSubtitleDisabled)
-                streamIndexes.Subtitle = ic.FindBestStream(AVMediaType.AVMEDIA_TYPE_SUBTITLE,
-                    streamIndexes.Subtitle,
+                streamIndexes.Subtitle = ic.FindBestSubtitleStream(streamIndexes.Subtitle,
                     streamIndexes.HasAudio ? streamIndexes.Audio : streamIndexes.Video);
 
             ShowMode = o.ShowMode;
