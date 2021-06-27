@@ -118,7 +118,7 @@
         public AVRational GuessAspectRatio(FFStream stream, FFFrame frame) =>
             ffmpeg.av_guess_sample_aspect_ratio(Pointer, stream.Pointer, frame != null ? frame.Pointer : null);
 
-        public int OpenInput(string filePath, FFInputFormat format, FFDictionary formatOptions)
+        public void OpenInput(string filePath, FFInputFormat format, FFDictionary formatOptions)
         {
             const string ScanAllPmtsKey = "scan_all_pmts";
 
@@ -138,10 +138,11 @@
             if (isScanAllPmtsSet)
                 formatOptions.Remove(ScanAllPmtsKey);
 
-            return resultCode;
+            if (resultCode < 0)
+                throw new FFmpegException(resultCode, $"Unable to open input '{filePath}'");
         }
 
-        public int FindStreamInfo(StringDictionary codecOptions)
+        public void FindStreamInfo(StringDictionary codecOptions)
         {
             var perStreamOptionsList = FindStreamInfoOptions(codecOptions);
             var perStreamOptions = (AVDictionary**)ffmpeg.av_mallocz_array((ulong)perStreamOptionsList.Count, (ulong)sizeof(IntPtr));
@@ -154,7 +155,8 @@
             foreach (var optionsDictionary in perStreamOptionsList)
                 optionsDictionary.Release();
 
-            return resultCode;
+            if (resultCode < 0)
+                throw new FFmpegException(resultCode, "Unable to find codec paramenters from per-stream options.");
         }
 
         protected override unsafe void ReleaseInternal(AVFormatContext* pointer) =>

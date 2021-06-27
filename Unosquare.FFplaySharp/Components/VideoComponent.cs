@@ -7,7 +7,7 @@
     using System.Linq;
     using Unosquare.FFplaySharp.Primitives;
 
-    public unsafe sealed class VideoComponent : FilteringMediaComponent
+    public sealed class VideoComponent : FilteringMediaComponent
     {
         private double FilterDelay;
 
@@ -69,10 +69,13 @@
                         ? Container.Options.VideoFilterGraphs[CurrentFilterIndex]
                         : null;
 
-                    if ((resultCode = ConfigureFilters(filterLiteral, decodedFrame)) < 0)
+                    try
+                    {
+                        ConfigureFilters(filterLiteral, decodedFrame);
+                    }
+                    catch
                     {
                         var evt = new SDL.SDL_Event() { type = (SDL.SDL_EventType)Constants.FF_QUIT_EVENT, };
-                        // evt.user.data1 = GCHandle.ToIntPtr(VideoStateHandle);
                         _ = SDL.SDL_PushEvent(ref evt);
                         break;
                     }
@@ -85,14 +88,14 @@
                     frameRate = OutputFilter.FrameRate;
                 }
 
-                resultCode = EnqueueInputFilter(decodedFrame);
+                resultCode = EnqueueFilteringFrame(decodedFrame);
                 if (resultCode < 0)
                     break;
 
                 while (resultCode >= 0)
                 {
                     var preFilteringTime = Clock.SystemTime;
-                    resultCode = DequeueOutputFilter(decodedFrame);
+                    resultCode = DequeueFilteringFrame(decodedFrame);
 
                     if (resultCode < 0)
                     {
@@ -188,33 +191,21 @@
         /// </summary>
         /// <param name="filterName"></param>
         /// <param name="filterArgs"></param>
-        /// <param name="resultCode"></param>
-        /// <param name="lastFilterContext"></param>
+        /// <param name="lastFilter"></param>
         /// <returns></returns>
-        private unsafe bool InsertFilter(
-            string filterName, string filterArgs, ref int resultCode, ref FFFilterContext lastFilterContext)
+        private unsafe FFFilterContext InsertFilter(
+            string filterName, string filterArgs, FFFilterContext lastFilter)
         {
-            FFFilterContext insertedFilterContext;
-            (insertedFilterContext, resultCode) = FFFilterContext.Create(
+            var insertedFilter = FFFilterContext.Create(
                 FilterGraph, FFFilter.FromName(filterName), $"ff_{filterName}", filterArgs);
 
-            if (resultCode < 0)
-                return false;
+            FFFilterContext.Link(insertedFilter, lastFilter);
 
-            resultCode = FFFilterContext.Link(insertedFilterContext, lastFilterContext);
-
-            if (resultCode < 0)
-                return false;
-
-            lastFilterContext = insertedFilterContext;
-            return true;
+            return insertedFilter;
         }
 
-
-        private int ConfigureFilters(string filterGraphLiteral, FFFrame decoderFrame)
+        private void ConfigureFilters(string filterGraphLiteral, FFFrame decoderFrame)
         {
-            int resultCode;
-            
             var codecParameters = Stream.CodecParameters;
             var frameRate = Container.Input.GuessFrameRate(Stream);
             var outputPixelFormats = Container.Renderer.Video.RetrieveSupportedPixelFormats().Cast<int>();
@@ -241,28 +232,13 @@
             if (frameRate.num != 0 && frameRate.den != 0)
                 sourceFilterArguments = $"{sourceFilterArguments}:frame_rate={frameRate.num}/{frameRate.den}";
 
-
-            const string SinkBufferName = "videoSinkBuffer";
-
-            var sinkBuffer = FFFilter.FromName("buffersink");
-
-            FFFilterContext sourceFilter;
-            (sourceFilter, resultCode) = FFFilterContext.Create(
+            var sourceFilter = FFFilterContext.Create(
                 FilterGraph, FFFilter.FromName("buffer"), "videoSourceBuffer", sourceFilterArguments);
 
-            if (resultCode < 0)
-                goto fail;
+            var outputFilter = FFFilterContext.Create(
+                FilterGraph, FFFilter.FromName("buffersink"), "videoSinkBuffer", null);
 
-            FFFilterContext outputFilter;
-            (outputFilter, resultCode) = FFFilterContext.Create(
-                FilterGraph, sinkBuffer, SinkBufferName, null);
-
-            if (resultCode < 0)
-                goto fail;
-
-            resultCode = outputFilter.SetOptionList("pix_fmts", outputPixelFormats.ToArray());
-            if (resultCode < 0)
-                goto fail;
+            outputFilter.SetOptionList("pix_fmts", outputPixelFormats.ToArray());
 
             var lastFilter = outputFilter;
             if (Container.Options.IsAutorotateEnabled)
@@ -271,37 +247,26 @@
 
                 if (Math.Abs(theta - 90) < 1.0)
                 {
-                    if (!InsertFilter("transpose", "clock", ref resultCode, ref lastFilter))
-                        goto fail;
+                    lastFilter = InsertFilter("transpose", "clock", lastFilter);
                 }
                 else if (Math.Abs(theta - 180) < 1.0)
                 {
-                    if (!InsertFilter("hflip", null, ref resultCode, ref lastFilter))
-                        goto fail;
-
-                    if (!InsertFilter("vflip", null, ref resultCode, ref lastFilter))
-                        goto fail;
+                    lastFilter = InsertFilter("hflip", null, lastFilter);
+                    lastFilter = InsertFilter("vflip", null, lastFilter);
                 }
                 else if (Math.Abs(theta - 270) < 1.0)
                 {
-                    if (!InsertFilter("transpose", "cclock", ref resultCode, ref lastFilter))
-                        goto fail;
+                    lastFilter = InsertFilter("transpose", "cclock", lastFilter);
                 }
                 else if (Math.Abs(theta) > 1.0)
                 {
-                    if (!InsertFilter("rotate", $"{theta}*PI/180", ref resultCode, ref lastFilter))
-                        goto fail;
+                    lastFilter = InsertFilter("rotate", $"{theta}*PI/180", lastFilter);
                 }
             }
 
-            if ((resultCode = MaterializeFilterGraph(filterGraphLiteral, sourceFilter, lastFilter)) < 0)
-                goto fail;
-
+            MaterializeFilterGraph(filterGraphLiteral, sourceFilter, lastFilter);
             InputFilter = sourceFilter;
             OutputFilter = outputFilter;
-
-            fail:
-            return resultCode;
         }
     }
 }

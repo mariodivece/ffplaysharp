@@ -53,6 +53,8 @@
             set => Pointer->data = value;
         }
 
+        public bool HasData => !IsNull && Data != null;
+
         public static FFPacket CreateFlushPacket()
         {
             var packet = new FFPacket()

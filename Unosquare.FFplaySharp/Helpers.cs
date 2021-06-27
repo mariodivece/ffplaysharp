@@ -205,8 +205,8 @@
         public static unsafe void LogError(string message) =>
             Log(null, ffmpeg.AV_LOG_ERROR, message);
 
-        public static unsafe void LogError(AVCodecContext* context, string message) =>
-            Log(context, ffmpeg.AV_LOG_ERROR, message);
+        public static unsafe void LogError(FFCodecContext context, string message) =>
+            Log(context.Pointer, ffmpeg.AV_LOG_ERROR, message);
 
         public static unsafe void LogWarning(string message) =>
             Log(null, ffmpeg.AV_LOG_WARNING, message);

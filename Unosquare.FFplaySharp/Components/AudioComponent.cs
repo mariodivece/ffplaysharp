@@ -54,74 +54,57 @@
 
         public override AVMediaType MediaType { get; } = AVMediaType.AVMEDIA_TYPE_AUDIO;
 
-        public int ConfigureFilters(FFCodecContext codecContext)
+        public void ConfigureFilters(FFCodecContext codecContext)
         {
             FilterSpec.ImportFrom(codecContext);
-            return ConfigureFilters(false);
+            ConfigureFilters(false);
         }
 
-        public int ConfigureFilters(bool forceOutputFormat)
+        public void ConfigureFilters(bool forceOutputFormat)
         {
-            var outputSampleFormats = new[] { (int)AVSampleFormat.AV_SAMPLE_FMT_S16 };
-            ReallocateFilterGraph();
-            var resamplerOptions = RetrieveResamplerOptions();
-            int resultCode;
-
-            FilterGraph.SetOption("aresample_swr_opts", resamplerOptions);
-            var sourceBufferOptions = $"sample_rate={FilterSpec.SampleRate}:sample_fmt={FilterSpec.SampleFormatName}:" +
-                $"channels={FilterSpec.Channels}:time_base={1}/{FilterSpec.SampleRate}";
-
-            if (FilterSpec.ChannelLayout != 0)
-                sourceBufferOptions = $"{sourceBufferOptions}:channel_layout=0x{FilterSpec.ChannelLayout:x16}";
-
-            FFFilterContext inputFilterContext;
-            (inputFilterContext, resultCode) = FFFilterContext.Create(
-                FilterGraph, FFFilter.FromName("abuffer"), "audioSourceBuffer", sourceBufferOptions);
-
-            if (resultCode < 0)
-                goto end;
-
-            FFFilterContext outputFilterContext;
-            (outputFilterContext, resultCode) = FFFilterContext.Create(
-                FilterGraph, FFFilter.FromName("abuffersink"), "audioSinkBuffer", null);
-
-            if (resultCode < 0)
-                goto end;
-
-            if ((resultCode = outputFilterContext.SetOptionList("sample_fmts", outputSampleFormats)) < 0)
-                goto end;
-
-            if ((resultCode = outputFilterContext.SetOption("all_channel_counts", 1)) < 0)
-                goto end;
-
-            if (forceOutputFormat)
+            try
             {
-                var outputChannelLayout = new[] { HardwareSpec.ChannelLayout };
-                var outputChannelCount = new[] { HardwareSpec.ChannelLayout != 0 ? -1 : HardwareSpec.Channels };
-                var outputSampleRates = new[] { HardwareSpec.SampleRate };
+                var outputSampleFormats = new[] { (int)AVSampleFormat.AV_SAMPLE_FMT_S16 };
+                ReallocateFilterGraph();
+                var resamplerOptions = RetrieveResamplerOptions();
 
-                if ((resultCode = outputFilterContext.SetOption("all_channel_counts", 0)) < 0)
-                    goto end;
-                if ((resultCode = outputFilterContext.SetOptionList("channel_layouts", outputChannelLayout)) < 0)
-                    goto end;
-                if ((resultCode = outputFilterContext.SetOptionList("channel_counts", outputChannelCount)) < 0)
-                    goto end;
-                if ((resultCode = outputFilterContext.SetOptionList("sample_rates", outputSampleRates)) < 0)
-                    goto end;
+                FilterGraph.SetOption("aresample_swr_opts", resamplerOptions);
+                var sourceBufferOptions = $"sample_rate={FilterSpec.SampleRate}:sample_fmt={FilterSpec.SampleFormatName}:" +
+                    $"channels={FilterSpec.Channels}:time_base={1}/{FilterSpec.SampleRate}";
+
+                if (FilterSpec.ChannelLayout != 0)
+                    sourceBufferOptions = $"{sourceBufferOptions}:channel_layout=0x{FilterSpec.ChannelLayout:x16}";
+
+                var inputFilterContext = FFFilterContext.Create(
+                    FilterGraph, FFFilter.FromName("abuffer"), "audioSourceBuffer", sourceBufferOptions);
+
+                var outputFilterContext = FFFilterContext.Create(
+                    FilterGraph, FFFilter.FromName("abuffersink"), "audioSinkBuffer", null);
+
+                outputFilterContext.SetOptionList("sample_fmts", outputSampleFormats);
+                outputFilterContext.SetOption("all_channel_counts", 1);
+
+                if (forceOutputFormat)
+                {
+                    var outputChannelLayout = new[] { HardwareSpec.ChannelLayout };
+                    var outputChannelCount = new[] { HardwareSpec.ChannelLayout != 0 ? -1 : HardwareSpec.Channels };
+                    var outputSampleRates = new[] { HardwareSpec.SampleRate };
+
+                    outputFilterContext.SetOption("all_channel_counts", 0);
+                    outputFilterContext.SetOptionList("channel_layouts", outputChannelLayout);
+                    outputFilterContext.SetOptionList("channel_counts", outputChannelCount);
+                    outputFilterContext.SetOptionList("sample_rates", outputSampleRates);
+                }
+
+                MaterializeFilterGraph(Container.Options.AudioFilterGraphs, inputFilterContext, outputFilterContext);
+                InputFilter = inputFilterContext;
+                OutputFilter = outputFilterContext;
             }
-
-            resultCode = MaterializeFilterGraph(Container.Options.AudioFilterGraphs, inputFilterContext, outputFilterContext);
-
-            if (resultCode < 0) goto end;
-
-            InputFilter = inputFilterContext;
-            OutputFilter =outputFilterContext;
-
-            end:
-            if (resultCode < 0)
+            catch
+            {
                 ReleaseFilterGraph();
-
-            return resultCode;
+                throw;
+            }
         }
 
 
@@ -206,7 +189,7 @@
                 {
                     var compensationDelta = (wantedSampleCount - audio.Frame.SampleCount) * HardwareSpec.SampleRate / audio.Frame.SampleRate;
                     var compensationDistance = wantedSampleCount * HardwareSpec.SampleRate / audio.Frame.SampleRate;
-                    
+
                     if (ConvertContext.SetCompensation(compensationDelta, compensationDistance) < 0)
                     {
                         Helpers.LogError("swr_set_compensation() failed\n");
@@ -231,7 +214,7 @@
                 var audioBufferOut = ResampledOutputBuffer;
                 var outputSampleCount = ConvertContext.Convert(
                     &audioBufferOut, wantedOutputSize, audioBufferIn, audio.Frame.SampleCount);
-                
+
                 ResampledOutputBuffer = audioBufferOut;
                 audio.Frame.ExtendedData = audioBufferIn;
 
@@ -353,15 +336,14 @@
 
         protected override FrameQueue CreateFrameQueue() => new(Packets, Constants.AudioFrameQueueCapacity, true);
 
-        public override unsafe int InitializeDecoder(FFCodecContext codecContext, int streamIndex)
+        public override void InitializeDecoder(FFCodecContext codecContext, int streamIndex)
         {
-            if (ConfigureFilters(codecContext) < 0)
-                return -1;
+            ConfigureFilters(codecContext);
 
             var wantedSpec = AudioParams.FromFilterContext(OutputFilter);
             var hardwareBufferSize = Container.Renderer.Audio.Open(wantedSpec, out var audioHardwareSpec);
             if (hardwareBufferSize < 0)
-                return -1;
+                throw new FFmpegException(-1, "Could not initialize audio hardware buffer.");
 
             HardwareBufferSize = hardwareBufferSize;
             HardwareSpec = audioHardwareSpec.Clone();
@@ -391,8 +373,6 @@
                 StartPts = ffmpeg.AV_NOPTS_VALUE;
                 StartPtsTimeBase = ffmpeg.av_make_q(0, 0);
             }
-
-            return 0;
         }
 
         private string RetrieveResamplerOptions()
@@ -470,17 +450,22 @@
 
                     FilterSpec.ImportFrom(decodedFrame);
                     lastPacketGroupIndex = PacketGroupIndex;
-                    resultCode = ConfigureFilters(true);
 
-                    if (resultCode < 0)
+                    try
+                    {
+                        ConfigureFilters(true);
+                    }
+                    catch
+                    {
                         break;
+                    }
                 }
 
-                if ((resultCode = EnqueueInputFilter(decodedFrame)) < 0)
+                if ((resultCode = EnqueueFilteringFrame(decodedFrame)) < 0)
                     break;
 
                 var isFrameQueueAvailable = true;
-                while ((resultCode = DequeueOutputFilter(decodedFrame)) >= 0)
+                while ((resultCode = DequeueFilteringFrame(decodedFrame)) >= 0)
                 {
                     var queuedFrame = Frames.PeekWriteable();
 

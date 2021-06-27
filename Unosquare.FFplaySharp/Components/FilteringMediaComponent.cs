@@ -17,10 +17,9 @@
 
         protected AVRational OutputFilterTimeBase => OutputFilter.TimeBase;
 
-        protected int MaterializeFilterGraph(
+        protected void MaterializeFilterGraph(
             string filterGraphLiteral, FFFilterContext inputFilterContext, FFFilterContext outputFilterContext)
         {
-            int resultCode;
             var initialFilterCount = FilterGraph.Filters.Count;
 
             if (!string.IsNullOrWhiteSpace(filterGraphLiteral))
@@ -41,35 +40,34 @@
                     Next = null
                 };
 
-                resultCode = FilterGraph.ParseLiteral(filterGraphLiteral, input, output);
-                if (resultCode < 0)
+                try
+                {
+                    FilterGraph.ParseLiteral(filterGraphLiteral, input, output);
+                }
+                catch
                 {
                     output.Release();
                     input.Release();
-                    goto fail;
+                    throw;
                 }
             }
             else
             {
-                if ((resultCode = FFFilterContext.Link(inputFilterContext, outputFilterContext)) < 0)
-                    goto fail;
+                FFFilterContext.Link(inputFilterContext, outputFilterContext);
             }
 
             // Reorder the filters to ensure that inputs of the custom filters are merged first
             for (var i = 0; i < FilterGraph.Filters.Count - initialFilterCount; i++)
                 FilterGraph.Filters.Swap(i, i + initialFilterCount);
 
-            resultCode = FilterGraph.Commit();
-
-        fail:
-            return resultCode;
+            FilterGraph.Commit();
         }
 
-        protected int EnqueueInputFilter(FFFrame decodedFrame) =>
-            InputFilter.AddFrame(decodedFrame);
+        protected int EnqueueFilteringFrame(FFFrame decodedFrame) =>
+            InputFilter.AddSourceFrame(decodedFrame);
 
-        protected int DequeueOutputFilter(FFFrame decodedFrame) =>
-            OutputFilter.GetSinkFlags(decodedFrame);
+        protected int DequeueFilteringFrame(FFFrame decodedFrame) =>
+            OutputFilter.GetSinkFrame(decodedFrame);
 
         protected void ReleaseFilterGraph()
         {

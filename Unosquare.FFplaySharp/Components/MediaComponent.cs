@@ -5,7 +5,7 @@
     using System.Threading;
     using Unosquare.FFplaySharp.Primitives;
 
-    public abstract unsafe class MediaComponent
+    public abstract class MediaComponent
     {
         private readonly ThreeState ReorderPts;
         private FFPacket PendingPacket;
@@ -101,7 +101,7 @@
                         switch (CodecContext.CodecType)
                         {
                             case AVMediaType.AVMEDIA_TYPE_VIDEO:
-                                resultCode = ffmpeg.avcodec_receive_frame(CodecContext.Pointer, decodedFrame.Pointer);
+                                resultCode = CodecContext.ReceiveFrame(decodedFrame);
                                 if (resultCode >= 0)
                                 {
                                     if (ReorderPts.IsAuto())
@@ -112,7 +112,7 @@
 
                                 break;
                             case AVMediaType.AVMEDIA_TYPE_AUDIO:
-                                resultCode = ffmpeg.avcodec_receive_frame(CodecContext.Pointer, decodedFrame.Pointer);
+                                resultCode = CodecContext.ReceiveFrame(decodedFrame);
                                 break;
                         }
 
@@ -170,12 +170,7 @@
                     if (CodecContext.CodecType.IsSubtitle())
                     {
                         var gotSubtitle = 0;
-
-                        resultCode = ffmpeg.avcodec_decode_subtitle2(
-                            CodecContext.Pointer,
-                            decodedSubtitle.Pointer,
-                            &gotSubtitle,
-                            currentPacket.Pointer);
+                        resultCode = CodecContext.DecodeSubtitle(decodedSubtitle, currentPacket, ref gotSubtitle);
 
                         if (resultCode < 0)
                         {
@@ -183,7 +178,7 @@
                         }
                         else
                         {
-                            if (gotSubtitle != 0 && currentPacket.Data == null)
+                            if (gotSubtitle != 0 && !currentPacket.HasData)
                             {
                                 IsPacketPending = true;
                                 PendingPacket = currentPacket.Clone();
@@ -191,7 +186,7 @@
 
                             resultCode = gotSubtitle != 0
                                 ? 0
-                                : currentPacket.Data != null
+                                : currentPacket.HasData
                                 ? ffmpeg.AVERROR(ffmpeg.EAGAIN)
                                 : ffmpeg.AVERROR_EOF;
                         }
@@ -200,7 +195,7 @@
                     {
                         if (CodecContext.SendPacket(currentPacket) == ffmpeg.AVERROR(ffmpeg.EAGAIN))
                         {
-                            Helpers.LogError(CodecContext.Pointer, "Receive_frame and send_packet both returned EAGAIN, which is an API violation.\n");
+                            Helpers.LogError(CodecContext, "Receive_frame and send_packet both returned EAGAIN, which is an API violation.\n");
                             IsPacketPending = true;
                             PendingPacket = currentPacket.Clone();
                         }
@@ -217,13 +212,12 @@
             FinalPacketGroupIndex = 0;
         }
 
-        public virtual int InitializeDecoder(FFCodecContext codecContext, int streamIndex)
+        public virtual void InitializeDecoder(FFCodecContext codecContext, int streamIndex)
         {
             StreamIndex = streamIndex;
             Stream = Container.Input.Streams[streamIndex];
             CodecContext = codecContext;
             PacketGroupIndex = -1;
-            return 0;
         }
 
         public void DisposeDecoder()

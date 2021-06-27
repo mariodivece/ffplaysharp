@@ -181,41 +181,46 @@
         public static MediaContainer Open(ProgramOptions options, IPresenter renderer)
         {
             var container = new MediaContainer(options, renderer);
-            renderer.Initialize(container);
 
-            var o = container.Options;
-            container.Video.LastStreamIndex = container.Video.StreamIndex = -1;
-            container.Audio.LastStreamIndex = container.Audio.StreamIndex = -1;
-            container.Subtitle.LastStreamIndex = container.Subtitle.StreamIndex = -1;
-            container.FileName = o.InputFileName;
-            if (string.IsNullOrWhiteSpace(container.FileName))
-                goto fail;
+            try
+            {
+                renderer.Initialize(container);
+                var o = container.Options;
+                container.Video.LastStreamIndex = container.Video.StreamIndex = -1;
+                container.Audio.LastStreamIndex = container.Audio.StreamIndex = -1;
+                container.Subtitle.LastStreamIndex = container.Subtitle.StreamIndex = -1;
+                container.FileName = o.InputFileName;
+                if (string.IsNullOrWhiteSpace(container.FileName))
+                    throw new ArgumentException($"{nameof(options)}.{nameof(options.InputFileName)} cannot be null.");
 
-            container.InputFormat = o.InputFormat ?? FFInputFormat.None;
-            container.ytop = 0;
-            container.xleft = 0;
+                container.InputFormat = o.InputFormat ?? FFInputFormat.None;
+                container.ytop = 0;
+                container.xleft = 0;
 
-            container.VideoClock = new Clock(container.Video.Packets);
-            container.AudioClock = new Clock(container.Audio.Packets);
-            container.ExternalClock = new Clock(container.ExternalClock);
+                container.VideoClock = new Clock(container.Video.Packets);
+                container.AudioClock = new Clock(container.Audio.Packets);
+                container.ExternalClock = new Clock(container.ExternalClock);
 
-            if (container.Options.StartupVolume < 0)
-                Helpers.LogWarning($"-volume={container.Options.StartupVolume} < 0, setting to 0\n");
+                if (container.Options.StartupVolume < 0)
+                    Helpers.LogWarning($"-volume={container.Options.StartupVolume} < 0, setting to 0\n");
 
-            if (container.Options.StartupVolume > 100)
-                Helpers.LogWarning($"-volume={container.Options.StartupVolume} > 100, setting to 100\n");
+                if (container.Options.StartupVolume > 100)
+                    Helpers.LogWarning($"-volume={container.Options.StartupVolume} > 100, setting to 100\n");
 
-            container.Options.StartupVolume = container.Options.StartupVolume.Clamp(0, 100);
-            container.Options.StartupVolume = (SDL.SDL_MIX_MAXVOLUME * container.Options.StartupVolume / 100).Clamp(0, SDL.SDL_MIX_MAXVOLUME);
+                container.Options.StartupVolume = container.Options.StartupVolume.Clamp(0, 100);
+                container.Options.StartupVolume = (SDL.SDL_MIX_MAXVOLUME * container.Options.StartupVolume / 100).Clamp(0, SDL.SDL_MIX_MAXVOLUME);
 
-            container.IsMuted = false;
-            container.ClockSyncMode = container.Options.ClockSyncType;
-            container.StartReadThread();
-            return container;
-
-        fail:
-            container.Close();
-            return null;
+                container.IsMuted = false;
+                container.ClockSyncMode = container.Options.ClockSyncType;
+                container.StartReadThread();
+                return container;
+            }
+            catch
+            {
+                container.Close();
+                return null;
+                throw;
+            }
         }
 
         /// <summary>
@@ -412,110 +417,114 @@
         /// </summary>
         /// <param name="streamIndex"></param>
         /// <returns>0 if OK</returns>
-        public int OpenComponent(int streamIndex)
+        public void OpenComponent(int streamIndex)
         {
             if (streamIndex < 0 || streamIndex >= Input.Streams.Count)
-                return -1;
+                return;
 
             var codecContext = new FFCodecContext();
-            var ret = codecContext.ApplyStreamParameters(Input.Streams[streamIndex]);
 
-            if (ret < 0) goto fail;
-            codecContext.PacketTimeBase = Input.Streams[streamIndex].TimeBase;
-
-            var codec = FFCodec.FromDecoderId(codecContext.CodecId);
-            var targetMediaType = codecContext.CodecType;
-
-            var targetComponent = targetMediaType switch
+            try
             {
-                AVMediaType.AVMEDIA_TYPE_AUDIO => Audio as MediaComponent,
-                AVMediaType.AVMEDIA_TYPE_VIDEO => Video,
-                AVMediaType.AVMEDIA_TYPE_SUBTITLE => Subtitle,
-                _ => throw new NotSupportedException($"Opening '{targetMediaType}' is not supported.")
-            };
+                codecContext.ApplyStreamParameters(Input.Streams[streamIndex]);
+                codecContext.PacketTimeBase = Input.Streams[streamIndex].TimeBase;
 
-            var forcedCodecName = targetComponent.WantedCodecName;
-            targetComponent.LastStreamIndex = streamIndex;
-            codec = !string.IsNullOrWhiteSpace(forcedCodecName)
-                ? FFCodec.FromDecoderName(forcedCodecName)
-                : codec;
+                var codec = FFCodec.FromDecoderId(codecContext.CodecId);
+                var targetMediaType = codecContext.CodecType;
 
-            if (codec == null)
-            {
-                if (!string.IsNullOrWhiteSpace(forcedCodecName))
-                    Helpers.LogWarning($"No codec could be found with name '{forcedCodecName}'\n");
-                else
-                    Helpers.LogWarning($"No decoder could be found for codec {codecContext.CodecName}\n");
-                ret = ffmpeg.AVERROR(ffmpeg.EINVAL);
-                goto fail;
+                var targetComponent = targetMediaType switch
+                {
+                    AVMediaType.AVMEDIA_TYPE_AUDIO => Audio as MediaComponent,
+                    AVMediaType.AVMEDIA_TYPE_VIDEO => Video,
+                    AVMediaType.AVMEDIA_TYPE_SUBTITLE => Subtitle,
+                    _ => throw new NotSupportedException($"Opening '{targetMediaType}' is not supported.")
+                };
+
+                var forcedCodecName = targetComponent.WantedCodecName;
+                targetComponent.LastStreamIndex = streamIndex;
+                codec = !string.IsNullOrWhiteSpace(forcedCodecName)
+                    ? FFCodec.FromDecoderName(forcedCodecName)
+                    : codec;
+
+                if (codec == null)
+                {
+                    var codecName = !string.IsNullOrWhiteSpace(forcedCodecName)
+                        ? forcedCodecName
+                        : codecContext.CodecName;
+
+                    Helpers.LogWarning($"No decoder could be found for codec {codecName}\n");
+                    throw new FFmpegException(ffmpeg.AVERROR(ffmpeg.EINVAL), $"Could not find codec with name '{codecName}'");
+                }
+
+                codecContext.CodecId = codec.Id;
+
+                var lowResFactor = Options.LowResolution;
+                if (lowResFactor > codec.MaxLowResFactor)
+                {
+                    Helpers.LogWarning($"The maximum value for lowres supported by the decoder is {codec.MaxLowResFactor}\n");
+                    lowResFactor = codec.MaxLowResFactor;
+                }
+
+                codecContext.LowResFactor = lowResFactor;
+
+                if (Options.IsFastDecodingEnabled == ThreeState.On)
+                    codecContext.Flags2 |= ffmpeg.AV_CODEC_FLAG2_FAST;
+
+                var codecOptions = Helpers.FilterCodecOptions(
+                    Options.CodecOptions,
+                    codecContext.CodecId,
+                    Input,
+                    Input.Streams[streamIndex],
+                    codec);
+
+                const string ThreadsOptionKey = "threads";
+                const string ThreadsOptionValue = "auto";
+
+                if (!codecOptions.ContainsKey(ThreadsOptionKey))
+                    codecOptions[ThreadsOptionKey] = ThreadsOptionValue;
+
+                if (lowResFactor != 0)
+                    codecOptions["lowres"] = $"{lowResFactor}";
+
+                if (targetMediaType.IsVideo() || targetMediaType.IsAudio())
+                    codecOptions["refcounted_frames"] = "1";
+
+                try
+                {
+                    codecContext.Open(codec, codecOptions);
+                    var invalidKey = codecOptions.First?.Key;
+                    if (invalidKey != null)
+                    {
+                        Helpers.LogError($"Option {invalidKey} not found.\n");
+                        throw new FFmpegException(ffmpeg.AVERROR_OPTION_NOT_FOUND, $"Option {invalidKey} not found.");
+                    }
+                }
+                catch
+                {
+                    throw;
+                }
+                finally
+                {
+                    codecOptions.Release();
+                }
+
+                IsAtEndOfStream = false;
+                Input.Streams[streamIndex].DiscardFlags = AVDiscard.AVDISCARD_DEFAULT;
+                targetComponent.InitializeDecoder(codecContext, streamIndex);
+
+                targetComponent.Start();
+
+                if (targetComponent.IsVideo)
+                    IsPictureAttachmentPending = true;
+
+                if (targetComponent.IsAudio)
+                    Renderer.Audio.Pause();
             }
-
-            codecContext.CodecId = codec.Id;
-
-            var lowResFactor = Options.LowResolution;
-            if (lowResFactor > codec.MaxLowResFactor)
+            catch
             {
-                Helpers.LogWarning($"The maximum value for lowres supported by the decoder is {codec.MaxLowResFactor}\n");
-                lowResFactor = codec.MaxLowResFactor;
+                codecContext.Release();
+                throw;
             }
-
-            codecContext.LowResFactor = lowResFactor;
-
-            if (Options.IsFastDecodingEnabled == ThreeState.On)
-                codecContext.Flags2 |= ffmpeg.AV_CODEC_FLAG2_FAST;
-
-            var codecOptions = Helpers.FilterCodecOptions(
-                Options.CodecOptions,
-                codecContext.CodecId,
-                Input,
-                Input.Streams[streamIndex],
-                codec);
-
-            const string ThreadsOptionKey = "threads";
-            const string ThreadsOptionValue = "auto";
-
-            if (!codecOptions.ContainsKey(ThreadsOptionKey))
-                codecOptions[ThreadsOptionKey] = ThreadsOptionValue;
-
-            if (lowResFactor != 0)
-                codecOptions["lowres"] = $"{lowResFactor}";
-
-            if (targetMediaType.IsVideo() || targetMediaType.IsAudio())
-                codecOptions["refcounted_frames"] = "1";
-
-            ret = codecContext.Open(codec, codecOptions);
-
-            var invalidKey = codecOptions.First?.Key;
-            codecOptions.Release();
-
-            if (ret < 0)
-                goto fail;
-
-            if (invalidKey != null)
-            {
-                Helpers.LogError($"Option {invalidKey} not found.\n");
-                ret = ffmpeg.AVERROR_OPTION_NOT_FOUND;
-                goto fail;
-            }
-
-            IsAtEndOfStream = false;
-            Input.Streams[streamIndex].DiscardFlags = AVDiscard.AVDISCARD_DEFAULT;
-            ret = targetComponent.InitializeDecoder(codecContext, streamIndex);
-            if (ret < 0) goto fail;
-            targetComponent.Start();
-
-            if (targetComponent.IsVideo)
-                IsPictureAttachmentPending = true;
-
-            if (targetComponent.IsAudio)
-                Renderer.Audio.Pause();
-
-            goto exit;
-
-        fail:
-            codecContext.Release();
-        exit:
-            return ret;
         }
 
         /// <summary>
@@ -532,7 +541,7 @@
                 component.Close();
 
             // Close the input context.
-            Input.Release();
+            Input?.Release();
             Input = null;
 
             // Release packets and frames
@@ -587,108 +596,95 @@
             return null;
         }
 
-        /// <summary>
-        /// This thread gets the stream from the disk or the network
-        /// </summary>
-        private void ReadingThreadMethod()
+        private void PrepareInput()
         {
-            var o = Options;
-            int ret;
-            var streamIndexes = new MediaTypeDictionary<int>(-1);
-
             IsAtEndOfStream = false;
 
-            var ic = new FFFormatContext
+            Input = new FFFormatContext
             {
                 InterruptCallback = InputInterruptCallback
             };
 
-            var formatOptions = o.FormatOptions.ToUnmanaged();
-            var err = ic.OpenInput(FileName, InputFormat, formatOptions);
-            formatOptions.Release();
-
-            if (err < 0)
+            var formatOptions = Options.FormatOptions.ToUnmanaged();
+            try
             {
-                Helpers.LogError($"{FileName}: {FFmpegException.DescribeError(err)}\n");
-                ret = -1;
-                goto fail;
-            }
-
-            var invalidOptionKey = formatOptions.First?.Key;
-            formatOptions.Release();
-
-            if (invalidOptionKey != null)
-            {
-                Helpers.LogError($"Option {invalidOptionKey} not found.\n");
-                ret = ffmpeg.AVERROR_OPTION_NOT_FOUND;
-                goto fail;
-            }
-
-            Input = ic;
-
-            if (o.GeneratePts)
-                ic.Flags |= ffmpeg.AVFMT_FLAG_GENPTS;
-
-            ic.InjectGlobalSideData();
-
-            if (o.IsStreamInfoEnabled)
-            {
-                err = ic.FindStreamInfo(o.CodecOptions);
-
-                if (err < 0)
+                Input.OpenInput(FileName, InputFormat, formatOptions);
+                var invalidOptionKey = formatOptions.First?.Key;
+                if (invalidOptionKey != null)
                 {
-                    Helpers.LogWarning($"{FileName}: could not find codec parameters\n");
-                    ret = -1;
-                    goto fail;
+                    Helpers.LogError($"Option {invalidOptionKey} not found.\n");
+                    throw new FFmpegException(ffmpeg.AVERROR_OPTION_NOT_FOUND, $"Option {invalidOptionKey} not found.");
                 }
+
+
+                if (Options.GeneratePts)
+                    Input.Flags |= ffmpeg.AVFMT_FLAG_GENPTS;
+
+                Input.InjectGlobalSideData();
+
+                if (Options.IsStreamInfoEnabled)
+                    Input.FindStreamInfo(Options.CodecOptions);
+
+                if (Input.IO != null)
+                    Input.IO.EndOfStream = false; // FIXME hack, ffplay maybe should not use avio_feof() to test for the end
+
+                if (Options.IsByteSeekingEnabled.IsAuto())
+                {
+                    Options.IsByteSeekingEnabled = Input.InputFormat.Flags.HasFlag(ffmpeg.AVFMT_TS_DISCONT) &&
+                        Input.InputFormat.Name != "ogg" ? ThreeState.On : ThreeState.Off;
+                }
+
+                MaxPictureDuration = Input.InputFormat.Flags.HasFlag(ffmpeg.AVFMT_TS_DISCONT) ? 10.0 : 3600.0;
+
+                var metadata = Input.Metadata;
+                if (string.IsNullOrWhiteSpace(Renderer.Video.WindowTitle) && metadata.ContainsKey("title"))
+                    Renderer.Video.WindowTitle = $"{metadata["title"]} - {Options.InputFileName}";
+
+                // if seeking requested, we execute it
+                if (Options.StartOffset.IsValidPts())
+                {
+                    var startTimestamp = Options.StartOffset;
+                    // add the stream start time
+                    if (Input.StartTime.IsValidPts())
+                        startTimestamp += Input.StartTime;
+
+                    var seekStoStartResult = Input.SeekFile(long.MinValue, startTimestamp, long.MaxValue);
+                    if (seekStoStartResult < 0)
+                        Helpers.LogWarning($"{FileName}: could not seek to position {(startTimestamp / Clock.TimeBaseMicros)}\n");
+                }
+
+                IsRealTime = Input.IsRealTime;
+
+                if (Options.ShowStatus != 0)
+                    Helpers.DumpFormat(Input, FileName);
             }
-
-            if (ic.IO != null)
-                ic.IO.EndOfStream = false; // FIXME hack, ffplay maybe should not use avio_feof() to test for the end
-
-            if (o.IsByteSeekingEnabled.IsAuto())
+            catch
             {
-                o.IsByteSeekingEnabled = ic.InputFormat.Flags.HasFlag(ffmpeg.AVFMT_TS_DISCONT) &&
-                    ic.InputFormat.Name != "ogg" ? ThreeState.On : ThreeState.Off;
+                Helpers.LogError($"{FileName}: Preparing input context failed.\n");
+                throw;
             }
-
-            MaxPictureDuration = ic.InputFormat.Flags.HasFlag(ffmpeg.AVFMT_TS_DISCONT) ? 10.0 : 3600.0;
-
-            var metadata = ic.Metadata;
-            if (string.IsNullOrWhiteSpace(Renderer.Video.WindowTitle) && metadata.ContainsKey("title"))
-                Renderer.Video.WindowTitle = $"{metadata["title"]} - {o.InputFileName}";
-
-            // if seeking requested, we execute it
-            if (o.StartOffset.IsValidPts())
+            finally
             {
-                var startTimestamp = o.StartOffset;
-                // add the stream start time
-                if (ic.StartTime.IsValidPts())
-                    startTimestamp += ic.StartTime;
-
-                ret = ic.SeekFile(long.MinValue, startTimestamp, long.MaxValue);
-                if (ret < 0)
-                    Helpers.LogWarning($"{FileName}: could not seek to position {(startTimestamp / Clock.TimeBaseMicros)}\n");
+                formatOptions.Release();
             }
+        }
 
-            IsRealTime = ic.IsRealTime;
-
-            if (o.ShowStatus != 0)
-                Helpers.DumpFormat(ic, FileName);
-
-            for (var i = 0; i < ic.Streams.Count; i++)
+        private void OpenComponents()
+        {
+            var streamIndexes = new MediaTypeDictionary<int>(-1);
+            for (var i = 0; i < Input.Streams.Count; i++)
             {
-                var stream = ic.Streams[i];
+                var stream = Input.Streams[i];
                 var mediaType = stream.CodecParameters.CodecType;
                 stream.DiscardFlags = AVDiscard.AVDISCARD_ALL;
 
                 var hasStreamSpec = mediaType >= 0 &&
-                    o.WantedStreams.ContainsKey(mediaType) &&
-                    o.WantedStreams[mediaType] != null &&
+                    Options.WantedStreams.ContainsKey(mediaType) &&
+                    Options.WantedStreams[mediaType] != null &&
                     !streamIndexes.HasValue(mediaType);
 
                 var isStreamSpecMatch = hasStreamSpec &&
-                    Helpers.MatchStreamSpecifier(ic, stream, o.WantedStreams[mediaType]) > 0;
+                    Helpers.MatchStreamSpecifier(Input, stream, Options.WantedStreams[mediaType]) > 0;
 
                 if (hasStreamSpec && isStreamSpecMatch)
                     streamIndexes[mediaType] = i;
@@ -696,32 +692,32 @@
 
             foreach (var mediaType in MediaTypeDictionary<int>.MediaTypes)
             {
-                if (!o.WantedStreams.ContainsKey(mediaType) || o.WantedStreams[mediaType] == null)
+                if (!Options.WantedStreams.ContainsKey(mediaType) || Options.WantedStreams[mediaType] == null)
                     continue;
 
                 if (streamIndexes[mediaType] != streamIndexes.DefaultValue)
                     continue;
 
-                Helpers.LogError($"Stream specifier {o.WantedStreams[mediaType]} does not match any {mediaType.ToText()} stream\n");
+                Helpers.LogError($"Stream specifier {Options.WantedStreams[mediaType]} does not match any {mediaType.ToText()} stream\n");
                 streamIndexes[mediaType] = int.MaxValue;
             }
 
-            if (!o.IsVideoDisabled)
-                streamIndexes.Video = ic.FindBestVideoStream(streamIndexes.Video);
+            if (!Options.IsVideoDisabled)
+                streamIndexes.Video = Input.FindBestVideoStream(streamIndexes.Video);
 
-            if (!o.IsAudioDisabled)
-                streamIndexes.Audio = ic.FindBestAudioStream(streamIndexes.Audio, streamIndexes.Video);
+            if (!Options.IsAudioDisabled)
+                streamIndexes.Audio = Input.FindBestAudioStream(streamIndexes.Audio, streamIndexes.Video);
 
-            if (!o.IsVideoDisabled && !o.IsSubtitleDisabled)
-                streamIndexes.Subtitle = ic.FindBestSubtitleStream(streamIndexes.Subtitle,
+            if (!Options.IsVideoDisabled && !Options.IsSubtitleDisabled)
+                streamIndexes.Subtitle = Input.FindBestSubtitleStream(streamIndexes.Subtitle,
                     streamIndexes.HasAudio ? streamIndexes.Audio : streamIndexes.Video);
 
-            ShowMode = o.ShowMode;
+            ShowMode = Options.ShowMode;
             if (streamIndexes.Video >= 0)
             {
-                var st = ic.Streams[streamIndexes.Video];
+                var st = Input.Streams[streamIndexes.Video];
                 var codecpar = st.CodecParameters;
-                var sar = ic.GuessAspectRatio(st, null);
+                var sar = Input.GuessAspectRatio(st, null);
                 if (codecpar.Width != 0)
                     Renderer.Video.SetDefaultWindowSize(codecpar.Width, codecpar.Height, sar);
             }
@@ -730,12 +726,16 @@
             if (streamIndexes.HasAudio)
                 OpenComponent(streamIndexes.Audio);
 
-            ret = -1;
-            if (streamIndexes.HasVideo)
-                ret = OpenComponent(streamIndexes.Video);
-
-            if (ShowMode == ShowMode.None)
-                ShowMode = ret >= 0 ? ShowMode.Video : ShowMode.None;
+            try
+            {
+                OpenComponent(streamIndexes.Video);
+                if (ShowMode == ShowMode.None)
+                    ShowMode = ShowMode.Video;
+            }
+            catch
+            {
+                throw;
+            }
 
             if (streamIndexes.HasSubtitle)
                 OpenComponent(streamIndexes.Subtitle);
@@ -743,98 +743,97 @@
             if (Video.StreamIndex < 0 && Audio.StreamIndex < 0)
             {
                 Helpers.LogFatal($"Failed to open file '{FileName}' or configure filtergraph\n");
-                ret = -1;
-                goto fail;
+                throw new InvalidOperationException($"Failed to open file '{FileName}' or configure filtergraph");
             }
 
-            if (o.IsInfiniteBufferEnabled < 0 && IsRealTime)
-                o.IsInfiniteBufferEnabled = ThreeState.On;
+            if (Options.IsInfiniteBufferEnabled < 0 && IsRealTime)
+                Options.IsInfiniteBufferEnabled = ThreeState.On;
+        }
 
-            while (true)
+        /// <summary>
+        /// This thread gets the stream from the disk or the network
+        /// </summary>
+        private void ReadingThreadMethod()
+        {
+            try
             {
-                if (IsAbortRequested)
-                    break;
+                PrepareInput();
+                OpenComponents();
 
-                if (IsPaused != WasPaused)
+                while (true)
                 {
-                    WasPaused = IsPaused;
-                    if (IsPaused)
-                        ReadPauseResultCode = ic.ReadPause();
-                    else
-                        ic.ReadPlay();
-                }
+                    if (IsAbortRequested)
+                        break;
 
-                if (IsPaused &&
-                        (ic.InputFormat.Name == "rtsp" ||
-                         (ic.IO != null && o.InputFileName.StartsWith("mmsh:"))))
-                {
-                    /* wait 10 ms to avoid trying to get another packet */
-                    /* XXX: horrible */
-                    SDL.SDL_Delay(10);
-                    continue;
-                }
-
-                if (IsSeekRequested)
-                    InputContextHandleSeek(ref ret);
-
-                if (IsPictureAttachmentPending)
-                {
-                    if (Video.IsPictureAttachmentStream)
+                    if (IsPaused != WasPaused)
                     {
-                        var copy = Video.Stream.CloneAttachedPicture();
-                        Video.Packets.Enqueue(copy);
-                        Video.Packets.EnqueueNull();
+                        WasPaused = IsPaused;
+                        if (IsPaused)
+                            ReadPauseResultCode = Input.ReadPause();
+                        else
+                            Input.ReadPlay();
                     }
 
-                    IsPictureAttachmentPending = false;
-                }
-
-                /* if the queue are full, no need to read more */
-                if (o.IsInfiniteBufferEnabled != ThreeState.On && (HasEnoughPacketBuffer || HasEnoughPacketCount))
-                {
-                    /* wait 10 ms */
-                    NeedsMorePacketsEvent.WaitOne(10);
-                    continue;
-                }
-
-                if (!IsPaused && Audio.HasFinishedDecoding && Video.HasFinishedDecoding)
-                {
-                    if (o.LoopCount != 1 && (o.LoopCount == 0 || (--o.LoopCount) > 0))
+                    if (IsPaused &&
+                            (Input.InputFormat.Name == "rtsp" ||
+                             (Input.IO != null && Options.InputFileName.StartsWith("mmsh:"))))
                     {
-                        SeekByTimestamp(o.StartOffset.IsValidPts() ? o.StartOffset : 0);
+                        // wait 10 ms to avoid trying to get another packet
+                        // XXX: horrible
+                        SDL.SDL_Delay(10);
+                        continue;
                     }
-                    else if (o.ExitOnFinish)
-                    {
-                        ret = ffmpeg.AVERROR_EOF;
-                        goto fail;
-                    }
-                }
 
-                var flowResult = ReadPacket(ref ret);
-                if (flowResult == FlowResult.Fail)
-                    goto fail;
-                else if (flowResult == FlowResult.LoopBreak)
-                    break;
-                else if (flowResult == FlowResult.LoopContinue)
-                    continue;
+                    if (IsSeekRequested)
+                        InputContextHandleSeek();
+
+                    if (IsPictureAttachmentPending)
+                    {
+                        if (Video.IsPictureAttachmentStream)
+                        {
+                            var copy = Video.Stream.CloneAttachedPicture();
+                            Video.Packets.Enqueue(copy);
+                            Video.Packets.EnqueueNull();
+                        }
+
+                        IsPictureAttachmentPending = false;
+                    }
+
+                    // if the queue are full, no need to read more
+                    if (Options.IsInfiniteBufferEnabled != ThreeState.On && (HasEnoughPacketBuffer || HasEnoughPacketCount))
+                    {
+                        // wait 10 ms
+                        NeedsMorePacketsEvent.WaitOne(10);
+                        continue;
+                    }
+
+                    if (!IsPaused && Audio.HasFinishedDecoding && Video.HasFinishedDecoding)
+                    {
+                        if (Options.LoopCount != 1 && (Options.LoopCount == 0 || (--Options.LoopCount) > 0))
+                        {
+                            SeekByTimestamp(Options.StartOffset.IsValidPts() ? Options.StartOffset : 0);
+                        }
+                        else if (Options.ExitOnFinish)
+                        {
+                            break;
+                        }
+                    }
+
+                    if (!ReadPacket())
+                        break;
+                }
             }
-
-            ret = 0;
-        fail:
-            if (ic != null && Input == null)
-                ic.Release();
-
-            if (ret != 0)
+            catch
             {
+                Input?.Release();
+                Input = null;
                 SDL.SDL_Event sdlEvent = new();
                 sdlEvent.type = (SDL.SDL_EventType)Constants.FF_QUIT_EVENT;
                 _ = SDL.SDL_PushEvent(ref sdlEvent);
             }
-
-            return; // 0;
         }
 
-        private void InputContextHandleSeek(ref int resultCode)
+        private void InputContextHandleSeek()
         {
             var seekTarget = SeekAbsoluteTarget;
             var seekTargetMin = SeekRelativeTarget > 0 ? seekTarget - SeekRelativeTarget + 2 : long.MinValue;
@@ -842,7 +841,7 @@
             // FIXME the +-2 is due to rounding being not done in the correct direction in generation
             //      of the seek_pos/seek_rel variables
 
-            resultCode = Input.SeekFile(seekTargetMin, seekTarget, seekTargetMax, SeekFlags);
+            var resultCode = Input.SeekFile(seekTargetMin, seekTarget, seekTargetMax, SeekFlags);
             if (resultCode < 0)
             {
                 Helpers.LogError($"{Input.Url}: error while seeking\n");
@@ -871,9 +870,9 @@
                 StepToNextFrame();
         }
 
-        private FlowResult ReadPacket(ref int resultCode)
+        private bool ReadPacket()
         {
-            resultCode = Input.ReadFrame(out var readPacket);
+            var resultCode = Input.ReadFrame(out var readPacket);
 
             if (resultCode < 0)
             {
@@ -891,15 +890,10 @@
                 }
 
                 if (Input.IO != null && Input.IO.Error != 0)
-                {
-                    if (Options.ExitOnFinish)
-                        return FlowResult.Fail;
-                    else
-                        return FlowResult.LoopBreak;
-                }
+                    return false;
 
                 NeedsMorePacketsEvent.WaitOne(10);
-                return FlowResult.LoopContinue;
+                return true;
             }
             else
             {
@@ -923,7 +917,7 @@
             else
                 readPacket.Release();
 
-            return FlowResult.Next;
+            return true;
         }
     }
 }

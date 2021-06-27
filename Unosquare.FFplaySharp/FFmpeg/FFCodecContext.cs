@@ -57,20 +57,41 @@
 
         public AVSampleFormat SampleFormat => Pointer->sample_fmt;
 
-        public int ApplyStreamParameters(FFStream stream) =>
-            ffmpeg.avcodec_parameters_to_context(Pointer, stream.CodecParameters.Pointer);
+        public void ApplyStreamParameters(FFStream stream)
+        {
+            var resultCode = ffmpeg.avcodec_parameters_to_context(Pointer, stream.CodecParameters.Pointer);
+            if (resultCode < 0)
+                throw new FFmpegException(resultCode, "Unable to apply stream parameters");
+        }
+        
+        public int ReceiveFrame(FFFrame frame) =>
+            ffmpeg.avcodec_receive_frame(Pointer, frame.Pointer);
+
+        public int DecodeSubtitle(FFSubtitle frame, FFPacket packet, ref int gotSubtitle)
+        {
+            int gotResult;
+            var resultCode = ffmpeg.avcodec_decode_subtitle2(
+                Pointer,
+                frame.Pointer,
+                &gotResult,
+                packet.Pointer);
+
+            gotSubtitle = gotResult;
+            return resultCode;
+        }
 
         public void FlushBuffers() => ffmpeg.avcodec_flush_buffers(Pointer);
 
         public int SendPacket(FFPacket packet) => ffmpeg.avcodec_send_packet(Pointer, packet.Pointer);
 
-        public int Open(FFCodec codec, FFDictionary codecOptions)
+        public void Open(FFCodec codec, FFDictionary codecOptions)
         {
             var codecOptionsArg = codecOptions.Pointer;
             var resultCode = ffmpeg.avcodec_open2(Pointer, codec.Pointer, &codecOptionsArg);
             codecOptions.Update(codecOptionsArg);
 
-            return resultCode;
+            if (resultCode < 0)
+                throw new FFmpegException(resultCode, $"Could not open codec '{codec.Name}'");
         }
 
         protected override unsafe void ReleaseInternal(AVCodecContext* pointer) =>

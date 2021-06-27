@@ -28,15 +28,23 @@
             set => Pointer->scale_sws_opts = value == null ? null : ffmpeg.av_strdup(value);
         }
 
-        public int ParseLiteral(string graphLiteral, FFFilterInOut input, FFFilterInOut output)
+        public void ParseLiteral(string graphLiteral, FFFilterInOut input, FFFilterInOut output)
         {
             var inputs = input.Pointer;
             var outputs = output.Pointer;
-            return ffmpeg.avfilter_graph_parse_ptr(Pointer, graphLiteral, &inputs, &outputs, null);
+            var resultCode = ffmpeg.avfilter_graph_parse_ptr(Pointer, graphLiteral, &inputs, &outputs, null);
+            if (resultCode < 0)
+                throw new FFmpegException(resultCode, $"Could not parse filtergraph literal: {graphLiteral}");
         }
 
-        public int Commit() =>
-            ffmpeg.avfilter_graph_config(Pointer, null);
+        public void Commit()
+        {
+            var resultCode = ffmpeg.avfilter_graph_config(Pointer, null);
+
+            if (resultCode < 0)
+                throw new FFmpegException(resultCode, "Could not commit filtergraph configuration.");
+        }
+            
 
         public int SetOption(string key, string value) =>
             ffmpeg.av_opt_set(Pointer, key, value, 0);

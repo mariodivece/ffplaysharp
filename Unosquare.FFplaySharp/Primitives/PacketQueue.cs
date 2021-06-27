@@ -5,7 +5,7 @@
     using System.Threading;
     using Unosquare.FFplaySharp.Components;
 
-    public unsafe sealed class PacketQueue : ISerialGroupable, IDisposable
+    public sealed class PacketQueue : ISerialGroupable, IDisposable
     {
         private readonly object SyncLock = new();
         private readonly AutoResetEvent IsAvailableEvent = new(false);

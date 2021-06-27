@@ -12,6 +12,12 @@
             ErrorCode = errorCode;
         }
 
+        public FFmpegException(int errorCode, string userMessage, Exception innerException = null)
+            : base($"{userMessage}\r\nFFmpeg Error: {DescribeError(errorCode)}", innerException)
+        {
+            ErrorCode = errorCode;
+        }
+
         public int ErrorCode { get; }
 
         /// <summary>

@@ -2,7 +2,6 @@
 {
     using FFmpeg.AutoGen;
     using System;
-    using Unosquare.FFplaySharp;
     using Unosquare.FFplaySharp.Primitives;
 
     public unsafe sealed class FFFilterContext : UnmanagedReference<AVFilterContext>
@@ -27,21 +26,35 @@
 
         public AVRational TimeBase => ffmpeg.av_buffersink_get_time_base(Pointer);
 
-        public static (FFFilterContext result, int resultCode) Create(FFFilterGraph graph, FFFilter filter, string name, string options)
+        public static FFFilterContext Create(FFFilterGraph graph, FFFilter filter, string name, string options)
         {
             AVFilterContext* pointer = null;
             var resultCode = ffmpeg.avfilter_graph_create_filter(
                 &pointer, filter.Pointer, name, options, null, graph.Pointer);
 
             var result = pointer != null ? new FFFilterContext(pointer) : null;
-            return (result, resultCode);
+
+            if (resultCode < 0 || result == null)
+                throw new FFmpegException(resultCode, $"Failed to create filter context '{name}'");
+
+            return result;
         }
 
-        public static int Link(FFFilterContext input, FFFilterContext output) =>
-            ffmpeg.avfilter_link(input.Pointer, 0, output.Pointer, 0);
+        public static void Link(FFFilterContext input, FFFilterContext output)
+        {
+            var resultCode = ffmpeg.avfilter_link(input.Pointer, 0, output.Pointer, 0);
+            if (resultCode != 0)
+                throw new FFmpegException(resultCode, "Failed to link filters.");
+        }
 
-        public int SetOption(string name, long value) =>
-            ffmpeg.av_opt_set_int(Pointer, name, value, SearhChildrenFlags);
+
+        public void SetOption(string name, long value)
+        {
+            var resultCode = ffmpeg.av_opt_set_int(Pointer, name, value, SearhChildrenFlags);
+            if (resultCode < 0)
+                throw new FFmpegException(resultCode, $"Failed to set option '{name}'.");
+        }
+            
 
 
         /// <summary>
@@ -51,20 +64,22 @@
         /// <param name="name"></param>
         /// <param name="values"></param>
         /// <returns></returns>
-        public int SetOptionList<T>(string name, T[] values)
+        public void SetOptionList<T>(string name, T[] values)
             where T : unmanaged
         {
             var pinnedValues = stackalloc T[values.Length];
             for (var i = 0; i < values.Length; i++)
                 pinnedValues[i] = values[i];
 
-            return ffmpeg.av_opt_set_bin(Pointer, name, (byte*)pinnedValues, values.Length * sizeof(T), SearhChildrenFlags);
+            var resultCode = ffmpeg.av_opt_set_bin(Pointer, name, (byte*)pinnedValues, values.Length * sizeof(T), SearhChildrenFlags);
+            if (resultCode < 0)
+                throw new FFmpegException(resultCode, $"Could not set option list for '{name}'");
         }
 
-        public int GetSinkFlags(FFFrame decodedFrame) =>
+        public int GetSinkFrame(FFFrame decodedFrame) =>
             ffmpeg.av_buffersink_get_frame_flags(Pointer, decodedFrame.Pointer, 0);
 
-        public int AddFrame(FFFrame decodedFrame) =>
+        public int AddSourceFrame(FFFrame decodedFrame) =>
             ffmpeg.av_buffersrc_add_frame(Pointer, decodedFrame.Pointer);
     }
 }

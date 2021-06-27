@@ -6,12 +6,4 @@
         On = 1,
         Auto = -1
     }
-
-    public enum FlowResult
-    {
-        Next,
-        LoopBreak,
-        LoopContinue,
-        Fail
-    }
 }
