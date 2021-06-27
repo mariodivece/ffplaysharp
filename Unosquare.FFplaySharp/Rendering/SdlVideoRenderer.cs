@@ -255,7 +255,7 @@
             }
 
             var point = new SDL.SDL_Point();
-            SDL.SDL_RenderCopyEx(SdlRenderer, VideoTexture, ref rect, ref rect, 0, ref point, video.IsPictureVerticalFlipped ? SDL.SDL_RendererFlip.SDL_FLIP_VERTICAL : SDL.SDL_RendererFlip.SDL_FLIP_NONE);
+            _ = SDL.SDL_RenderCopyEx(SdlRenderer, VideoTexture, ref rect, ref rect, 0, ref point, video.IsPictureVerticalFlipped ? SDL.SDL_RendererFlip.SDL_FLIP_VERTICAL : SDL.SDL_RendererFlip.SDL_FLIP_NONE);
 
             if (subtitle != null)
             {
@@ -282,7 +282,7 @@
                         h = (int)(sdlSourceRect.h * yratio)
                     };
 
-                    SDL.SDL_RenderCopy(SdlRenderer, SubtitleTexture, ref sdlSourceRect, ref target);
+                    _ = SDL.SDL_RenderCopy(SdlRenderer, SubtitleTexture, ref sdlSourceRect, ref target);
                 }
             }
         }
@@ -368,7 +368,7 @@
                 convertContext.Reallocate(
                     video.Width, video.Height, frame.PixelFormat, video.Width, video.Height, AVPixelFormat.AV_PIX_FMT_BGRA);
 
-                if (!convertContext.IsNull)
+                if (convertContext != null)
                 {
                     if (SDL.SDL_LockTexture(texture, ref textureRect, out var textureAddress, out var texturePitch) == 0)
                     {
@@ -429,7 +429,7 @@
             SDL.SDL_SetWindowSize(RenderingWindow, w, h);
             SDL.SDL_SetWindowPosition(RenderingWindow, screen_left, screen_top);
             if (is_full_screen)
-                SDL.SDL_SetWindowFullscreen(RenderingWindow, (uint)SDL.SDL_WindowFlags.SDL_WINDOW_FULLSCREEN_DESKTOP);
+                _ = SDL.SDL_SetWindowFullscreen(RenderingWindow, (uint)SDL.SDL_WindowFlags.SDL_WINDOW_FULLSCREEN_DESKTOP);
 
             SDL.SDL_ShowWindow(RenderingWindow);
 
@@ -597,7 +597,7 @@
         public void ToggleFullScreen()
         {
             is_full_screen = !is_full_screen;
-            SDL.SDL_SetWindowFullscreen(RenderingWindow, (uint)(is_full_screen ? SDL.SDL_WindowFlags.SDL_WINDOW_FULLSCREEN_DESKTOP : 0));
+            _ = SDL.SDL_SetWindowFullscreen(RenderingWindow, (uint)(is_full_screen ? SDL.SDL_WindowFlags.SDL_WINDOW_FULLSCREEN_DESKTOP : 0));
         }
 
         private static SDL.SDL_Rect CalculateDisplayRect(

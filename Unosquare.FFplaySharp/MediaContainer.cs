@@ -317,7 +317,7 @@
                 if (nextStreamIndex == startStreamIndex)
                     return;
 
-                var resultStreamIndex = program != null && !program.IsNull
+                var resultStreamIndex = program != null
                     ? Convert.ToInt32(program.StreamIndices[nextStreamIndex])
                     : nextStreamIndex;
 

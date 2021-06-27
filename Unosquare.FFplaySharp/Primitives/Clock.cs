@@ -31,7 +31,7 @@
         /// <summary>
         /// The ffmpeg time base. Returns the number of microsends per second (i.e. 1,000,000 microseconds = 1 second).
         /// </summary>
-        public static double TimeBaseMicros { get; } = Convert.ToDouble(ffmpeg.AV_TIME_BASE);
+        public static double TimeBaseMicros { get; } = ffmpeg.AV_TIME_BASE.ToDouble();
 
         /// <summary>
         /// Gets the current relative system time in seconds.

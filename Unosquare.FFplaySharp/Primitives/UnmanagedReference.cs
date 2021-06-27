@@ -3,7 +3,7 @@
     using System;
     using System.IO;
 
-    public interface IUnmanagedReference
+    public interface IUnmanagedReference : IEquatable<IUnmanagedReference>
     {
         IntPtr Address { get; }
 
@@ -25,6 +25,8 @@
         T* Pointer { get; }
 
         void Update(T* pointer);
+
+        T PointerValue { get; }
     }
 
     public abstract unsafe class UnmanagedReference<T> : IUnmanagedReference<T>
@@ -40,15 +42,33 @@
             // placeholder
         }
 
+        public static bool operator ==(UnmanagedReference<T> a, object b)
+        {
+            var addressA = a?.Address ?? default;
+            var addressB = (b as IUnmanagedReference)?.Address ?? default;
+
+            return addressA == addressB;
+        }
+
+        public static bool operator !=(UnmanagedReference<T> a, object b) => !(a == b);
+
         public bool IsNull => Address == IntPtr.Zero;
 
         public IntPtr Address { get; protected set; } = IntPtr.Zero;
 
         public T* Pointer => (T*)Address;
 
+        public T PointerValue => Address == IntPtr.Zero ? default : *Pointer;
+
         public void Update(IntPtr address) => Address = address;
 
         public void Update(T* pointer) => Address = new IntPtr(pointer);
+
+        public bool Equals(IUnmanagedReference other) => other == this;
+
+        public override bool Equals(object obj) => Equals(obj as IUnmanagedReference);
+
+        public override int GetHashCode() => Address.GetHashCode();
     }
 
     public abstract unsafe class UnmanagedCountedReference<T> : UnmanagedReference<T>, IUnmanagedCountedReference
@@ -62,8 +82,6 @@
         }
 
         public ulong ObjectId { get; protected set; }
-
-        public T Value => *Pointer;
 
         protected string Source { get; }
 

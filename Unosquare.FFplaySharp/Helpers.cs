@@ -31,30 +31,30 @@
             // HOURS:MM:SS.MILLISECONDS
             var timeStr = timeString.Trim();
             var segments = timeStr.Split(semicolonSeparator).Select(c => c.Trim()).Reverse().ToArray();
-            var spanParts = (Hours: 0M, Minutes: 0M, Seconds: 0M);
+            var (hours, minutes, seconds) = (0M, 0M, 0M);
             for (var segmentIndex = 0; segmentIndex < segments.Length; segmentIndex++)
             {
                 var value = decimal.TryParse(segments[segmentIndex], out var parsedValue) ? parsedValue : 0;
                 switch (segmentIndex)
                 {
                     case 0:
-                        spanParts.Seconds = value;
+                        seconds = value;
                         break;
                     case 1:
-                        spanParts.Minutes = value;
+                        minutes = value;
                         break;
                     case 2:
-                        spanParts.Hours = value;
+                        hours = value;
                         break;
                     default:
                         break;
                 }
             }
 
-            var isNegative = spanParts.Seconds < 0 || spanParts.Hours < 0;
-            var secondsSum = Math.Abs(spanParts.Hours * 60 * 60)
-                + Math.Abs(spanParts.Minutes * 60)
-                + Math.Abs(spanParts.Seconds);
+            var isNegative = seconds < 0 || hours < 0;
+            var secondsSum = Math.Abs(hours * 60 * 60)
+                + Math.Abs(minutes * 60)
+                + Math.Abs(seconds);
 
             var totalSeconds = secondsSum * (isNegative ? -1M : 1M);
             return Convert.ToInt64(totalSeconds) * ffmpeg.AV_TIME_BASE;

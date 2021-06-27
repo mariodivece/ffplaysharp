@@ -73,7 +73,7 @@
                     {
                         var evt = new SDL.SDL_Event() { type = (SDL.SDL_EventType)Constants.FF_QUIT_EVENT, };
                         // evt.user.data1 = GCHandle.ToIntPtr(VideoStateHandle);
-                        SDL.SDL_PushEvent(ref evt);
+                        _ = SDL.SDL_PushEvent(ref evt);
                         break;
                     }
 

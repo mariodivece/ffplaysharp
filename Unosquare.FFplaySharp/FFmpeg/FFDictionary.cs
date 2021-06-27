@@ -111,8 +111,5 @@
 
             return dictionary;
         }
-
-        private static AVDictionary* SetEntry(AVDictionary* dictionary, string key, string value) =>
-            SetEntry(dictionary, key, value, 0);
     }
 }

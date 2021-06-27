@@ -49,7 +49,7 @@
         /// <summary>
         /// Gets whether the video frame is flipped vertically.
         /// </summary>
-        public bool IsPictureVerticalFlipped => !Frame.IsNull && Frame.LineSize[0] < 0;
+        public bool IsPictureVerticalFlipped => Frame != null && Frame.LineSize[0] < 0;
 
         public long ChannelLayout { get; private set; }
 

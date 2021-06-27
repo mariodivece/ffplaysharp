@@ -292,14 +292,15 @@
         /// <returns></returns>
         private unsafe int ApplyDefaultOption(string optionName, string optionValue)
         {
+            const char Semicolon = ':';
             const int SearchFlags = ffmpeg.AV_OPT_SEARCH_CHILDREN | ffmpeg.AV_OPT_SEARCH_FAKE_OBJ;
 
             if (optionName == "debug" || optionName == "fdebug")
                 ffmpeg.av_log_set_level(ffmpeg.AV_LOG_DEBUG);
 
             // Example: codec:a:1 ac3
-            var strippedOptionName = optionName.Contains(':')
-                ? optionName.Substring(0, optionName.IndexOf(':'))
+            var strippedOptionName = optionName.Contains(Semicolon)
+                ? optionName.Substring(0, optionName.IndexOf(Semicolon))
                 : optionName;
 
             FFOption o = null;
