@@ -11,8 +11,7 @@
     {
         private readonly double SyncDiffAverageCoffiecient = Math.Exp(Math.Log(0.01) / Constants.AUDIO_DIFF_AVG_NB);
 
-        private byte* ResampledOutputBuffer;
-        private uint ResampledOutputBufferSize;
+        private ByteBuffer ResampledOutputBuffer;
         private long StartPts;
         private AVRational StartPtsTimeBase;
         private long NextPts;
@@ -195,25 +194,13 @@
                     }
                 }
 
-                if (ResampledOutputBuffer == null)
-                {
-                    ResampledOutputBuffer = (byte*)ffmpeg.av_mallocz((ulong)outputBufferSize);
-                    ResampledOutputBufferSize = (uint)outputBufferSize;
-                }
-
-                if (ResampledOutputBufferSize < outputBufferSize && ResampledOutputBuffer != null)
-                {
-                    ffmpeg.av_free(ResampledOutputBuffer);
-                    ResampledOutputBuffer = (byte*)ffmpeg.av_mallocz((ulong)outputBufferSize);
-                    ResampledOutputBufferSize = (uint)outputBufferSize;
-                }
-
+                ResampledOutputBuffer = ByteBuffer.Reallocate(ResampledOutputBuffer, (ulong)outputBufferSize);
                 var audioBufferIn = audio.Frame.ExtendedData;
-                var audioBufferOut = ResampledOutputBuffer;
+                var audioBufferOut = ResampledOutputBuffer.Pointer;
                 var outputSampleCount = ConvertContext.Convert(
                     &audioBufferOut, wantedOutputSize, audioBufferIn, audio.Frame.SampleCount);
 
-                ResampledOutputBuffer = audioBufferOut;
+                ResampledOutputBuffer.Update(audioBufferOut);
                 audio.Frame.ExtendedData = audioBufferIn;
 
                 if (outputSampleCount < 0)
@@ -229,7 +216,7 @@
                         ReleaseConvertContext();
                 }
 
-                OutputBuffer = ResampledOutputBuffer;
+                OutputBuffer = ResampledOutputBuffer.Pointer;
                 resampledBufferSize = outputSampleCount * HardwareSpec.Channels * HardwareSpec.BytesPerSample;
             }
             else
@@ -320,11 +307,8 @@
 
             ReleaseConvertContext();
 
-            if (ResampledOutputBuffer != null)
-                ffmpeg.av_free(ResampledOutputBuffer);
-
+            ResampledOutputBuffer?.Release();
             ResampledOutputBuffer = null;
-            ResampledOutputBufferSize = 0;
             OutputBuffer = null;
 
             Container.Input.Streams[StreamIndex].DiscardFlags = AVDiscard.AVDISCARD_ALL;
