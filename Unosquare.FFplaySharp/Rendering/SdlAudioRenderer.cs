@@ -37,8 +37,8 @@
             else
             {
                 const string AlsaBufferSizeName = "SDL_AUDIO_ALSA_SET_BUFFER_SIZE";
-                /* Try to work around an occasional ALSA buffer underflow issue when the
-                 * period size is NPOT due to ALSA resampling by forcing the buffer size. */
+                // Try to work around an occasional ALSA buffer underflow issue when the
+                // period size is NPOT due to ALSA resampling by forcing the buffer size.
                 if (Environment.GetEnvironmentVariable(AlsaBufferSizeName) == null)
                     Environment.SetEnvironmentVariable(AlsaBufferSizeName, "1", EnvironmentVariableTarget.Process);
             }
@@ -47,14 +47,14 @@
         public int Volume { get; set; }
 
 
-        public int Open(AudioParams wantedSpec, out AudioParams audioDeviceSpec) =>
-            Open(wantedSpec.ChannelLayout, wantedSpec.Channels, wantedSpec.SampleRate, out audioDeviceSpec);
+        public AudioParams Open(AudioParams wantedSpec) =>
+            Open(wantedSpec.ChannelLayout, wantedSpec.Channels, wantedSpec.SampleRate);
 
-        private int Open(long wantedChannelLayout, int wantedChannelCount, int wantedSampleRate, out AudioParams audioDeviceSpec)
+        private AudioParams Open(long wantedChannelLayout, int wantedChannelCount, int wantedSampleRate)
         {
             Volume = Container.Options.StartupVolume;
 
-            audioDeviceSpec = new AudioParams();
+            var audioDeviceSpec = new AudioParams();
             var probeChannelCount = new[] { 0, 0, 1, 6, 2, 6, 4, 6 };
             var probeSampleRates = new[] { 0, 44100, 48000, 96000, 192000 };
             var probeSampleRateIndex = probeSampleRates.Length - 1;
@@ -84,7 +84,7 @@
             if (wantedSpec.freq <= 0 || wantedSpec.channels <= 0)
             {
                 Helpers.LogError("Invalid sample rate or channel count!\n");
-                return -1;
+                return audioDeviceSpec;
             }
 
             while (probeSampleRateIndex != 0 && probeSampleRates[probeSampleRateIndex] >= wantedSpec.freq)
@@ -109,7 +109,7 @@
                     if (wantedSpec.freq == 0)
                     {
                         Helpers.LogError("No more combinations to try, audio open failed\n");
-                        return -1;
+                        return audioDeviceSpec;
                     }
                 }
 
@@ -119,7 +119,7 @@
             if (deviceSpec.format != SDL.AUDIO_S16SYS)
             {
                 Helpers.LogError($"SDL advised audio format {deviceSpec.format} is not supported!\n");
-                return -1;
+                return audioDeviceSpec;
             }
 
             if (deviceSpec.channels != wantedSpec.channels)
@@ -128,7 +128,7 @@
                 if (wantedChannelLayout == 0)
                 {
                     Helpers.LogError($"SDL advised channel count {deviceSpec.channels} is not supported!\n");
-                    return -1;
+                    return audioDeviceSpec;
                 }
             }
 
@@ -140,24 +140,21 @@
             if (audioDeviceSpec.BytesPerSecond <= 0 || audioDeviceSpec.FrameSize <= 0)
             {
                 Helpers.LogError("av_samples_get_buffer_size failed\n");
-                return -1;
+                return audioDeviceSpec;
             }
 
             ReadBufferIndex = 0;
             ReadBufferSize = 0;
 
-            return (int)deviceSpec.size;
+            audioDeviceSpec.BufferSize = (int)deviceSpec.size;
+            return audioDeviceSpec;
         }
 
-        public void Close()
-        {
+        public void Close() =>
             SDL.SDL_CloseAudioDevice(AudioDeviceId);
-        }
 
-        public void Pause()
-        {
+        public void Pause() =>
             SDL.SDL_PauseAudioDevice(AudioDeviceId, 0);
-        }
 
         /// <summary>
         /// Port of sdl_audio_callback
@@ -224,7 +221,7 @@
             if (!Container.Audio.FrameTime.IsNaN())
             {
                 var readBufferAvailable = ReadBufferSize - ReadBufferIndex;
-                var bufferDuration = (2d * Container.Audio.HardwareBufferSize + readBufferAvailable) / Container.Audio.HardwareSpec.BytesPerSecond;
+                var bufferDuration = (2d * Container.Audio.HardwareSpec.BufferSize + readBufferAvailable) / Container.Audio.HardwareSpec.BytesPerSecond;
                 Container.AudioClock.Set(Container.Audio.FrameTime - bufferDuration, Container.Audio.GroupIndex, AudioCallbackTime);
                 Container.ExternalClock.SyncToSlave(Container.AudioClock);
             }

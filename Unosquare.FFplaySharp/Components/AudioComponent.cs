@@ -37,8 +37,6 @@
 
         public byte* OutputBuffer { get; set; }
 
-        public int HardwareBufferSize { get; private set; }
-
         public override string WantedCodecName => Container.Options.AudioForcedCodecName;
 
         public ResamplerContext ConvertContext { get; private set; }
@@ -123,7 +121,7 @@
 
             do
             {
-                var callbackTimeout = (double)HardwareBufferSize / HardwareSpec.BytesPerSecond / 2.0;
+                var callbackTimeout = (double)HardwareSpec.BufferSize / HardwareSpec.BytesPerSecond / 2.0;
 
                 while (Frames.PendingCount == 0)
                 {
@@ -341,11 +339,10 @@
             ConfigureFilters(codecContext);
 
             var wantedSpec = AudioParams.FromFilterContext(OutputFilter);
-            var hardwareBufferSize = Container.Renderer.Audio.Open(wantedSpec, out var audioHardwareSpec);
-            if (hardwareBufferSize < 0)
+            var audioHardwareSpec = Container.Renderer.Audio.Open(wantedSpec);
+            if (audioHardwareSpec.BufferSize < 0)
                 throw new FFmpegException(-1, "Could not initialize audio hardware buffer.");
 
-            HardwareBufferSize = hardwareBufferSize;
             HardwareSpec = audioHardwareSpec.Clone();
 
             // Start off with the source spec to be the same as the hardware
@@ -359,7 +356,7 @@
 
             // since we do not have a precise anough audio FIFO fullness,
             // we correct audio sync only if larger than this threshold.
-            SyncDiffDelayThreshold = (double)HardwareBufferSize / HardwareSpec.BytesPerSecond;
+            SyncDiffDelayThreshold = (double)HardwareSpec.BufferSize / HardwareSpec.BytesPerSecond;
 
             base.InitializeDecoder(codecContext, streamIndex);
 

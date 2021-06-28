@@ -8,7 +8,7 @@
 
         public int Volume { get; }
 
-        public int Open(AudioParams wantedSpec, out AudioParams audioDeviceSpec);
+        public AudioParams Open(AudioParams wantedSpec);
 
         public void Pause();
 

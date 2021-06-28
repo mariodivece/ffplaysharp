@@ -6,6 +6,13 @@
 
     public class AudioParams
     {
+        public AudioParams()
+        {
+            // placeholder
+        }
+
+        public int BufferSize { get; set; } = -1;
+
         public int SampleRate { get; set; }
         
         public int Channels { get; set; }
@@ -27,30 +34,29 @@
         public void ImportFrom(FFFrame frame)
         {
             SampleFormat = frame.SampleFormat;
+            SampleRate = frame.SampleRate;
             Channels = frame.Channels;
             ChannelLayout = ValidateChannelLayout(frame.ChannelLayout, frame.Channels);
-            SampleRate = frame.SampleRate;
         }
 
         public void ImportFrom(FFCodecContext codecContext)
         {
+            SampleFormat = codecContext.SampleFormat;
             SampleRate = codecContext.SampleRate;
             Channels = codecContext.Channels;
             ChannelLayout = ValidateChannelLayout(codecContext.ChannelLayout, codecContext.Channels);
-            SampleFormat = codecContext.SampleFormat;
         }
 
         public AudioParams Clone()
         {
-            var result = new AudioParams
+            return new()
             {
                 Channels = Channels,
                 SampleRate = SampleRate,
                 ChannelLayout = ChannelLayout,
-                SampleFormat = SampleFormat
+                SampleFormat = SampleFormat,
+                BufferSize = BufferSize
             };
-
-            return result;
         }
 
         public bool IsDifferentTo(FFFrame audioFrame) =>
