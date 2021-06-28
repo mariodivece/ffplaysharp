@@ -178,7 +178,8 @@
                     {
                         // if error, just output silence.
                         ReadBuffer.Update(null);
-                        ReadBufferSize = Constants.SDL_AUDIO_MIN_BUFFER_SIZE / Container.Audio.HardwareSpec.FrameSize * Container.Audio.HardwareSpec.FrameSize;
+                        ReadBufferSize = Convert.ToInt32(Container.Audio.HardwareSpec.FrameSize *
+                            (double)Constants.SDL_AUDIO_MIN_BUFFER_SIZE / Container.Audio.HardwareSpec.FrameSize);
                     }
                     else
                     {
