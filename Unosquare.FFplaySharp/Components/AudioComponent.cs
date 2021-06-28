@@ -11,6 +11,7 @@
     {
         private readonly double SyncDiffAverageCoffiecient = Math.Exp(Math.Log(0.01) / Constants.AUDIO_DIFF_AVG_NB);
 
+        private ResamplerContext ConvertContext;
         private ByteBuffer ResampledOutputBuffer;
         private long StartPts;
         private AVRational StartPtsTimeBase;
@@ -20,6 +21,8 @@
         private double SyncDiffTotalDelay; /* used for AV difference average computation */
         private double SyncDiffDelayThreshold;
         private int SyncDiffAverageCount;
+        private AudioParams StreamSpec = new();
+        private AudioParams FilterSpec = new();
 
         public AudioComponent(MediaContainer container)
             : base(container)
@@ -34,18 +37,7 @@
 
         public int GroupIndex { get; private set; } = -1;
 
-        public byte* OutputBuffer { get; set; }
-
         public override string WantedCodecName => Container.Options.AudioForcedCodecName;
-
-        public ResamplerContext ConvertContext { get; private set; }
-
-        /// <summary>
-        /// Gets the audio parameters as specified by decoded frames.
-        /// </summary>
-        public AudioParams StreamSpec { get; private set; } = new();
-
-        public AudioParams FilterSpec { get; } = new();
 
         public AudioParams HardwareSpec { get; private set; } = new();
 
@@ -104,19 +96,19 @@
             }
         }
 
-
         /// <summary>
         /// Decode one audio frame and return its uncompressed size.
         /// The processed audio frame is decoded, converted if required, and
         /// stored in is->audio_buf, with size in bytes given by the return value.
         /// </summary>
         /// <returns>The size in bytes of the output buffer.</returns>
-        public int RefillOutputBuffer()
+        public BufferReference RefillOutputBuffer()
         {
+            var result = new BufferReference(null, -1);
             FrameHolder audio;
 
             if (Container.IsPaused)
-                return -1;
+                return result;
 
             do
             {
@@ -126,13 +118,13 @@
                 {
                     var elapsedCallback = Clock.SystemTime - Container.Renderer.Audio.AudioCallbackTime;
                     if (elapsedCallback > callbackTimeout)
-                        return -1;
+                        return result;
 
                     ffmpeg.av_usleep(1000);
                 }
 
                 if ((audio = Frames.PeekWaitCurrent()) == null)
-                    return -1;
+                    return result;
 
                 Frames.Dequeue();
 
@@ -162,7 +154,7 @@
                            $"{HardwareSpec.SampleRate} Hz {HardwareSpec.SampleFormatName} {HardwareSpec.Channels} channels!\n");
 
                     ReleaseConvertContext();
-                    return -1;
+                    return result;
                 }
 
                 StreamSpec.ImportFrom(audio.Frame);
@@ -179,7 +171,7 @@
                 if (outputBufferSize < 0)
                 {
                     Helpers.LogError("av_samples_get_buffer_size() failed\n");
-                    return -1;
+                    return result;
                 }
 
                 if (wantedSampleCount != audio.Frame.SampleCount)
@@ -190,7 +182,7 @@
                     if (ConvertContext.SetCompensation(compensationDelta, compensationDistance) < 0)
                     {
                         Helpers.LogError("swr_set_compensation() failed\n");
-                        return -1;
+                        return result;
                     }
                 }
 
@@ -206,7 +198,7 @@
                 if (outputSampleCount < 0)
                 {
                     Helpers.LogError("swr_convert() failed\n");
-                    return -1;
+                    return result;
                 }
 
                 if (outputSampleCount == wantedOutputSize)
@@ -216,12 +208,12 @@
                         ReleaseConvertContext();
                 }
 
-                OutputBuffer = ResampledOutputBuffer.Pointer;
+                result.Update(ResampledOutputBuffer.Pointer);
                 resampledBufferSize = outputSampleCount * HardwareSpec.Channels * HardwareSpec.BytesPerSample;
             }
             else
             {
-                OutputBuffer = audio.Frame.Data[0];
+                result.Update(audio.Frame.Data[0]);
                 resampledBufferSize = audio.Frame.SamplesBufferSize;
             }
 
@@ -242,7 +234,8 @@
             }
 
             LastFrameTime = FrameTime;
-            return resampledBufferSize;
+            result.Length = resampledBufferSize;
+            return result;
         }
 
         /// <summary>
@@ -309,7 +302,6 @@
 
             ResampledOutputBuffer?.Release();
             ResampledOutputBuffer = null;
-            OutputBuffer = null;
 
             Container.Input.Streams[StreamIndex].DiscardFlags = AVDiscard.AVDISCARD_ALL;
             Stream = null;

@@ -1,5 +1,6 @@
 ﻿namespace Unosquare.FFplaySharp.Rendering
 {
+    using FFmpeg;
     using FFmpeg.AutoGen;
     using SDL2;
     using System;
@@ -12,6 +13,7 @@
         private uint AudioDeviceId;
         private int ReadBufferSize;
         private int ReadBufferIndex;
+        private BufferReference ReadBuffer;
 
         public double AudioCallbackTime { get; private set; }
 
@@ -171,16 +173,16 @@
             {
                 if (ReadBufferIndex >= ReadBufferSize)
                 {
-                    var audioSize = Container.Audio.RefillOutputBuffer();
-                    if (audioSize < 0)
+                    ReadBuffer = Container.Audio.RefillOutputBuffer();
+                    if (ReadBuffer.Length < 0)
                     {
                         // if error, just output silence.
-                        Container.Audio.OutputBuffer = null;
+                        ReadBuffer.Update(null);
                         ReadBufferSize = Constants.SDL_AUDIO_MIN_BUFFER_SIZE / Container.Audio.HardwareSpec.FrameSize * Container.Audio.HardwareSpec.FrameSize;
                     }
                     else
                     {
-                        ReadBufferSize = audioSize;
+                        ReadBufferSize = Convert.ToInt32(ReadBuffer.Length);
                     }
 
                     ReadBufferIndex = 0;
@@ -191,9 +193,9 @@
                     readByteCount = pendingByteCount;
 
                 var outputStreamPointer = (byte*)audioStream.ToPointer();
-                var inputStreamPointer = Container.Audio.OutputBuffer + ReadBufferIndex;
+                var inputStreamPointer = ReadBuffer.Pointer + ReadBufferIndex;
 
-                if (!Container.IsMuted && Container.Audio.OutputBuffer != null && Volume == SDL.SDL_MIX_MAXVOLUME)
+                if (!Container.IsMuted && ReadBuffer != null && Volume == SDL.SDL_MIX_MAXVOLUME)
                 {
                     Buffer.MemoryCopy(inputStreamPointer, outputStreamPointer, readByteCount, readByteCount);
                 }
@@ -203,7 +205,7 @@
                         outputStreamPointer[i] = 0;
                     });
 
-                    if (!Container.IsMuted && Container.Audio.OutputBuffer != null)
+                    if (!Container.IsMuted && ReadBuffer != null)
                         SDL.SDL_MixAudioFormat(
                             outputStreamPointer,
                             inputStreamPointer,
