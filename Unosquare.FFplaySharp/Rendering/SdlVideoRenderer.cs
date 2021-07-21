@@ -102,21 +102,21 @@
                 SdlRenderer = SDL.SDL_CreateRenderer(RenderingWindow, -1, SDL.SDL_RendererFlags.SDL_RENDERER_ACCELERATED | SDL.SDL_RendererFlags.SDL_RENDERER_PRESENTVSYNC);
                 if (SdlRenderer.IsNull())
                 {
-                    Helpers.LogWarning($"Failed to initialize a hardware accelerated renderer: {SDL.SDL_GetError()}\n");
+                    ($"Failed to initialize a hardware accelerated renderer: {SDL.SDL_GetError()}.").LogWarning();
                     SdlRenderer = SDL.SDL_CreateRenderer(RenderingWindow, -1, 0);
                 }
 
                 if (!SdlRenderer.IsNull())
                 {
                     if (SDL.SDL_GetRendererInfo(SdlRenderer, out SdlRendererInfo) == 0)
-                        Helpers.LogVerbose($"Initialized {Helpers.PtrToString(SdlRendererInfo.name)} renderer.\n");
+                        ($"Initialized {Helpers.PtrToString(SdlRendererInfo.name)} renderer.").LogVerbose();
                 }
             }
 
             if (RenderingWindow.IsNull() || SdlRenderer.IsNull() || SdlRendererInfo.num_texture_formats <= 0)
             {
-                var errorMessage = $"Failed to create window or renderer: {SDL.SDL_GetError()}";
-                Helpers.LogFatal(errorMessage);
+                var errorMessage = $"Failed to create window or renderer: {SDL.SDL_GetError()}.";
+                (errorMessage).LogFatal();
                 throw new Exception(errorMessage);
             }
         }
@@ -178,7 +178,7 @@
                     SDL.SDL_UnlockTexture(texture);
                 }
 
-                Helpers.LogVerbose($"Created {pixelWidth}x{pixelHeight} texture with {SDL.SDL_GetPixelFormatName(sdlFormat)}.\n");
+                ($"Created {pixelWidth}x{pixelHeight} texture with {SDL.SDL_GetPixelFormatName(sdlFormat)}.").LogVerbose();
             }
             return 0;
         }
@@ -216,7 +216,7 @@
 
                             if (Container.Subtitle.ConvertContext == null)
                             {
-                                Helpers.LogFatal("Cannot initialize the conversion context\n");
+                                ("Cannot initialize the conversion context.").LogFatal();
                                 return;
                             }
 
@@ -378,7 +378,7 @@
                 }
                 else
                 {
-                    Helpers.LogFatal("Cannot initialize the conversion context\n");
+                    ("Cannot initialize the conversion context.").LogFatal();
                     resultCode = -1;
                 }
             }
@@ -386,19 +386,21 @@
             {
                 if (frame.LineSize[0] > 0 && frame.LineSize[1] > 0 && frame.LineSize[2] > 0)
                 {
-                    resultCode = SDL.SDL_UpdateYUVTexture(texture, ref textureRect, (IntPtr)frame.Data[0], frame.LineSize[0],
-                                                           (IntPtr)frame.Data[1], frame.LineSize[1],
-                                                           (IntPtr)frame.Data[2], frame.LineSize[2]);
+                    resultCode = SDL.SDL_UpdateYUVTexture(texture, ref textureRect,
+                        (IntPtr)frame.Data[0], frame.LineSize[0],
+                        (IntPtr)frame.Data[1], frame.LineSize[1],
+                        (IntPtr)frame.Data[2], frame.LineSize[2]);
                 }
                 else if (frame.LineSize[0] < 0 && frame.LineSize[1] < 0 && frame.LineSize[2] < 0)
                 {
-                    resultCode = SDL.SDL_UpdateYUVTexture(texture, ref textureRect, (IntPtr)frame.Data[0] + frame.LineSize[0] * (video.Height - 1), -frame.LineSize[0],
-                                                           (IntPtr)frame.Data[1] + frame.LineSize[1] * (Helpers.AV_CEIL_RSHIFT(video.Height, 1) - 1), -frame.LineSize[1],
-                                                           (IntPtr)frame.Data[2] + frame.LineSize[2] * (Helpers.AV_CEIL_RSHIFT(video.Height, 1) - 1), -frame.LineSize[2]);
+                    resultCode = SDL.SDL_UpdateYUVTexture(texture, ref textureRect,
+                        (IntPtr)frame.Data[0] + frame.LineSize[0] * (video.Height - 1), -frame.LineSize[0],
+                        (IntPtr)frame.Data[1] + frame.LineSize[1] * (Helpers.AV_CEIL_RSHIFT(video.Height, 1) - 1), -frame.LineSize[1],
+                        (IntPtr)frame.Data[2] + frame.LineSize[2] * (Helpers.AV_CEIL_RSHIFT(video.Height, 1) - 1), -frame.LineSize[2]);
                 }
                 else
                 {
-                    Helpers.LogError("Mixed negative and positive linesizes are not supported.\n");
+                    ("Mixed negative and positive linesizes are not supported.").LogError();
                     return -1;
                 }
             }
@@ -584,10 +586,10 @@
                     for (var i = buf.Length; i < 90; i++)
                         buf.Append(' ');
 
-                    if (Container.Options.ShowStatus == ThreeState.On && ffmpeg.av_log_get_level() < ffmpeg.AV_LOG_INFO)
+                    if (Container.Options.ShowStatus == ThreeState.On && FFLog.Level < ffmpeg.AV_LOG_INFO)
                         Console.Write($"{buf}\r");
                     else
-                        Helpers.LogInfo($"{buf}\r");
+                        ($"{buf}\r").LogInfo(false);
 
                     LastStatusLogTime = currentTime;
                 }
@@ -690,7 +692,7 @@
                 }
             }
 
-            Helpers.LogTrace($"video: delay={pictureDuration,-8:0.####} A-V={-clockDifference,-8:0.####}\n");
+            ($"video: delay={pictureDuration,-8:0.####} A-V={-clockDifference,-8:0.####}.").LogTrace();
 
             return pictureDuration;
         }

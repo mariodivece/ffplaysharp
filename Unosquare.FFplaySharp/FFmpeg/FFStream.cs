@@ -45,10 +45,10 @@
             theta -= 360 * Math.Floor(theta / 360 + 0.9 / 360);
 
             if (Math.Abs(theta - 90 * Math.Round(theta / 90, 0)) > 2)
-                Helpers.LogWarning("Odd rotation angle.\n" +
-                    "If you want to help, upload a sample " +
-                    "of this file to https://streams.videolan.org/upload/ " +
-                    "and contact the ffmpeg-devel mailing list. (ffmpeg-devel@ffmpeg.org)");
+                ("Odd rotation angle.\n" +
+                "If you want to help, upload a sample " +
+                "of this file to https://streams.videolan.org/upload/ " +
+                "and contact the ffmpeg-devel mailing list. (ffmpeg-devel@ffmpeg.org)").LogWarning();
 
             return theta;
         }

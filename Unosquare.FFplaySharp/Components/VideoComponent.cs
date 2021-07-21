@@ -59,9 +59,9 @@
                     var lastFormatName = ffmpeg.av_get_pix_fmt_name((AVPixelFormat)lastFormat) ?? "none";
                     var frameFormatName = ffmpeg.av_get_pix_fmt_name(decodedFrame.PixelFormat) ?? "none";
 
-                    Helpers.LogDebug(
-                           $"Video frame changed from size:{lastWidth}x%{lastHeight} format:{lastFormatName} serial:{lastGroupIndex} to " +
-                           $"size:{decodedFrame.Width}x{decodedFrame.Height} format:{frameFormatName} serial:{PacketGroupIndex}\n");
+                    ($"Video frame changed from size:{lastWidth}x%{lastHeight} format:{lastFormatName} serial:{lastGroupIndex} to " +
+                    $"size:{decodedFrame.Width}x{decodedFrame.Height} format:{frameFormatName} serial:{PacketGroupIndex}.")
+                    .LogDebug();
 
                     ReallocateFilterGraph();
 

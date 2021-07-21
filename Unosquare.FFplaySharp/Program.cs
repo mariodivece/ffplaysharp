@@ -1,5 +1,6 @@
 ﻿namespace Unosquare.FFplaySharp
 {
+    using FFmpeg;
     using FFmpeg.AutoGen;
     using System;
     using Unosquare.FFplaySharp.Rendering;
@@ -13,10 +14,10 @@
         {
 
             Helpers.SetFFmpegRootPath(@"C:\ffmpeg\x64");
-            ffmpeg.av_log_set_flags(ffmpeg.AV_LOG_SKIP_REPEATED);
-            ffmpeg.av_log_set_level(ffmpeg.AV_LOG_VERBOSE);
+            FFLog.Flags = ffmpeg.AV_LOG_SKIP_REPEATED;
+            FFLog.Level = ffmpeg.AV_LOG_VERBOSE;
 
-            /* register all codecs, demux and protocols */
+            // register all codecs, demux and protocols
             ffmpeg.avdevice_register_all();
             ffmpeg.avformat_network_init();
 
@@ -24,8 +25,8 @@
 
             //init_opts();
 
-            //signal(SIGINT, sigterm_handler); /* Interrupt (ANSI).    */
-            //signal(SIGTERM, sigterm_handler); /* Termination (ANSI).  */
+            //signal(SIGINT, sigterm_handler); // Interrupt (ANSI).
+            //signal(SIGTERM, sigterm_handler); // Termination (ANSI).
 
             if (string.IsNullOrWhiteSpace(o.InputFileName))
                 Environment.Exit(1);
@@ -35,7 +36,7 @@
 
             if (container == null)
             {
-                Helpers.LogFatal("Failed to initialize VideoState!\n");
+                ("Failed to initialize Video State!").LogFatal();
                 presenter.Stop();
             }
 

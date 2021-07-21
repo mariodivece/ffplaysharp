@@ -17,7 +17,7 @@
                 t.WindowHeight = int.TryParse(a, out var v) ? v : t.WindowHeight),
             Option("s", true, "set frame size (WxH or abbreviation)", "size", (t, a) =>
             {
-                ffmpeg.av_log(null, ffmpeg.AV_LOG_WARNING, "Option -s is deprecated, use -video_size.\n");
+                ("Option -s is deprecated, use -video_size.").LogWarning();
                 t.ApplyDefaultOption("video_size", a);
             }),
             Option("fs", false, "force full screen", (t, a) =>
@@ -54,7 +54,7 @@
                 t.InputFormat = FFInputFormat.Find(a)),
             Option("pix_fmt", true, "set pixel format", "format", (t, a) =>
             {
-                ffmpeg.av_log(null, ffmpeg.AV_LOG_WARNING, "Option -pix_fmt is deprecated, use -pixel_format.\n");
+                ("Option -pix_fmt is deprecated, use -pixel_format.").LogWarning();
                 t.ApplyDefaultOption("pixel_format", a);
             }),
             Option("stats", false, "show status", (t, a) =>
@@ -296,7 +296,7 @@
             const int SearchFlags = ffmpeg.AV_OPT_SEARCH_CHILDREN | ffmpeg.AV_OPT_SEARCH_FAKE_OBJ;
 
             if (optionName == "debug" || optionName == "fdebug")
-                ffmpeg.av_log_set_level(ffmpeg.AV_LOG_DEBUG);
+                FFLog.Level = ffmpeg.AV_LOG_DEBUG;
 
             // Example: codec:a:1 ac3
             var strippedOptionName = optionName.Contains(Semicolon)
@@ -319,7 +319,7 @@
                 FormatOptions.Set(o, optionName, optionValue);
 
                 if (isConsumed)
-                    ffmpeg.av_log(null, ffmpeg.AV_LOG_VERBOSE, $"Routing option {optionName} to both codec and muxer layer\n");
+                    ($"Routing option {optionName} to both codec and muxer layer.").LogVerbose();
 
                 isConsumed = true;
             }
@@ -335,13 +335,13 @@
 
                 if (invalidOptions.Contains(optionName))
                 {
-                    ffmpeg.av_log(null, ffmpeg.AV_LOG_ERROR, "Directly using swscale dimensions/format options is not supported, please use the -s or -pix_fmt options\n");
+                    ("Directly using swscale dimensions/format options is not supported, please use the -s or -pix_fmt options.").LogError();
                     return ffmpeg.AVERROR(ffmpeg.EINVAL);
                 }
 
                 if (setResult < 0)
                 {
-                    ffmpeg.av_log(null, ffmpeg.AV_LOG_ERROR, $"Error setting option {optionName}.\n");
+                    ($"Error setting option {optionName}.").LogError();
                     return setResult;
                 }
 
@@ -357,7 +357,7 @@
 
                 if (setResult < 0)
                 {
-                    ffmpeg.av_log(null, ffmpeg.AV_LOG_ERROR, $"Error setting option {optionName}.\n");
+                    ($"Error setting option {optionName}.").LogError();
                     return setResult;
                 }
 

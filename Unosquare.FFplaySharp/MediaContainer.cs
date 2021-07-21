@@ -202,10 +202,10 @@
                 container.ExternalClock = new Clock(container.ExternalClock);
 
                 if (container.Options.StartupVolume < 0)
-                    Helpers.LogWarning($"-volume={container.Options.StartupVolume} < 0, setting to 0\n");
+                    ($"-volume={container.Options.StartupVolume} < 0, setting to 0.").LogWarning();
 
                 if (container.Options.StartupVolume > 100)
-                    Helpers.LogWarning($"-volume={container.Options.StartupVolume} > 100, setting to 100\n");
+                    ($"-volume={container.Options.StartupVolume} > 100, setting to 100.").LogWarning();
 
                 container.Options.StartupVolume = container.Options.StartupVolume.Clamp(0, 100);
                 container.Options.StartupVolume = (SDL.SDL_MIX_MAXVOLUME * container.Options.StartupVolume / 100).Clamp(0, SDL.SDL_MIX_MAXVOLUME);
@@ -350,7 +350,7 @@
             if (program != null && nextStreamIndex != -1)
                 nextStreamIndex = program.StreamIndices[nextStreamIndex];
 
-            Helpers.LogInfo($"Switch {component.MediaTypeString} stream from #{component.StreamIndex} to #{nextStreamIndex}\n");
+            ($"Switch {component.MediaTypeString} stream from #{component.StreamIndex} to #{nextStreamIndex}.").LogInfo();
             component.Close();
             OpenComponent(nextStreamIndex);
         }
@@ -407,7 +407,7 @@
             if (i >= Input.Chapters.Count)
                 return;
 
-            Helpers.LogVerbose($"Seeking to chapter {i}.\n");
+            ($"Seeking to chapter {i}.").LogVerbose();
             SeekByTimestamp(ffmpeg.av_rescale_q(Input.Chapters[i].StartTime, Input.Chapters[i].TimeBase, Constants.AV_TIME_BASE_Q));
         }
 
@@ -452,7 +452,7 @@
                         ? forcedCodecName
                         : codecContext.CodecName;
 
-                    Helpers.LogWarning($"No decoder could be found for codec {codecName}\n");
+                    ($"No decoder could be found for codec {codecName}.").LogWarning();
                     throw new FFmpegException(ffmpeg.AVERROR(ffmpeg.EINVAL), $"Could not find codec with name '{codecName}'");
                 }
 
@@ -461,7 +461,7 @@
                 var lowResFactor = Options.LowResolution;
                 if (lowResFactor > codec.MaxLowResFactor)
                 {
-                    Helpers.LogWarning($"The maximum value for lowres supported by the decoder is {codec.MaxLowResFactor}\n");
+                    ($"The maximum value for lowres supported by the decoder is {codec.MaxLowResFactor}.").LogWarning();
                     lowResFactor = codec.MaxLowResFactor;
                 }
 
@@ -470,10 +470,9 @@
                 if (Options.IsFastDecodingEnabled == ThreeState.On)
                     codecContext.Flags2 |= ffmpeg.AV_CODEC_FLAG2_FAST;
 
-                var codecOptions = Helpers.FilterCodecOptions(
+                var codecOptions = Input.FilterCodecOptions(
                     Options.CodecOptions,
                     codecContext.CodecId,
-                    Input,
                     Input.Streams[streamIndex],
                     codec);
 
@@ -495,7 +494,7 @@
                     var invalidKey = codecOptions.First?.Key;
                     if (invalidKey != null)
                     {
-                        Helpers.LogError($"Option {invalidKey} not found.\n");
+                        ($"Option {invalidKey} not found.").LogError();
                         throw new FFmpegException(ffmpeg.AVERROR_OPTION_NOT_FOUND, $"Option {invalidKey} not found.");
                     }
                 }
@@ -612,7 +611,7 @@
                 var invalidOptionKey = formatOptions.First?.Key;
                 if (invalidOptionKey != null)
                 {
-                    Helpers.LogError($"Option {invalidOptionKey} not found.\n");
+                    ($"Option {invalidOptionKey} not found.").LogError();
                     throw new FFmpegException(ffmpeg.AVERROR_OPTION_NOT_FOUND, $"Option {invalidOptionKey} not found.");
                 }
 
@@ -650,17 +649,17 @@
 
                     var seekStoStartResult = Input.SeekFile(long.MinValue, startTimestamp, long.MaxValue);
                     if (seekStoStartResult < 0)
-                        Helpers.LogWarning($"{FileName}: could not seek to position {(startTimestamp / Clock.TimeBaseMicros)}\n");
+                        ($"{FileName}: could not seek to position {(startTimestamp / Clock.TimeBaseMicros)}.").LogWarning();
                 }
 
                 IsRealTime = Input.IsRealTime;
 
                 if (Options.ShowStatus != 0)
-                    Helpers.DumpFormat(Input, FileName);
+                    Input.DumpFormat(FileName);
             }
             catch
             {
-                Helpers.LogError($"{FileName}: Preparing input context failed.\n");
+                ($"{FileName}: Preparing input context failed.").LogError();
                 throw;
             }
             finally
@@ -684,7 +683,7 @@
                     !streamIndexes.HasValue(mediaType);
 
                 var isStreamSpecMatch = hasStreamSpec &&
-                    Helpers.MatchStreamSpecifier(Input, stream, Options.WantedStreams[mediaType]) > 0;
+                    Input.MatchStreamSpecifier(stream, Options.WantedStreams[mediaType]) > 0;
 
                 if (hasStreamSpec && isStreamSpecMatch)
                     streamIndexes[mediaType] = i;
@@ -698,7 +697,7 @@
                 if (streamIndexes[mediaType] != streamIndexes.DefaultValue)
                     continue;
 
-                Helpers.LogError($"Stream specifier {Options.WantedStreams[mediaType]} does not match any {mediaType.ToText()} stream\n");
+                ($"Stream specifier {Options.WantedStreams[mediaType]} does not match any {mediaType.ToName()} stream").LogError();
                 streamIndexes[mediaType] = int.MaxValue;
             }
 
@@ -742,7 +741,7 @@
 
             if (Video.StreamIndex < 0 && Audio.StreamIndex < 0)
             {
-                Helpers.LogFatal($"Failed to open file '{FileName}' or configure filtergraph\n");
+                ($"Failed to open file '{FileName}' or configure filtergraph.").LogFatal();
                 throw new InvalidOperationException($"Failed to open file '{FileName}' or configure filtergraph");
             }
 
@@ -844,7 +843,7 @@
             var resultCode = Input.SeekFile(seekTargetMin, seekTarget, seekTargetMax, SeekFlags);
             if (resultCode < 0)
             {
-                Helpers.LogError($"{Input.Url}: error while seeking\n");
+                ($"{Input.Url}: error while seeking").LogError();
             }
             else
             {

@@ -66,7 +66,7 @@
             Convert.ToInt64(Pointer->channel_layout);
 
         public int SamplesBufferSize =>
-            Helpers.ComputeSamplesBufferSize(Channels, SampleCount, SampleFormat, true);
+            AudioParams.ComputeSamplesBufferSize(Channels, SampleCount, SampleFormat, true);
 
         public void Reset()
         {

@@ -23,9 +23,9 @@
 
         public AVSampleFormat SampleFormat { get; set; }
 
-        public int FrameSize => Helpers.ComputeSamplesBufferSize(Channels, 1, SampleFormat, true);
+        public int FrameSize => ComputeSamplesBufferSize(Channels, 1, SampleFormat, true);
 
-        public int BytesPerSecond => Helpers.ComputeSamplesBufferSize(Channels, SampleRate, SampleFormat, true);
+        public int BytesPerSecond => ComputeSamplesBufferSize(Channels, SampleRate, SampleFormat, true);
 
         public int BytesPerSample => ffmpeg.av_get_bytes_per_sample(SampleFormat);
 
@@ -74,6 +74,9 @@
 
             return result;
         }
+
+        public static unsafe int ComputeSamplesBufferSize(int channels, int sampleRate, AVSampleFormat sampleFormat, bool align) =>
+            ffmpeg.av_samples_get_buffer_size(null, channels, sampleRate, sampleFormat, (align ? 1 : 0));
 
         public static string GetChannelLayoutString(long channelLayout) =>
             GetChannelLayoutString(Convert.ToUInt64(channelLayout));

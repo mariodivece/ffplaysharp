@@ -36,7 +36,7 @@
 
         public abstract AVMediaType MediaType { get; }
 
-        public string MediaTypeString => MediaType.ToText();
+        public string MediaTypeString => MediaType.ToName();
 
         public bool IsAudio => MediaType == AVMediaType.AVMEDIA_TYPE_AUDIO;
 
@@ -195,7 +195,7 @@
                     {
                         if (CodecContext.SendPacket(currentPacket) == ffmpeg.AVERROR(ffmpeg.EAGAIN))
                         {
-                            Helpers.LogError(CodecContext, "Receive_frame and send_packet both returned EAGAIN, which is an API violation.\n");
+                            CodecContext.LogError("Receive_frame and send_packet both returned EAGAIN, which is an API violation.");
                             IsPacketPending = true;
                             PendingPacket = currentPacket.Clone();
                         }

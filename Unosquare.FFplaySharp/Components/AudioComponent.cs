@@ -148,10 +148,10 @@
 
                 if (ConvertContext == null || ConvertContext.Initialize() < 0)
                 {
-                    Helpers.LogError(
-                           $"Cannot create sample rate converter for conversion of {audio.Frame.SampleRate} Hz " +
-                           $"{audio.Frame.SampleFormatName} {audio.Frame.Channels} channels to " +
-                           $"{HardwareSpec.SampleRate} Hz {HardwareSpec.SampleFormatName} {HardwareSpec.Channels} channels!\n");
+                    ($"Cannot create sample rate converter for conversion of {audio.Frame.SampleRate} Hz " +
+                    $"{audio.Frame.SampleFormatName} {audio.Frame.Channels} channels to " +
+                    $"{HardwareSpec.SampleRate} Hz {HardwareSpec.SampleFormatName} {HardwareSpec.Channels} channels!")
+                    .LogError();
 
                     ReleaseConvertContext();
                     return result;
@@ -166,11 +166,12 @@
             if (ConvertContext != null)
             {
                 var wantedOutputSize = wantedSampleCount * HardwareSpec.SampleRate / audio.Frame.SampleRate + 256;
-                var outputBufferSize = Helpers.ComputeSamplesBufferSize(HardwareSpec.Channels, wantedOutputSize, HardwareSpec.SampleFormat, false);
+                var outputBufferSize = AudioParams.ComputeSamplesBufferSize(
+                    HardwareSpec.Channels, wantedOutputSize, HardwareSpec.SampleFormat, false);
 
                 if (outputBufferSize < 0)
                 {
-                    Helpers.LogError("av_samples_get_buffer_size() failed\n");
+                    ("av_samples_get_buffer_size() failed").LogError();
                     return result;
                 }
 
@@ -181,7 +182,7 @@
 
                     if (ConvertContext.SetCompensation(compensationDelta, compensationDistance) < 0)
                     {
-                        Helpers.LogError("swr_set_compensation() failed\n");
+                        ("swr_set_compensation() failed").LogError();
                         return result;
                     }
                 }
@@ -197,13 +198,13 @@
 
                 if (outputSampleCount < 0)
                 {
-                    Helpers.LogError("swr_convert() failed\n");
+                    ("swr_convert() failed").LogError();
                     return result;
                 }
 
                 if (outputSampleCount == wantedOutputSize)
                 {
-                    Helpers.LogWarning("audio buffer is probably too small\n");
+                    ("Audio buffer is probably too small.").LogWarning();
                     if (ConvertContext.Initialize() < 0)
                         ReleaseConvertContext();
                 }
@@ -276,7 +277,9 @@
                         wantedSampleCount = wantedSampleCount.Clamp(minSampleCount, maxSampleCount);
                     }
 
-                    Helpers.LogTrace($"diff={clockDelay} adiff={syncDiffDelay} sample_diff={(wantedSampleCount - sampleCount)} apts={FrameTime} {SyncDiffDelayThreshold}\n");
+                    ($"diff={clockDelay} adiff={syncDiffDelay} sample_diff={(wantedSampleCount - sampleCount)} " +
+                    $"apts={FrameTime} {SyncDiffDelayThreshold}.")
+                    .LogTrace();
                 }
             }
             else
@@ -416,10 +419,13 @@
                 {
                     var decoderLayoutString = AudioParams.GetChannelLayoutString(decoderChannelLayout);
 
-                    Helpers.LogDebug(
-                       $"Audio frame changed from " +
-                       $"rate:{FilterSpec.SampleRate} ch:{FilterSpec.Channels} fmt:{FilterSpec.SampleFormatName} layout:{FilterSpec.ChannelLayoutString} serial:{lastPacketGroupIndex} to " +
-                       $"rate:{decodedFrame.SampleRate} ch:{decodedFrame.Channels} fmt:{AudioParams.GetSampleFormatName(decodedFrame.SampleFormat)} layout:{decoderLayoutString} serial:{PacketGroupIndex}\n");
+                    ($"Audio frame changed from " +
+                    $"rate:{FilterSpec.SampleRate} ch:{FilterSpec.Channels} fmt:{FilterSpec.SampleFormatName} " +
+                    $"layout:{FilterSpec.ChannelLayoutString} serial:{lastPacketGroupIndex} to " +
+                    $"rate:{decodedFrame.SampleRate} ch:{decodedFrame.Channels} " +
+                    $"fmt:{AudioParams.GetSampleFormatName(decodedFrame.SampleFormat)} layout:{decoderLayoutString} " +
+                    $"serial:{PacketGroupIndex}.")
+                    .LogDebug();
 
                     FilterSpec.ImportFrom(decodedFrame);
                     lastPacketGroupIndex = PacketGroupIndex;

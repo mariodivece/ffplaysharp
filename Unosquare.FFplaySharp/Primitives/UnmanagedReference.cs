@@ -52,13 +52,13 @@
 
         public static bool operator !=(UnmanagedReference<T> a, object b) => !(a == b);
 
-        public bool IsNull => Address == IntPtr.Zero;
+        public bool IsNull => Address.IsNull();
 
         public IntPtr Address { get; protected set; } = IntPtr.Zero;
 
         public T* Pointer => (T*)Address;
 
-        public T PointerValue => Address == IntPtr.Zero ? default : *Pointer;
+        public T PointerValue => Address.IsNull() ? default : *Pointer;
 
         public void Update(IntPtr address) => Address = address;
 
@@ -87,7 +87,7 @@
 
         public void Release()
         {
-            if (Address != IntPtr.Zero)
+            if (!Address.IsNull())
                 ReleaseInternal(Pointer);
 
             Update(IntPtr.Zero);

@@ -16,9 +16,6 @@
 
         public static int AV_CEIL_RSHIFT(int a, int b) => ((a) + (1 << (b)) - 1) >> (b);
 
-        public static unsafe void DumpFormat(FFFormatContext context, string fileName) =>
-            ffmpeg.av_dump_format(context.Pointer, 0, fileName, 0);
-
         /// <summary>
         /// Parses a hexagesimal (HOURS:MM:SS.MILLISECONDS) or simple second
         /// and decimal string representing time and returns total microseconds.
@@ -72,33 +69,13 @@
 
         public static bool IsSubtitle(this AVMediaType t) => t == AVMediaType.AVMEDIA_TYPE_SUBTITLE;
 
-        public static string ToText(this AVMediaType t) => ffmpeg.av_get_media_type_string(t);
-
-        /// <summary>
-        /// Port of check_stream_specifier.
-        /// Returns 0 for no match, 1 for match and a negative number on error.
-        /// </summary>
-        /// <param name="formatContext">The format context.</param>
-        /// <param name="stream">The associated stream.</param>
-        /// <param name="specifier">The specifier string.</param>
-        /// <returns>A non-negative number on success. A negative error code on failure.</returns>
-        public static unsafe int CheckStreamSpecifier(FFFormatContext formatContext, FFStream stream, string specifier)
-        {
-            var resultCode = MatchStreamSpecifier(formatContext, stream, specifier);
-            if (resultCode < 0)
-                Log(formatContext.Pointer, ffmpeg.AV_LOG_ERROR, $"Invalid stream specifier: {specifier}.\n");
-
-            return resultCode;
-        }
-
-        public static unsafe int MatchStreamSpecifier(FFFormatContext formatContext, FFStream stream, string specifier) =>
-            ffmpeg.avformat_match_stream_specifier(formatContext.Pointer, stream.Pointer, specifier);
+        public static string ToName(this AVMediaType t) => ffmpeg.av_get_media_type_string(t);
 
         public static unsafe string PtrToString(byte* ptr) => PtrToString((IntPtr)ptr);
 
         public static unsafe string PtrToString(IntPtr address)
         {
-            if (address == IntPtr.Zero)
+            if (address.IsNull())
                 return null;
 
             var source = (byte*)address.ToPointer();
@@ -113,124 +90,6 @@
             Buffer.MemoryCopy(source, target, length, length);
             return Encoding.UTF8.GetString(target, length);
         } 
-
-        /// <summary>
-        /// Port of filter_codec_opts.
-        /// </summary>
-        /// <param name="allOptions"></param>
-        /// <param name="codecId"></param>
-        /// <param name="formatContext"></param>
-        /// <param name="stream"></param>
-        /// <param name="codec"></param>
-        /// <returns></returns>
-        public static unsafe FFDictionary FilterCodecOptions(
-            StringDictionary allOptions,
-            AVCodecID codecId,
-            FFFormatContext formatContext,
-            FFStream stream,
-            FFCodec codec)
-        {
-
-            var filteredOptions = new FFDictionary();
-
-            int optionFlags = formatContext.Pointer->oformat != null
-                ? ffmpeg.AV_OPT_FLAG_ENCODING_PARAM
-                : ffmpeg.AV_OPT_FLAG_DECODING_PARAM;
-
-            if (codec == null)
-            {
-                codec = formatContext.Pointer->oformat != null
-                    ? FFCodec.FromEncoderId(codecId)
-                    : FFCodec.FromDecoderId(codecId);
-            }
-                
-
-            // -codec:a:1 ac3
-            // option:mediatype:streamindex value
-            // option:mediatype
-            // option
-
-            var prefix = string.Empty;
-            switch (stream.CodecParameters.CodecType)
-            {
-                case AVMediaType.AVMEDIA_TYPE_VIDEO:
-                    prefix = "v";
-                    optionFlags |= ffmpeg.AV_OPT_FLAG_VIDEO_PARAM;
-                    break;
-                case AVMediaType.AVMEDIA_TYPE_AUDIO:
-                    prefix = "a";
-                    optionFlags |= ffmpeg.AV_OPT_FLAG_AUDIO_PARAM;
-                    break;
-                case AVMediaType.AVMEDIA_TYPE_SUBTITLE:
-                    prefix = "s";
-                    optionFlags |= ffmpeg.AV_OPT_FLAG_SUBTITLE_PARAM;
-                    break;
-            }
-
-            var semicolonSeprator = new char[] { ':' };
-            foreach (var t in allOptions)
-            {
-                var keyParts = t.Key.Split(semicolonSeprator, 2);
-                var optionName = keyParts[0];
-                var specifier = keyParts.Length > 1 ? keyParts[1] : null;
-
-                var checkResult = specifier != null
-                    ? CheckStreamSpecifier(formatContext, stream, specifier)
-                    : -1;
-
-                if (checkResult <= 0)
-                    continue;
-
-                if (FFMediaClass.Codec.HasOption(optionName, optionFlags) || codec == null ||
-                    codec.PrivateClass.HasOption(optionName, optionFlags))
-                {
-                    filteredOptions[optionName] = t.Value;
-                }
-                else if (prefix.Length > 0 && optionName.Length > 1 && optionName.StartsWith(prefix) &&
-                    FFMediaClass.Codec.HasOption(optionName.Substring(1), optionFlags))
-                {
-                    filteredOptions[optionName.Substring(1)] = t.Value;
-                }
-            }
-
-            return filteredOptions;
-        }
-
-        public static unsafe int ComputeSamplesBufferSize(int channels, int sampleRate, AVSampleFormat sampleFormat, bool align) =>
-            ffmpeg.av_samples_get_buffer_size(null, channels, sampleRate, sampleFormat, (align ? 1 : 0));
-
-        public static unsafe void Log(void* opaque, int logLevel, string message) =>
-            ffmpeg.av_log(opaque, logLevel, message);
-
-        public static unsafe void LogError(string message) =>
-            Log(null, ffmpeg.AV_LOG_ERROR, message);
-
-        public static unsafe void LogError(FFCodecContext context, string message) =>
-            Log(context.Pointer, ffmpeg.AV_LOG_ERROR, message);
-
-        public static unsafe void LogWarning(string message) =>
-            Log(null, ffmpeg.AV_LOG_WARNING, message);
-
-        public static unsafe void LogWarning(AVCodecContext* context, string message) =>
-            Log(context, ffmpeg.AV_LOG_WARNING, message);
-
-        public static unsafe void LogFatal(string message) =>
-            Log(null, ffmpeg.AV_LOG_FATAL, message);
-
-        public static unsafe void LogDebug(string message) =>
-            Log(null, ffmpeg.AV_LOG_DEBUG, message);
-
-        public static unsafe void LogInfo(string message) =>
-            Log(null, ffmpeg.AV_LOG_INFO, message);
-
-        public static unsafe void LogVerbose(string message) =>
-            Log(null, ffmpeg.AV_LOG_VERBOSE, message);
-
-        public static unsafe void LogTrace(string message) =>
-            Log(null, ffmpeg.AV_LOG_TRACE, message);
-
-        public static unsafe void LogQuiet(string message) =>
-            Log(null, ffmpeg.AV_LOG_QUIET, message);
 
         public static bool IsValidPts(this long pts) => pts != ffmpeg.AV_NOPTS_VALUE;
 

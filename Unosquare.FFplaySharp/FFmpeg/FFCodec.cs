@@ -1,11 +1,6 @@
 ﻿namespace FFmpeg
 {
     using FFmpeg.AutoGen;
-    using System;
-    using System.Collections.Generic;
-    using System.Linq;
-    using System.Text;
-    using System.Threading.Tasks;
     using Unosquare.FFplaySharp.Primitives;
 
     public unsafe sealed class FFCodec : UnmanagedReference<AVCodec>

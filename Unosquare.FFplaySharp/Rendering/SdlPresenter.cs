@@ -1,5 +1,6 @@
 ﻿namespace Unosquare.FFplaySharp.Rendering
 {
+    using FFmpeg;
     using FFmpeg.AutoGen;
     using SDL2;
     using System;
@@ -40,7 +41,7 @@
 
             if (SDL.SDL_Init(SdlInitFlags) != 0)
             {
-                Helpers.LogFatal($"Could not initialize SDL - {SDL.SDL_GetError()}\n");
+                ($"Could not initialize SDL - {SDL.SDL_GetError()}").LogFatal();
                 return false;
             }
 
@@ -238,7 +239,7 @@
                             var targetTime = TimeSpan.FromSeconds(seekPercent * durationSecs);
                             var targetPosition = Convert.ToInt64(seekPercent * Container.Input.Duration);
 
-                            Helpers.LogInfo($"Seek to {(seekPercent * 100):0.00} ({targetTime}) of total duration ({totalDuration})       \n");
+                            ($"Seek to {(seekPercent * 100):0.00} ({targetTime}) of total duration ({totalDuration})").LogInfo();
 
                             if (Container.Input.StartTime.IsValidPts())
                                 targetPosition += Container.Input.StartTime;
@@ -284,7 +285,7 @@
                 Console.WriteLine();
 
             SDL.SDL_Quit();
-            Helpers.LogQuiet(string.Empty);
+            (string.Empty).LogQuiet();
             ReferenceCounter.VeirfyZero();
             Environment.Exit(0);
         }

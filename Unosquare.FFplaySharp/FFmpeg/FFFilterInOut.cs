@@ -45,7 +45,7 @@
 
         public void Release()
         {
-            if (Address != IntPtr.Zero)
+            if (!Address.IsNull())
             {
                 var pointer = Pointer;
                 ffmpeg.avfilter_inout_free(&pointer);

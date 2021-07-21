@@ -85,7 +85,7 @@
 
             if (wantedSpec.freq <= 0 || wantedSpec.channels <= 0)
             {
-                Helpers.LogError("Invalid sample rate or channel count!\n");
+                ("Invalid sample rate or channel count!").LogError();
                 return audioDeviceSpec;
             }
 
@@ -102,7 +102,7 @@
             SDL.SDL_AudioSpec deviceSpec;
             while ((AudioDeviceId = SDL.SDL_OpenAudioDevice(null, 0, ref wantedSpec, out deviceSpec, AudioDeviceFlags)) == 0)
             {
-                Helpers.LogWarning($"SDL_OpenAudio ({wantedSpec.channels} channels, {wantedSpec.freq} Hz): {SDL.SDL_GetError()}\n");
+                ($"SDL_OpenAudio ({wantedSpec.channels} channels, {wantedSpec.freq} Hz): {SDL.SDL_GetError()}.").LogWarning();
                 wantedSpec.channels = (byte)probeChannelCount[Math.Min(7, (int)wantedSpec.channels)];
                 if (wantedSpec.channels == 0)
                 {
@@ -110,7 +110,7 @@
                     wantedSpec.channels = (byte)wantedChannelCount;
                     if (wantedSpec.freq == 0)
                     {
-                        Helpers.LogError("No more combinations to try, audio open failed\n");
+                        ("No more combinations to try, audio open failed").LogError();
                         return audioDeviceSpec;
                     }
                 }
@@ -120,7 +120,7 @@
 
             if (deviceSpec.format != SDL.AUDIO_S16SYS)
             {
-                Helpers.LogError($"SDL advised audio format {deviceSpec.format} is not supported!\n");
+                ($"SDL advised audio format {deviceSpec.format} is not supported!").LogError();
                 return audioDeviceSpec;
             }
 
@@ -129,7 +129,7 @@
                 wantedChannelLayout = AudioParams.DefaultChannelLayoutFor(deviceSpec.channels);
                 if (wantedChannelLayout == 0)
                 {
-                    Helpers.LogError($"SDL advised channel count {deviceSpec.channels} is not supported!\n");
+                    ($"SDL advised channel count {deviceSpec.channels} is not supported!").LogError();
                     return audioDeviceSpec;
                 }
             }
@@ -141,7 +141,7 @@
 
             if (audioDeviceSpec.BytesPerSecond <= 0 || audioDeviceSpec.FrameSize <= 0)
             {
-                Helpers.LogError("av_samples_get_buffer_size failed\n");
+                ("av_samples_get_buffer_size failed").LogError();
                 return audioDeviceSpec;
             }
 
