@@ -1,20 +1,16 @@
-﻿namespace FFmpeg
+﻿namespace FFmpeg;
+
+public unsafe sealed class FFFilter : UnmanagedReference<AVFilter>
 {
-    using FFmpeg.AutoGen;
-    using Unosquare.FFplaySharp.Primitives;
-
-    public unsafe sealed class FFFilter : UnmanagedReference<AVFilter>
+    private FFFilter(AVFilter* pointer)
+        : base(pointer)
     {
-        private FFFilter(AVFilter* pointer)
-            : base(pointer)
-        {
-            // placeholder
-        }
+        // placeholder
+    }
 
-        public static FFFilter FromName(string name)
-        {
-            var pointer = ffmpeg.avfilter_get_by_name(name);
-            return pointer != null ? new FFFilter(pointer) : null;
-        }
+    public static FFFilter FromName(string name)
+    {
+        var pointer = ffmpeg.avfilter_get_by_name(name);
+        return pointer != null ? new FFFilter(pointer) : null;
     }
 }

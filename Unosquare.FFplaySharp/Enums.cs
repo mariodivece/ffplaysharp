@@ -1,9 +1,8 @@
-﻿namespace Unosquare.FFplaySharp
+﻿namespace Unosquare.FFplaySharp;
+
+public enum ThreeState
 {
-    public enum ThreeState
-    {
-        Off = 0,
-        On = 1,
-        Auto = -1
-    }
+    Off = 0,
+    On = 1,
+    Auto = -1
 }

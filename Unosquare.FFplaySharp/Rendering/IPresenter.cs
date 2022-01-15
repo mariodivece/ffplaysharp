@@ -1,17 +1,16 @@
-﻿namespace Unosquare.FFplaySharp.Rendering
+﻿namespace Unosquare.FFplaySharp.Rendering;
+
+public interface IPresenter
 {
-    public interface IPresenter
-    {
-        public IVideoRenderer Video { get; }
+    public IVideoRenderer Video { get; }
 
-        public IAudioRenderer Audio { get; }
+    public IAudioRenderer Audio { get; }
 
-        public MediaContainer Container { get; }
+    public MediaContainer Container { get; }
 
-        public bool Initialize(MediaContainer container);
+    public bool Initialize(MediaContainer container);
 
-        public void Start();
+    public void Start();
 
-        public void Stop();
-    }
+    public void Stop();
 }

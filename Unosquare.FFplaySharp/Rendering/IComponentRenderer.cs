@@ -1,13 +1,12 @@
-﻿namespace Unosquare.FFplaySharp.Rendering
+﻿namespace Unosquare.FFplaySharp.Rendering;
+
+public interface IComponentRenderer
 {
-    public interface IComponentRenderer
-    {
-        public MediaContainer Container { get; }
+    public MediaContainer Container { get; }
 
-        public IPresenter Presenter { get; }
+    public IPresenter Presenter { get; }
 
-        public void Initialize(IPresenter presenter);
+    public void Initialize(IPresenter presenter);
 
-        public void Close();
-    }
+    public void Close();
 }

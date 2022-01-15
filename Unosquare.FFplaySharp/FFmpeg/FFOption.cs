@@ -1,16 +1,12 @@
-﻿namespace FFmpeg
+﻿namespace FFmpeg;
+
+public unsafe sealed class FFOption : UnmanagedReference<AVOption>
 {
-    using FFmpeg.AutoGen;
-    using Unosquare.FFplaySharp.Primitives;
-
-    public unsafe sealed class FFOption : UnmanagedReference<AVOption>
+    public FFOption(AVOption* pointer)
+        : base(pointer)
     {
-        public FFOption(AVOption* pointer)
-            : base(pointer)
-        {
 
-        }
-
-        public AVOptionType Type => Pointer->type;
     }
+
+    public AVOptionType Type => Pointer->type;
 }

@@ -1,272 +1,266 @@
-﻿namespace Unosquare.FFplaySharp.Components
+﻿namespace Unosquare.FFplaySharp.Components;
+
+using SDL2;
+
+public sealed class VideoComponent : FilteringMediaComponent
 {
-    using FFmpeg;
-    using FFmpeg.AutoGen;
-    using SDL2;
-    using System;
-    using System.Linq;
-    using Unosquare.FFplaySharp.Primitives;
+    private double FilterDelay;
 
-    public sealed class VideoComponent : FilteringMediaComponent
+    public VideoComponent(MediaContainer container)
+        : base(container)
     {
-        private double FilterDelay;
+        // placeholder
+    }
 
-        public VideoComponent(MediaContainer container)
-            : base(container)
+    public int CurrentFilterIndex { get; set; }
+
+    public int DroppedFrameCount { get; private set; }
+
+    public RescalerContext ConvertContext { get; } = new();
+
+    public override AVMediaType MediaType => AVMediaType.AVMEDIA_TYPE_VIDEO;
+
+    public override string WantedCodecName => Container.Options.AudioForcedCodecName;
+
+    protected override FrameQueue CreateFrameQueue() => new(Packets, Constants.VideoFrameQueueCapacity, true);
+
+    protected override void DecodingThreadMethod()
+    {
+        int resultCode;
+        var frameRate = Container.Input.GuessFrameRate(Stream);
+
+        var decodedFrame = new FFFrame();
+        var lastWidth = 0;
+        var lastHeight = 0;
+        var lastFormat = -2;
+        var lastGroupIndex = -1;
+        var lastFilterIndex = 0;
+
+        while (true)
         {
-            // placeholder
-        }
+            resultCode = DecodeFrame(decodedFrame);
 
-        public int CurrentFilterIndex { get; set; }
+            if (resultCode < 0)
+                break;
 
-        public int DroppedFrameCount { get; private set; }
+            if (resultCode == 0)
+                continue;
 
-        public RescalerContext ConvertContext { get; } = new();
+            var isReconfigNeeded = lastWidth != decodedFrame.Width || lastHeight != decodedFrame.Height || lastFormat != (int)decodedFrame.PixelFormat ||
+                lastGroupIndex != PacketGroupIndex || lastFilterIndex != CurrentFilterIndex;
 
-        public override AVMediaType MediaType => AVMediaType.AVMEDIA_TYPE_VIDEO;
-
-        public override string WantedCodecName => Container.Options.AudioForcedCodecName;
-
-        protected override FrameQueue CreateFrameQueue() => new(Packets, Constants.VideoFrameQueueCapacity, true);
-
-        protected override void DecodingThreadMethod()
-        {
-            int resultCode;
-            var frameRate = Container.Input.GuessFrameRate(Stream);
-
-            var decodedFrame = new FFFrame();
-            var lastWidth = 0;
-            var lastHeight = 0;
-            var lastFormat = -2;
-            var lastGroupIndex = -1;
-            var lastFilterIndex = 0;
-
-            while (true)
+            if (isReconfigNeeded)
             {
-                resultCode = DecodeFrame(decodedFrame);
+                var lastFormatName = ffmpeg.av_get_pix_fmt_name((AVPixelFormat)lastFormat) ?? "none";
+                var frameFormatName = ffmpeg.av_get_pix_fmt_name(decodedFrame.PixelFormat) ?? "none";
 
-                if (resultCode < 0)
-                    break;
+                ($"Video frame changed from size:{lastWidth}x%{lastHeight} format:{lastFormatName} serial:{lastGroupIndex} to " +
+                $"size:{decodedFrame.Width}x{decodedFrame.Height} format:{frameFormatName} serial:{PacketGroupIndex}.")
+                .LogDebug();
 
-                if (resultCode == 0)
-                    continue;
+                ReallocateFilterGraph();
 
-                var isReconfigNeeded = lastWidth != decodedFrame.Width || lastHeight != decodedFrame.Height || lastFormat != (int)decodedFrame.PixelFormat ||
-                    lastGroupIndex != PacketGroupIndex || lastFilterIndex != CurrentFilterIndex;
+                var filterLiteral = Container.Options.VideoFilterGraphs.Count > 0
+                    ? Container.Options.VideoFilterGraphs[CurrentFilterIndex]
+                    : null;
 
-                if (isReconfigNeeded)
+                try
                 {
-                    var lastFormatName = ffmpeg.av_get_pix_fmt_name((AVPixelFormat)lastFormat) ?? "none";
-                    var frameFormatName = ffmpeg.av_get_pix_fmt_name(decodedFrame.PixelFormat) ?? "none";
-
-                    ($"Video frame changed from size:{lastWidth}x%{lastHeight} format:{lastFormatName} serial:{lastGroupIndex} to " +
-                    $"size:{decodedFrame.Width}x{decodedFrame.Height} format:{frameFormatName} serial:{PacketGroupIndex}.")
-                    .LogDebug();
-
-                    ReallocateFilterGraph();
-
-                    var filterLiteral = Container.Options.VideoFilterGraphs.Count > 0
-                        ? Container.Options.VideoFilterGraphs[CurrentFilterIndex]
-                        : null;
-
-                    try
-                    {
-                        ConfigureFilters(filterLiteral, decodedFrame);
-                    }
-                    catch
-                    {
-                        var evt = new SDL.SDL_Event() { type = (SDL.SDL_EventType)Constants.FF_QUIT_EVENT, };
-                        _ = SDL.SDL_PushEvent(ref evt);
-                        break;
-                    }
-
-                    lastWidth = decodedFrame.Width;
-                    lastHeight = decodedFrame.Height;
-                    lastFormat = (int)decodedFrame.PixelFormat;
-                    lastGroupIndex = PacketGroupIndex;
-                    lastFilterIndex = CurrentFilterIndex;
-                    frameRate = OutputFilter.FrameRate;
+                    ConfigureFilters(filterLiteral, decodedFrame);
+                }
+                catch
+                {
+                    var evt = new SDL.SDL_Event() { type = (SDL.SDL_EventType)Constants.FF_QUIT_EVENT, };
+                    _ = SDL.SDL_PushEvent(ref evt);
+                    break;
                 }
 
-                resultCode = EnqueueFilteringFrame(decodedFrame);
+                lastWidth = decodedFrame.Width;
+                lastHeight = decodedFrame.Height;
+                lastFormat = (int)decodedFrame.PixelFormat;
+                lastGroupIndex = PacketGroupIndex;
+                lastFilterIndex = CurrentFilterIndex;
+                frameRate = OutputFilter.FrameRate;
+            }
+
+            resultCode = EnqueueFilteringFrame(decodedFrame);
+            if (resultCode < 0)
+                break;
+
+            while (resultCode >= 0)
+            {
+                var preFilteringTime = Clock.SystemTime;
+                resultCode = DequeueFilteringFrame(decodedFrame);
+
                 if (resultCode < 0)
-                    break;
-
-                while (resultCode >= 0)
                 {
-                    var preFilteringTime = Clock.SystemTime;
-                    resultCode = DequeueFilteringFrame(decodedFrame);
+                    if (resultCode == ffmpeg.AVERROR_EOF)
+                        FinalPacketGroupIndex = PacketGroupIndex;
 
-                    if (resultCode < 0)
-                    {
-                        if (resultCode == ffmpeg.AVERROR_EOF)
-                            FinalPacketGroupIndex = PacketGroupIndex;
-
-                        resultCode = 0;
-                        break;
-                    }
-
-                    FilterDelay = Clock.SystemTime - preFilteringTime;
-                    if (Math.Abs(FilterDelay) > Constants.AV_NOSYNC_THRESHOLD / 10.0)
-                        FilterDelay = 0;
-
-                    var duration = (frameRate.num != 0 && frameRate.den != 0
-                        ? ffmpeg.av_make_q(frameRate.den, frameRate.num).ToFactor()
-                        : 0);
-
-                    var frameTime = decodedFrame.Pts.IsValidPts()
-                        ? decodedFrame.Pts * OutputFilterTimeBase.ToFactor()
-                        : double.NaN;
-
-                    resultCode = EnqueueFrame(decodedFrame, frameTime, duration, PacketGroupIndex);
-                    decodedFrame.Reset();
-
-                    if (Packets.GroupIndex != PacketGroupIndex)
-                        break;
+                    resultCode = 0;
+                    break;
                 }
 
-                if (resultCode < 0)
+                FilterDelay = Clock.SystemTime - preFilteringTime;
+                if (Math.Abs(FilterDelay) > Constants.AV_NOSYNC_THRESHOLD / 10.0)
+                    FilterDelay = 0;
+
+                var duration = (frameRate.num != 0 && frameRate.den != 0
+                    ? ffmpeg.av_make_q(frameRate.den, frameRate.num).ToFactor()
+                    : 0);
+
+                var frameTime = decodedFrame.Pts.IsValidPts()
+                    ? decodedFrame.Pts * OutputFilterTimeBase.ToFactor()
+                    : double.NaN;
+
+                resultCode = EnqueueFrame(decodedFrame, frameTime, duration, PacketGroupIndex);
+                decodedFrame.Reset();
+
+                if (Packets.GroupIndex != PacketGroupIndex)
                     break;
             }
 
-            ReleaseFilterGraph();
-            decodedFrame?.Release();
-            return; // 0;
+            if (resultCode < 0)
+                break;
         }
 
-        private int EnqueueFrame(FFFrame sourceFrame, double frameTime, double duration, int groupIndex)
-        {
-            var queuedFrame = Frames.PeekWriteable();
+        ReleaseFilterGraph();
+        decodedFrame?.Release();
+        return; // 0;
+    }
 
-            if (queuedFrame == null)
-                return -1;
+    private int EnqueueFrame(FFFrame sourceFrame, double frameTime, double duration, int groupIndex)
+    {
+        var queuedFrame = Frames.PeekWriteable();
 
-            queuedFrame.Update(sourceFrame, groupIndex, frameTime, duration);
-            Frames.Enqueue();
+        if (queuedFrame == null)
+            return -1;
 
-            Container.Renderer.Video.SetDefaultWindowSize(
-                queuedFrame.Width, queuedFrame.Height, queuedFrame.Frame.SampleAspectRatio);
+        queuedFrame.Update(sourceFrame, groupIndex, frameTime, duration);
+        Frames.Enqueue();
 
+        Container.Renderer.Video.SetDefaultWindowSize(
+            queuedFrame.Width, queuedFrame.Height, queuedFrame.Frame.SampleAspectRatio);
+
+        return 0;
+    }
+
+    private int DecodeFrame(FFFrame frame)
+    {
+        var gotPicture = DecodeFrame(frame, null);
+
+        if (gotPicture < 0)
+            return -1;
+
+        if (gotPicture == 0)
             return 0;
-        }
 
-        private int DecodeFrame(FFFrame frame)
+        frame.SampleAspectRatio = Container.Input.GuessAspectRatio(Stream, frame);
+
+        if (Container.Options.IsFrameDropEnabled > 0 || (Container.Options.IsFrameDropEnabled != 0 && Container.MasterSyncMode != ClockSource.Video))
         {
-            var gotPicture = DecodeFrame(frame, null);
-
-            if (gotPicture < 0)
-                return -1;
-
-            if (gotPicture == 0)
-                return 0;
-
-            frame.SampleAspectRatio = Container.Input.GuessAspectRatio(Stream, frame);
-
-            if (Container.Options.IsFrameDropEnabled > 0 || (Container.Options.IsFrameDropEnabled != 0 && Container.MasterSyncMode != ClockSource.Video))
+            if (frame.Pts.IsValidPts())
             {
-                if (frame.Pts.IsValidPts())
-                {
-                    var frameTime = Stream.TimeBase.ToFactor() * frame.Pts;
-                    var frameDelay = frameTime - Container.MasterTime;
+                var frameTime = Stream.TimeBase.ToFactor() * frame.Pts;
+                var frameDelay = frameTime - Container.MasterTime;
 
-                    if (!frameDelay.IsNaN() && Math.Abs(frameDelay) < Constants.AV_NOSYNC_THRESHOLD &&
-                        frameDelay - FilterDelay < 0 &&
-                        PacketGroupIndex == Container.VideoClock.GroupIndex &&
-                        Packets.Count != 0)
-                    {
-                        DroppedFrameCount++;
-                        frame.Reset();
-                        gotPicture = 0;
-                    }
+                if (!frameDelay.IsNaN() && Math.Abs(frameDelay) < Constants.AV_NOSYNC_THRESHOLD &&
+                    frameDelay - FilterDelay < 0 &&
+                    PacketGroupIndex == Container.VideoClock.GroupIndex &&
+                    Packets.Count != 0)
+                {
+                    DroppedFrameCount++;
+                    frame.Reset();
+                    gotPicture = 0;
                 }
             }
-
-            return gotPicture;
         }
 
-        /// <summary>
-        /// Port of the INSERT_FILT macro.
-        /// this macro adds a filter before the lastly added filter, so the 
-        /// processing order of the filters is in reverse
-        /// </summary>
-        /// <param name="filterName"></param>
-        /// <param name="filterArgs"></param>
-        /// <param name="lastFilter"></param>
-        /// <returns></returns>
-        private unsafe FFFilterContext InsertFilter(
-            string filterName, string filterArgs, FFFilterContext lastFilter)
+        return gotPicture;
+    }
+
+    /// <summary>
+    /// Port of the INSERT_FILT macro.
+    /// this macro adds a filter before the lastly added filter, so the 
+    /// processing order of the filters is in reverse
+    /// </summary>
+    /// <param name="filterName"></param>
+    /// <param name="filterArgs"></param>
+    /// <param name="lastFilter"></param>
+    /// <returns></returns>
+    private unsafe FFFilterContext InsertFilter(
+        string filterName, string filterArgs, FFFilterContext lastFilter)
+    {
+        var insertedFilter = FFFilterContext.Create(
+            FilterGraph, FFFilter.FromName(filterName), $"ff_{filterName}", filterArgs);
+
+        FFFilterContext.Link(insertedFilter, lastFilter);
+
+        return insertedFilter;
+    }
+
+    private void ConfigureFilters(string filterGraphLiteral, FFFrame decoderFrame)
+    {
+        var codecParameters = Stream.CodecParameters;
+        var frameRate = Container.Input.GuessFrameRate(Stream);
+        var outputPixelFormats = Container.Renderer.Video.RetrieveSupportedPixelFormats().Cast<int>();
+        var softwareScalerFlags = string.Empty;
+
+        foreach (var kvp in Container.Options.ScalerOptions)
         {
-            var insertedFilter = FFFilterContext.Create(
-                FilterGraph, FFFilter.FromName(filterName), $"ff_{filterName}", filterArgs);
-
-            FFFilterContext.Link(insertedFilter, lastFilter);
-
-            return insertedFilter;
+            softwareScalerFlags = (kvp.Key == "sws_flags")
+                ? $"flags={kvp.Value}:{softwareScalerFlags}"
+                : $"{kvp.Key}={kvp.Value}:{softwareScalerFlags}";
         }
 
-        private void ConfigureFilters(string filterGraphLiteral, FFFrame decoderFrame)
+        if (string.IsNullOrWhiteSpace(softwareScalerFlags))
+            softwareScalerFlags = null;
+
+        FilterGraph.SoftwareScalerOptions = softwareScalerFlags;
+
+        var sourceFilterArguments =
+            $"video_size={decoderFrame.Width}x{decoderFrame.Height}" +
+            $":pix_fmt={(int)decoderFrame.PixelFormat}" +
+            $":time_base={Stream.TimeBase.num}/{Stream.TimeBase.den}" +
+            $":pixel_aspect={codecParameters.SampleAspectRatio.num}/{Math.Max(codecParameters.SampleAspectRatio.den, 1)}";
+
+        if (frameRate.num != 0 && frameRate.den != 0)
+            sourceFilterArguments = $"{sourceFilterArguments}:frame_rate={frameRate.num}/{frameRate.den}";
+
+        var sourceFilter = FFFilterContext.Create(
+            FilterGraph, FFFilter.FromName("buffer"), "videoSourceBuffer", sourceFilterArguments);
+
+        var outputFilter = FFFilterContext.Create(
+            FilterGraph, FFFilter.FromName("buffersink"), "videoSinkBuffer", null);
+
+        outputFilter.SetOptionList("pix_fmts", outputPixelFormats.ToArray());
+
+        var lastFilter = outputFilter;
+        if (Container.Options.IsAutorotateEnabled)
         {
-            var codecParameters = Stream.CodecParameters;
-            var frameRate = Container.Input.GuessFrameRate(Stream);
-            var outputPixelFormats = Container.Renderer.Video.RetrieveSupportedPixelFormats().Cast<int>();
-            var softwareScalerFlags = string.Empty;
+            var theta = Stream.ComputeDisplayRotation();
 
-            foreach (var kvp in Container.Options.ScalerOptions)
+            if (Math.Abs(theta - 90) < 1.0)
             {
-                softwareScalerFlags = (kvp.Key == "sws_flags")
-                    ? $"flags={kvp.Value}:{softwareScalerFlags}"
-                    : $"{kvp.Key}={kvp.Value}:{softwareScalerFlags}";
+                lastFilter = InsertFilter("transpose", "clock", lastFilter);
             }
-
-            if (string.IsNullOrWhiteSpace(softwareScalerFlags))
-                softwareScalerFlags = null;
-
-            FilterGraph.SoftwareScalerOptions = softwareScalerFlags;
-
-            var sourceFilterArguments =
-                $"video_size={decoderFrame.Width}x{decoderFrame.Height}" +
-                $":pix_fmt={(int)decoderFrame.PixelFormat}" +
-                $":time_base={Stream.TimeBase.num}/{Stream.TimeBase.den}" +
-                $":pixel_aspect={codecParameters.SampleAspectRatio.num}/{Math.Max(codecParameters.SampleAspectRatio.den, 1)}";
-
-            if (frameRate.num != 0 && frameRate.den != 0)
-                sourceFilterArguments = $"{sourceFilterArguments}:frame_rate={frameRate.num}/{frameRate.den}";
-
-            var sourceFilter = FFFilterContext.Create(
-                FilterGraph, FFFilter.FromName("buffer"), "videoSourceBuffer", sourceFilterArguments);
-
-            var outputFilter = FFFilterContext.Create(
-                FilterGraph, FFFilter.FromName("buffersink"), "videoSinkBuffer", null);
-
-            outputFilter.SetOptionList("pix_fmts", outputPixelFormats.ToArray());
-
-            var lastFilter = outputFilter;
-            if (Container.Options.IsAutorotateEnabled)
+            else if (Math.Abs(theta - 180) < 1.0)
             {
-                var theta = Stream.ComputeDisplayRotation();
-
-                if (Math.Abs(theta - 90) < 1.0)
-                {
-                    lastFilter = InsertFilter("transpose", "clock", lastFilter);
-                }
-                else if (Math.Abs(theta - 180) < 1.0)
-                {
-                    lastFilter = InsertFilter("hflip", null, lastFilter);
-                    lastFilter = InsertFilter("vflip", null, lastFilter);
-                }
-                else if (Math.Abs(theta - 270) < 1.0)
-                {
-                    lastFilter = InsertFilter("transpose", "cclock", lastFilter);
-                }
-                else if (Math.Abs(theta) > 1.0)
-                {
-                    lastFilter = InsertFilter("rotate", $"{theta}*PI/180", lastFilter);
-                }
+                lastFilter = InsertFilter("hflip", null, lastFilter);
+                lastFilter = InsertFilter("vflip", null, lastFilter);
             }
-
-            MaterializeFilterGraph(filterGraphLiteral, sourceFilter, lastFilter);
-            InputFilter = sourceFilter;
-            OutputFilter = outputFilter;
+            else if (Math.Abs(theta - 270) < 1.0)
+            {
+                lastFilter = InsertFilter("transpose", "cclock", lastFilter);
+            }
+            else if (Math.Abs(theta) > 1.0)
+            {
+                lastFilter = InsertFilter("rotate", $"{theta}*PI/180", lastFilter);
+            }
         }
+
+        MaterializeFilterGraph(filterGraphLiteral, sourceFilter, lastFilter);
+        InputFilter = sourceFilter;
+        OutputFilter = outputFilter;
     }
 }

@@ -1,9 +1,8 @@
-﻿namespace Unosquare.FFplaySharp.Primitives
+﻿namespace Unosquare.FFplaySharp.Primitives;
+
+public enum ShowMode
 {
-    public enum ShowMode
-    {
-        None = -1,
-        Video = 0,
-        Last
-    }
+    None = -1,
+    Video = 0,
+    Last
 }

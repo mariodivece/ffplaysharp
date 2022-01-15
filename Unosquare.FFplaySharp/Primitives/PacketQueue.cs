@@ -1,180 +1,174 @@
-﻿namespace Unosquare.FFplaySharp.Primitives
+﻿namespace Unosquare.FFplaySharp.Primitives;
+
+public sealed class PacketQueue : ISerialGroupable, IDisposable
 {
-    using FFmpeg;
-    using System;
-    using System.Threading;
-    using Unosquare.FFplaySharp.Components;
+    private readonly object SyncLock = new();
+    private readonly AutoResetEvent IsAvailableEvent = new(false);
+    private bool m_IsClosed = true; // starts in a blocked state
+    private FFPacket First;
+    private FFPacket Last;
 
-    public sealed class PacketQueue : ISerialGroupable, IDisposable
+    private int m_Count;
+    private int m_ByteSize;
+    private long m_DurationUnits;
+    private int m_GroupIndex;
+
+    public PacketQueue(MediaComponent component)
     {
-        private readonly object SyncLock = new();
-        private readonly AutoResetEvent IsAvailableEvent = new(false);
-        private bool m_IsClosed = true; // starts in a blocked state
-        private FFPacket First;
-        private FFPacket Last;
+        Component = component;
+    }
 
-        private int m_Count;
-        private int m_ByteSize;
-        private long m_DurationUnits;
-        private int m_GroupIndex;
+    public MediaComponent Component { get; }
 
-        public PacketQueue(MediaComponent component)
+    public int Count
+    {
+        get { lock (SyncLock) return m_Count; }
+        private set { lock (SyncLock) m_Count = value; }
+    }
+
+    public int ByteSize
+    {
+        get { lock (SyncLock) return m_ByteSize; }
+        private set { lock (SyncLock) m_ByteSize = value; }
+    }
+
+    /// <summary>
+    /// Gets the packet queue duration in stream time base units.
+    /// </summary>
+    public long DurationUnits
+    {
+        get { lock (SyncLock) return m_DurationUnits; }
+        private set { lock (SyncLock) m_DurationUnits = value; }
+    }
+
+    /// <summary>
+    /// The serial is the group (serial) the packet queue belongs to.
+    /// </summary>
+    public int GroupIndex
+    {
+        get { lock (SyncLock) return m_GroupIndex; }
+        private set { lock (SyncLock) m_GroupIndex = value; }
+    }
+
+    public bool IsClosed
+    {
+        get { lock (SyncLock) return m_IsClosed; }
+    }
+
+    public void Open()
+    {
+        lock (SyncLock)
         {
-            Component = component;
+            m_IsClosed = false;
+            EnqueueFlush();
         }
+    }
 
-        public MediaComponent Component { get; }
-
-        public int Count
+    public bool Enqueue(FFPacket packet)
+    {
+        var result = true;
+        lock (SyncLock)
         {
-            get { lock (SyncLock) return m_Count; }
-            private set { lock (SyncLock) m_Count = value; }
-        }
+            packet.Next = null;
 
-        public int ByteSize
-        {
-            get { lock (SyncLock) return m_ByteSize; }
-            private set { lock (SyncLock) m_ByteSize = value; }
-        }
-
-        /// <summary>
-        /// Gets the packet queue duration in stream time base units.
-        /// </summary>
-        public long DurationUnits
-        {
-            get { lock (SyncLock) return m_DurationUnits; }
-            private set { lock (SyncLock) m_DurationUnits = value; }
-        }
-
-        /// <summary>
-        /// The serial is the group (serial) the packet queue belongs to.
-        /// </summary>
-        public int GroupIndex
-        {
-            get { lock (SyncLock) return m_GroupIndex; }
-            private set { lock (SyncLock) m_GroupIndex = value; }
-        }
-
-        public bool IsClosed
-        {
-            get { lock (SyncLock) return m_IsClosed; }
-        }
-
-        public void Open()
-        {
-            lock (SyncLock)
+            if (m_IsClosed)
             {
-                m_IsClosed = false;
-                EnqueueFlush();
+                result = false;
             }
-        }
-
-        public bool Enqueue(FFPacket packet)
-        {
-            var result = true;
-            lock (SyncLock)
+            else
             {
-                packet.Next = null;
+                if (packet.IsFlushPacket)
+                    GroupIndex++;
 
-                if (m_IsClosed)
-                {
-                    result = false;
-                }
+                packet.GroupIndex = GroupIndex;
+
+                if (Last == null)
+                    First = packet;
                 else
+                    Last.Next = packet;
+
+                Last = packet;
+                Count++;
+                ByteSize += packet.Size + FFPacket.StructureSize;
+                DurationUnits += packet.DurationUnits;
+                IsAvailableEvent.Set();
+            }
+
+            if (!result)
+                packet.Release();
+        }
+
+        return result;
+    }
+
+    public bool EnqueueFlush() =>
+        Enqueue(FFPacket.CreateFlushPacket());
+
+    public bool EnqueueNull() =>
+        Enqueue(FFPacket.CreateNullPacket(Component.StreamIndex));
+
+    public FFPacket Dequeue(bool blockWait)
+    {
+        while (true)
+        {
+            if (IsClosed)
+                return null;
+
+            lock (SyncLock)
+            {
+                var item = First;
+                if (item != null)
                 {
-                    if (packet.IsFlushPacket)
-                        GroupIndex++;
+                    First = item.Next;
+                    if (First == null)
+                        Last = null;
 
-                    packet.GroupIndex = GroupIndex;
-
-                    if (Last == null)
-                        First = packet;
-                    else
-                        Last.Next = packet;
-
-                    Last = packet;
-                    Count++;
-                    ByteSize += packet.Size + FFPacket.StructureSize;
-                    DurationUnits += packet.DurationUnits;
-                    IsAvailableEvent.Set();
+                    Count--;
+                    ByteSize -= item.Size + FFPacket.StructureSize;
+                    DurationUnits -= item.DurationUnits;
+                    return item;
                 }
-
-                if (!result)
-                    packet.Release();
             }
 
-            return result;
+            if (!blockWait)
+                return null;
+            else
+                IsAvailableEvent.WaitOne();
         }
+    }
 
-        public bool EnqueueFlush() =>
-            Enqueue(FFPacket.CreateFlushPacket());
-
-        public bool EnqueueNull() =>
-            Enqueue(FFPacket.CreateNullPacket(Component.StreamIndex));
-
-        public FFPacket Dequeue(bool blockWait)
+    public void Clear()
+    {
+        lock (SyncLock)
         {
-            while (true)
-            {
-                if (IsClosed)
-                    return null;
+            for (var currentPacket = First; currentPacket != null; currentPacket = currentPacket?.Next)
+                currentPacket?.Release();
 
-                lock (SyncLock)
-                {
-                    var item = First;
-                    if (item != null)
-                    {
-                        First = item.Next;
-                        if (First == null)
-                            Last = null;
-
-                        Count--;
-                        ByteSize -= item.Size + FFPacket.StructureSize;
-                        DurationUnits -= item.DurationUnits;
-                        return item;
-                    }
-                }
-
-                if (!blockWait)
-                    return null;
-                else
-                    IsAvailableEvent.WaitOne();
-            }
+            Last = null;
+            First = null;
+            Count = 0;
+            ByteSize = 0;
+            DurationUnits = 0;
         }
+    }
 
-        public void Clear()
+    public void Close()
+    {
+        lock (SyncLock)
+            m_IsClosed = true;
+
+        IsAvailableEvent.Set();
+    }
+
+    public void Dispose()
+    {
+        lock (SyncLock)
         {
-            lock (SyncLock)
-            {
-                for (var currentPacket = First; currentPacket != null; currentPacket = currentPacket?.Next)
-                    currentPacket?.Release();
-
-                Last = null;
-                First = null;
-                Count = 0;
-                ByteSize = 0;
-                DurationUnits = 0;
-            }
+            Close();
+            Clear();
         }
 
-        public void Close()
-        {
-            lock (SyncLock)
-                m_IsClosed = true;
-
-            IsAvailableEvent.Set();
-        }
-
-        public void Dispose()
-        {
-            lock (SyncLock)
-            {
-                Close();
-                Clear();
-            }
-
-            IsAvailableEvent.Set();
-            IsAvailableEvent.Dispose();
-        }
+        IsAvailableEvent.Set();
+        IsAvailableEvent.Dispose();
     }
 }

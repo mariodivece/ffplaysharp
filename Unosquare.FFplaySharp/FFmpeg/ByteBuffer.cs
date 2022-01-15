@@ -1,43 +1,37 @@
-﻿namespace FFmpeg
+﻿namespace FFmpeg;
+
+public unsafe sealed class ByteBuffer : UnmanagedCountedReference<byte>
 {
-    using FFmpeg.AutoGen;
-    using System;
-    using System.Runtime.CompilerServices;
-    using Unosquare.FFplaySharp.Primitives;
-
-    public unsafe sealed class ByteBuffer : UnmanagedCountedReference<byte>
+    public ByteBuffer(ulong length, [CallerFilePath] string filePath = default, [CallerLineNumber] int lineNumber = default)
+        : base(filePath, lineNumber)
     {
-        public ByteBuffer(ulong length, [CallerFilePath] string filePath = default, [CallerLineNumber] int lineNumber = default)
-            : base(filePath, lineNumber)
+        var pointer = (byte*)ffmpeg.av_mallocz(length);
+        Update(pointer);
+        Length = length;
+    }
+
+    public ulong Length { get; private set; }
+
+    public static ByteBuffer Reallocate(ByteBuffer original, ulong length)
+    {
+        if (original == null || original.Length < length)
         {
-            var pointer = (byte*)ffmpeg.av_mallocz(length);
-            Update(pointer);
-            Length = length;
+            original?.Release();
+            return new(length);
         }
 
-        public ulong Length { get; private set; }
+        return original;
+    }
 
-        public static ByteBuffer Reallocate(ByteBuffer original, ulong length)
-        {
-            if (original == null || original.Length < length)
-            {
-                original?.Release();
-                return new(length);
-            }
+    public void Write(byte* source, int length)
+    {
+        var maxLength = Math.Min(Convert.ToInt32(Length), length);
+        Buffer.MemoryCopy(source, Pointer, maxLength, maxLength);
+    }
 
-            return original;
-        }
-
-        public void Write(byte* source, int length)
-        {
-            var maxLength = Math.Min(Convert.ToInt32(Length), length);
-            Buffer.MemoryCopy(source, Pointer, maxLength, maxLength);
-        }
-
-        protected override void ReleaseInternal(byte* pointer)
-        {
-            ffmpeg.av_free(pointer);
-            Length = 0;
-        }
+    protected override void ReleaseInternal(byte* pointer)
+    {
+        ffmpeg.av_free(pointer);
+        Length = 0;
     }
 }

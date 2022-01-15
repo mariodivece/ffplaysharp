@@ -234,10 +234,10 @@
                 {
                     filteredOptions[optionName] = t.Value;
                 }
-                else if (prefix.Length > 0 && optionName.Length > 1 && optionName.StartsWith(prefix) &&
-                    FFMediaClass.Codec.HasOption(optionName.Substring(1), optionFlags))
+                else if (prefix.Length > 0 && optionName.Length > 1 && optionName.StartsWith(prefix, StringComparison.Ordinal) &&
+                    FFMediaClass.Codec.HasOption(optionName[1..], optionFlags))
                 {
-                    filteredOptions[optionName.Substring(1)] = t.Value;
+                    filteredOptions[optionName[1..]] = t.Value;
                 }
             }
 
