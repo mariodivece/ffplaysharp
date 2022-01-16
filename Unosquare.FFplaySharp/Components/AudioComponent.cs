@@ -249,7 +249,7 @@ public unsafe sealed class AudioComponent : FilteringMediaComponent, ISerialGrou
 
         var clockDelay = Container.AudioClock.Value - Container.MasterTime;
 
-        if (!clockDelay.IsNaN() && Math.Abs(clockDelay) < Constants.AV_NOSYNC_THRESHOLD)
+        if (!clockDelay.IsNaN() && Math.Abs(clockDelay) < Constants.MediaNoSyncThreshold)
         {
             SyncDiffTotalDelay = clockDelay + (SyncDiffAverageCoffiecient * SyncDiffTotalDelay);
             if (SyncDiffAverageCount < Constants.AUDIO_DIFF_AVG_NB)
@@ -265,8 +265,8 @@ public unsafe sealed class AudioComponent : FilteringMediaComponent, ISerialGrou
                 if (Math.Abs(syncDiffDelay) >= SyncDiffDelayThreshold)
                 {
                     wantedSampleCount = sampleCount + (int)(clockDelay * StreamSpec.SampleRate);
-                    var minSampleCount = (int)(sampleCount * (100 - Constants.SAMPLE_CORRECTION_PERCENT_MAX) / 100);
-                    var maxSampleCount = (int)(sampleCount * (100 + Constants.SAMPLE_CORRECTION_PERCENT_MAX) / 100);
+                    var minSampleCount = (int)(sampleCount * (100 - Constants.SampleCorrectionPercentMax) / 100);
+                    var maxSampleCount = (int)(sampleCount * (100 + Constants.SampleCorrectionPercentMax) / 100);
                     wantedSampleCount = wantedSampleCount.Clamp(minSampleCount, maxSampleCount);
                 }
 

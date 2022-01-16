@@ -58,11 +58,8 @@ public unsafe class SdlAudioRenderer : IAudioRenderer
 
         const string ChannelCountEnvVariable = "SDL_AUDIO_CHANNELS";
         var env = Environment.GetEnvironmentVariable(ChannelCountEnvVariable);
-        if (!string.IsNullOrWhiteSpace(env))
-        {
-            wantedChannelCount = int.Parse(env);
+        if (!string.IsNullOrWhiteSpace(env) && int.TryParse(env, out wantedChannelCount))
             wantedChannelLayout = AudioParams.DefaultChannelLayoutFor(wantedChannelCount);
-        }
 
         if (wantedChannelLayout == 0 || wantedChannelCount != AudioParams.ChannelCountFor(wantedChannelLayout))
         {
@@ -89,7 +86,7 @@ public unsafe class SdlAudioRenderer : IAudioRenderer
 
         wantedSpec.format = SDL.AUDIO_S16SYS;
         wantedSpec.silence = 0;
-        wantedSpec.samples = (ushort)Math.Max(Constants.SDL_AUDIO_MIN_BUFFER_SIZE, 2 << ffmpeg.av_log2((uint)(wantedSpec.freq / Constants.SDL_AUDIO_MAX_CALLBACKS_PER_SEC)));
+        wantedSpec.samples = (ushort)Math.Max(Constants.SdlAudioMinBufferSize, 2 << ffmpeg.av_log2((uint)(wantedSpec.freq / Constants.SdlAudioMaxCallbacksPerSec)));
         wantedSpec.callback = AudioCallback;
         // wanted_spec.userdata = GCHandle.ToIntPtr(VideoStateHandle);
 
@@ -174,7 +171,7 @@ public unsafe class SdlAudioRenderer : IAudioRenderer
                     // if error, just output silence.
                     ReadBuffer.Update(null);
                     ReadBufferSize = Convert.ToInt32(Container.Audio.HardwareSpec.FrameSize *
-                        (double)Constants.SDL_AUDIO_MIN_BUFFER_SIZE / Container.Audio.HardwareSpec.FrameSize);
+                        (double)Constants.SdlAudioMinBufferSize / Container.Audio.HardwareSpec.FrameSize);
                 }
                 else
                 {

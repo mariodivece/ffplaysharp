@@ -102,7 +102,7 @@ public sealed class VideoComponent : FilteringMediaComponent
                 }
 
                 FilterDelay = Clock.SystemTime - preFilteringTime;
-                if (Math.Abs(FilterDelay) > Constants.AV_NOSYNC_THRESHOLD / 10.0)
+                if (Math.Abs(FilterDelay) > Constants.MediaNoSyncThreshold / 10.0)
                     FilterDelay = 0;
 
                 var duration = (frameRate.num != 0 && frameRate.den != 0
@@ -164,7 +164,7 @@ public sealed class VideoComponent : FilteringMediaComponent
                 var frameTime = Stream.TimeBase.ToFactor() * frame.Pts;
                 var frameDelay = frameTime - Container.MasterTime;
 
-                if (!frameDelay.IsNaN() && Math.Abs(frameDelay) < Constants.AV_NOSYNC_THRESHOLD &&
+                if (!frameDelay.IsNaN() && Math.Abs(frameDelay) < Constants.MediaNoSyncThreshold &&
                     frameDelay - FilterDelay < 0 &&
                     PacketGroupIndex == Container.VideoClock.GroupIndex &&
                     Packets.Count != 0)

@@ -88,7 +88,7 @@ public unsafe class SdlVideoRenderer : IVideoRenderer
             parent.SdlInitFlags |= (uint)SDL.SDL_WindowFlags.SDL_WINDOW_RESIZABLE;
 
         RenderingWindow = SDL.SDL_CreateWindow(
-            Constants.program_name, SDL.SDL_WINDOWPOS_UNDEFINED, SDL.SDL_WINDOWPOS_UNDEFINED, DefaultWidth, DefaultHeight, (SDL.SDL_WindowFlags)parent.SdlInitFlags);
+            Constants.ProgramName, SDL.SDL_WINDOWPOS_UNDEFINED, SDL.SDL_WINDOWPOS_UNDEFINED, DefaultWidth, DefaultHeight, (SDL.SDL_WindowFlags)parent.SdlInitFlags);
 
         SDL.SDL_SetHint(SDL.SDL_HINT_RENDER_SCALE_QUALITY, "best");
 
@@ -111,8 +111,8 @@ public unsafe class SdlVideoRenderer : IVideoRenderer
         if (RenderingWindow.IsNull() || SdlRenderer.IsNull() || SdlRendererInfo.num_texture_formats <= 0)
         {
             var errorMessage = $"Failed to create window or renderer: {SDL.SDL_GetError()}.";
-            (errorMessage).LogFatal();
-            throw new Exception(errorMessage);
+            errorMessage.LogFatal();
+            throw new FFmpegException(ffmpeg.AVERROR_EXIT, errorMessage);
         }
     }
 
@@ -479,7 +479,7 @@ public unsafe class SdlVideoRenderer : IVideoRenderer
                 }
 
                 Container.PictureDisplayTimer += pictureDisplayDuration;
-                if (pictureDisplayDuration > 0 && currentTime - Container.PictureDisplayTimer > Constants.AV_SYNC_THRESHOLD_MAX)
+                if (pictureDisplayDuration > 0 && currentTime - Container.PictureDisplayTimer > Constants.MediaSyncThresholdMax)
                     Container.PictureDisplayTimer = currentTime;
 
                 if (currentPicture.HasValidTime)
@@ -564,22 +564,23 @@ public unsafe class SdlVideoRenderer : IVideoRenderer
                 var audioQueueSize = Container.HasAudio ? Container.Audio.Packets.ByteSize : 0;
                 var videoQueueSize = Container.HasVideo ? Container.Video.Packets.ByteSize : 0;
                 var subtitleQueueSize = Container.HasSubtitles ? Container.Subtitle.Packets.ByteSize : 0;
-
                 var audioVideoDelay = Container.ComponentSyncDelay;
+                var ci = CultureInfo.InvariantCulture;
 
-                var buf = new StringBuilder();
-                buf.Append($"{Container.MasterTime,-8:0.####} | ");
-                buf.Append((Container.HasAudio && Container.HasVideo) ? "A-V" : (Container.HasVideo ? "M-V" : (Container.HasAudio ? "M-A" : "   ")));
-                buf.Append($":{audioVideoDelay,9:0.####} | ");
-                buf.Append($"fd={(Container.Video.DroppedFrameCount + DroppedPictureCount)} | ");
-                buf.Append($"aq={(audioQueueSize / 1024)}KB | ");
-                buf.Append($"vq={(videoQueueSize / 1024)}KB | ");
-                buf.Append($"sq={subtitleQueueSize}B | ");
-                buf.Append($" f={(Container.HasVideo ? Container.Video.CodecContext.FaultyDtsCount : 0)} / ");
-                buf.Append($"{(Container.HasVideo ? Container.Video.CodecContext.FaultyPtsCount : 0)}");
+                var buf = new StringBuilder()
+                    .Append(ci, $"{Container.MasterTime,-8:0.####} | ")
+                    .Append((Container.HasAudio && Container.HasVideo) ? "A-V" : (Container.HasVideo ? "M-V" : (Container.HasAudio ? "M-A" : "   ")))
+                    .Append(ci, $":{audioVideoDelay,9:0.####} | ")
+                    .Append(ci, $"fd={(Container.Video.DroppedFrameCount + DroppedPictureCount)} | ")
+                    .Append(ci, $"aq={(audioQueueSize / 1024)}KB | ")
+                    .Append(ci, $"vq={(videoQueueSize / 1024)}KB | ")
+                    .Append(ci, $"sq={subtitleQueueSize}B | ")
+                    .Append(ci, $" f={(Container.HasVideo ? Container.Video.CodecContext.FaultyDtsCount : 0)} / ")
+                    .Append(ci, $"{(Container.HasVideo ? Container.Video.CodecContext.FaultyPtsCount : 0)}");
 
-                for (var i = buf.Length; i < 90; i++)
-                    buf.Append(' ');
+                var paddingLength = 90 - buf.Length;
+                if (paddingLength > 0)
+                    buf.Append(' ', paddingLength);
 
                 if (Container.Options.ShowStatus == ThreeState.On && FFLog.Level < ffmpeg.AV_LOG_INFO)
                     Console.Write($"{buf}\r");
@@ -675,12 +676,12 @@ public unsafe class SdlVideoRenderer : IVideoRenderer
             /* skip or repeat frame. We take into account the
                delay to compute the threshold. I still don't know
                if it is the best guess */
-            var syncThreshold = Math.Max(Constants.AV_SYNC_THRESHOLD_MIN, Math.Min(Constants.AV_SYNC_THRESHOLD_MAX, pictureDuration));
+            var syncThreshold = Math.Max(Constants.MediaSyncThresholdMin, Math.Min(Constants.MediaSyncThresholdMax, pictureDuration));
             if (!clockDifference.IsNaN() && Math.Abs(clockDifference) < container.MaxPictureDuration)
             {
                 if (clockDifference <= -syncThreshold)
                     pictureDuration = Math.Max(0, pictureDuration + clockDifference);
-                else if (clockDifference >= syncThreshold && pictureDuration > Constants.AV_SYNC_FRAMEDUP_THRESHOLD)
+                else if (clockDifference >= syncThreshold && pictureDuration > Constants.MediaSyncFrameDupThreshold)
                     pictureDuration += clockDifference;
                 else if (clockDifference >= syncThreshold)
                     pictureDuration = 2 * pictureDuration;

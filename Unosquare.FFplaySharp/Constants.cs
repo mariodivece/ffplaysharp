@@ -5,33 +5,72 @@ using SDL2;
 
 public static class Constants
 {
-    public const string program_name = "ffplay";
-    public const int program_birth_year = 2003;
+    public const string ProgramName = "ffplay";
+    public const int ProgramBirthYear = 2003;
 
-    public const int MAX_QUEUE_SIZE = 15 * 1024 * 1024;
+    /// <summary>
+    /// Port of MAX_QUEUE_SIZE
+    /// </summary>
+    public const int MaxQueueSize = 15 * 1024 * 1024;
     public const int MinPacketCount = 25;
-    public const int EXTERNAL_CLOCK_MIN_FRAMES = 2;
-    public const int EXTERNAL_CLOCK_MAX_FRAMES = 10;
 
-    /* Minimum SDL audio buffer size, in samples. */
-    public const int SDL_AUDIO_MIN_BUFFER_SIZE = 512;
-    /* Calculate actual buffer size keeping in mind not cause too frequent audio callbacks */
-    public const int SDL_AUDIO_MAX_CALLBACKS_PER_SEC = 30;
+    /// <summary>
+    /// Port of EXTERNAL_CLOCK_MIN_FRAMES
+    /// </summary>
+    public const int ExternalClockMinFrames = 2;
 
-    /* Step size for volume control in dB */
-    public const double SDL_VOLUME_STEP = 0.75;
+    /// <summary>
+    /// Port of EXTERNAL_CLOCK_MAX_FRAMES
+    /// </summary>
+    public const int ExternalClockMaxFrames = 10;
 
-    /* no AV sync correction is done if below the minimum AV sync threshold */
-    public const double AV_SYNC_THRESHOLD_MIN = 0.04;
-    /* AV sync correction is done if above the maximum AV sync threshold */
-    public const double AV_SYNC_THRESHOLD_MAX = 0.1;
-    /* If a frame duration is longer than this, it will not be duplicated to compensate AV sync */
-    public const double AV_SYNC_FRAMEDUP_THRESHOLD = 0.1;
-    /* no AV correction is done if too big error */
-    public const double AV_NOSYNC_THRESHOLD = 10.0;
+    /// <summary>
+    /// Minimum SDL audio buffer size, in samples.
+    /// Port of SDL_AUDIO_MIN_BUFFER_SIZE
+    /// </summary>
+    public const int SdlAudioMinBufferSize = 512;
 
-    /* maximum audio speed change to get correct sync */
-    public const double SAMPLE_CORRECTION_PERCENT_MAX = 10;
+    /// <summary>
+    /// Calculate actual buffer size keeping in mind not cause too frequent audio callbacks.
+    /// Port of SDL_AUDIO_MAX_CALLBACKS_PER_SEC
+    /// </summary>
+    public const int SdlAudioMaxCallbacksPerSec = 30;
+
+    /// <summary>
+    /// Step size for volume control in dB
+    /// Port of SDL_VOLUME_STEP
+    /// </summary>
+    public const double SdlVolumeStep = 0.75;
+
+    /// <summary>
+    /// No AV sync correction is done if below the minimum AV sync threshold.
+    /// Port of AV_SYNC_THRESHOLD_MIN
+    /// </summary>
+    public const double MediaSyncThresholdMin = 0.04;
+
+    /// <summary>
+    /// AV sync correction is done if above the maximum AV sync threshold.
+    /// Port of AV_SYNC_THRESHOLD_MAX
+    /// </summary>
+    public const double MediaSyncThresholdMax = 0.1;
+
+    /// <summary>
+    /// If a frame duration is longer than this, it will not be duplicated to compensate AV sync.
+    /// Port of AV_SYNC_FRAMEDUP_THRESHOLD
+    /// </summary>
+    public const double MediaSyncFrameDupThreshold = 0.1;
+
+    /// <summary>
+    /// no AV correction is done if too big error.
+    /// Port of AV_NOSYNC_THRESHOLD
+    /// </summary>
+    public const double MediaNoSyncThreshold = 10.0;
+
+    /// <summary>
+    /// maximum audio speed change to get correct sync.
+    /// Port of SAMPLE_CORRECTION_PERCENT_MAX
+    /// </summary>
+    public const double SampleCorrectionPercentMax = 10;
 
     /* external clock speed adjustment constants for realtime sources based on buffer fullness */
     public const double EXTERNAL_CLOCK_SPEED_MIN = 0.900;
@@ -53,7 +92,8 @@ public static class Constants
     public const int USE_ONEPASS_SUBTITLE_RENDER = 1;
 
     /// <summary>
-    /// Port of sws_flags. Represents the 
+    /// Port of sws_flags. Represents the rescaler interpolation flags.
+    /// Bilinear is fine and is faster. Bicubic is higher quality.
     /// </summary>
     public const int RescalerInterpolation = ffmpeg.SWS_BICUBIC;
 
@@ -67,6 +107,7 @@ public static class Constants
 
     public const int SeekMethodUnknownFlags = ffmpeg.AVFMT_NOBINSEARCH | ffmpeg.AVFMT_NOGENSEARCH | ffmpeg.AVFMT_NO_BYTE_SEEK;
 
+#pragma warning disable CA1707 // Identifiers should not contain underscores
     public static readonly AVPixelFormat AV_PIX_FMT_RGB32 = AV_PIX_FMT_NE(AVPixelFormat.AV_PIX_FMT_ARGB, AVPixelFormat.AV_PIX_FMT_BGRA);
     public static readonly AVPixelFormat AV_PIX_FMT_RGB32_1 = AV_PIX_FMT_NE(AVPixelFormat.AV_PIX_FMT_RGBA, AVPixelFormat.AV_PIX_FMT_ABGR);
     public static readonly AVPixelFormat AV_PIX_FMT_BGR32 = AV_PIX_FMT_NE(AVPixelFormat.AV_PIX_FMT_ABGR, AVPixelFormat.AV_PIX_FMT_RGBA);
@@ -82,6 +123,7 @@ public static class Constants
     public static readonly AVPixelFormat AV_PIX_FMT_0BGRLE = AV_PIX_FMT_NE(AVPixelFormat.AV_PIX_FMT_RGB0, AVPixelFormat.AV_PIX_FMT_0BGR);
     public static readonly AVPixelFormat AV_PIX_FMT_0RGBLE = AV_PIX_FMT_NE(AVPixelFormat.AV_PIX_FMT_BGR0, AVPixelFormat.AV_PIX_FMT_0RGB);
 
-    public static AVPixelFormat AV_PIX_FMT_NE(AVPixelFormat be, AVPixelFormat le)
-        => BitConverter.IsLittleEndian ? le : be;
+    public static AVPixelFormat AV_PIX_FMT_NE(AVPixelFormat bigEndian, AVPixelFormat littleEndian)
+        => BitConverter.IsLittleEndian ? littleEndian : bigEndian;
+#pragma warning restore CA1707 // Identifiers should not contain underscores
 }

@@ -105,7 +105,7 @@ public class Clock : ISerialGroupable
     {
         var currentTime = Value;
         var slaveTime = slaveClock.Value;
-        if (!slaveTime.IsNaN() && (currentTime.IsNaN() || Math.Abs(currentTime - slaveTime) > Constants.AV_NOSYNC_THRESHOLD))
+        if (!slaveTime.IsNaN() && (currentTime.IsNaN() || Math.Abs(currentTime - slaveTime) > Constants.MediaNoSyncThreshold))
             Set(slaveTime, slaveClock.GroupIndex);
     }
 }

@@ -60,7 +60,7 @@ public abstract unsafe class UnmanagedReference<T> : IUnmanagedReference<T>
 
     public void Update(IntPtr address) => Address = address;
 
-    public void Update(T* pointer) => Address = new IntPtr(pointer);
+    public void Update(T* pointer) => Address = new(pointer);
 
     public bool Equals(IUnmanagedReference other) => other == this;
 

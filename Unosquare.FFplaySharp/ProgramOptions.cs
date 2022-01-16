@@ -154,9 +154,9 @@ public unsafe class ProgramOptions
 
     public ThreeState IsFastDecodingEnabled { get; set; } = ThreeState.Off;
 
-    public bool GeneratePts { get; set; } = false;
+    public bool GeneratePts { get; set; }
 
-    public int LowResolution { get; set; } = 0;
+    public int LowResolution { get; set; }
 
     public ThreeState IsPtsReorderingEnabled { get; set; } = ThreeState.Auto;
 
@@ -180,7 +180,7 @@ public unsafe class ProgramOptions
 
     public string VideoForcedCodecName { get; set; }
 
-    public List<string> VideoFilterGraphs { get; } = new(32);
+    public IList<string> VideoFilterGraphs { get; } = new List<string>(32);
 
     public string AudioFilterGraphs { get; set; }
 
@@ -188,7 +188,7 @@ public unsafe class ProgramOptions
 
     public bool IsStreamInfoEnabled { get; set; } = true;
 
-    public int FilteringThreadCount { get; set; } = 0;
+    public int FilteringThreadCount { get; set; }
 
     // Internal option dictionaries
     public StringDictionary ScalerOptions { get; } = new();
@@ -221,14 +221,14 @@ public unsafe class ProgramOptions
                     options.InputFileName = "-";
                     continue;
                 }
-                else if (!argumentName.StartsWith("-"))
+                else if (!argumentName.StartsWith('-'))
                 {
                     options.InputFileName = argumentName;
                     continue;
                 }
             }
 
-            if (argumentName.StartsWith("-"))
+            if (argumentName.StartsWith('-'))
                 argumentName = argumentName.TrimStart('-').ToLowerInvariant();
             else
                 continue;
@@ -250,7 +250,7 @@ public unsafe class ProgramOptions
                 continue;
             }
 
-            if (definition.Flags.HasFlag(OptionFlags.HAS_ARG))
+            if (definition.Flags.HasFlag(OptionUsage.NoParameters))
             {
                 argumentValue = nextItem;
                 i++;
@@ -265,17 +265,17 @@ public unsafe class ProgramOptions
         return options;
     }
 
-    private static OptionDef<ProgramOptions> Option(string name, OptionFlags flags, string help, string argName, Action<ProgramOptions, string> apply)
+    private static OptionDef<ProgramOptions> Option(string name, OptionUsage flags, string help, string argName, Action<ProgramOptions, string> apply)
         => new(name, flags, apply, help, argName);
 
     private static OptionDef<ProgramOptions> Option(string name, bool hasArgument, string help, string argName, Action<ProgramOptions, string> apply)
-        => new(name, hasArgument ? OptionFlags.HAS_ARG : OptionFlags.OPT_BOOL, apply, help, argName);
+        => new(name, hasArgument ? OptionUsage.NoParameters : OptionUsage.IsBoolean, apply, help, argName);
 
-    private static OptionDef<ProgramOptions> Option(string name, OptionFlags flags, string help, Action<ProgramOptions, string> apply)
+    private static OptionDef<ProgramOptions> Option(string name, OptionUsage flags, string help, Action<ProgramOptions, string> apply)
         => new(name, flags, apply, help);
 
     private static OptionDef<ProgramOptions> Option(string name, bool hasArgument, string help, Action<ProgramOptions, string> apply)
-        => new(name, hasArgument ? OptionFlags.HAS_ARG : OptionFlags.OPT_BOOL, apply, help);
+        => new(name, hasArgument ? OptionUsage.NoParameters : OptionUsage.IsBoolean, apply, help);
 
     /// <summary>
     /// Port of opt_default

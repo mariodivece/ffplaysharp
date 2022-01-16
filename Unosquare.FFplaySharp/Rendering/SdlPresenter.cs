@@ -7,7 +7,7 @@ public unsafe class SdlPresenter : IPresenter
 {
     private double LastMouseLeftClick;
     private double LastCursorShownTime;
-    private bool IsCursorHidden = false;
+    private bool IsCursorHidden;
 
     public IVideoRenderer Video { get; private set; }
 
@@ -89,11 +89,11 @@ public unsafe class SdlPresenter : IPresenter
                             break;
                         case SDL.SDL_Keycode.SDLK_KP_MULTIPLY:
                         case SDL.SDL_Keycode.SDLK_0:
-                            Audio.UpdateVolume(1, Constants.SDL_VOLUME_STEP);
+                            Audio.UpdateVolume(1, Constants.SdlVolumeStep);
                             break;
                         case SDL.SDL_Keycode.SDLK_KP_DIVIDE:
                         case SDL.SDL_Keycode.SDLK_9:
-                            Audio.UpdateVolume(-1, Constants.SDL_VOLUME_STEP);
+                            Audio.UpdateVolume(-1, Constants.SdlVolumeStep);
                             break;
                         case SDL.SDL_Keycode.SDLK_s: // S: Step to next frame
                             Container.StepToNextFrame();

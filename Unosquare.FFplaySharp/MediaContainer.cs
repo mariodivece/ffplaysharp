@@ -6,7 +6,7 @@ public unsafe class MediaContainer
 {
     private readonly AVIOInterruptCB_callback InputInterruptCallback;
 
-    private FFInputFormat InputFormat = null;
+    private FFInputFormat InputFormat;
     private Thread ReadingThread;
 
     private bool WasPaused;
@@ -167,15 +167,18 @@ public unsafe class MediaContainer
 
     private bool HasEnoughPacketCount => Components.All(c => c.HasEnoughPackets);
 
-    private bool HasEnoughPacketBuffer => Components.Sum(c => c.Packets.ByteSize) > Constants.MAX_QUEUE_SIZE;
+    private bool HasEnoughPacketBuffer => Components.Sum(c => c.Packets.ByteSize) > Constants.MaxQueueSize;
 
-    public static MediaContainer Open(ProgramOptions options, IPresenter renderer)
+    public static MediaContainer Open(ProgramOptions options, IPresenter presenter)
     {
-        var container = new MediaContainer(options, renderer);
+        if (presenter is null)
+            throw new ArgumentNullException(nameof(presenter));
+
+        var container = new MediaContainer(options, presenter);
 
         try
         {
-            renderer.Initialize(container);
+            presenter.Initialize(container);
             var o = container.Options;
             container.Video.LastStreamIndex = container.Video.StreamIndex = -1;
             container.Audio.LastStreamIndex = container.Audio.StreamIndex = -1;
@@ -219,13 +222,13 @@ public unsafe class MediaContainer
     /// </summary>
     public void SyncExternalClockSpeed()
     {
-        if (HasVideo && Video.Packets.Count <= Constants.EXTERNAL_CLOCK_MIN_FRAMES ||
-            HasAudio && Audio.Packets.Count <= Constants.EXTERNAL_CLOCK_MIN_FRAMES)
+        if (HasVideo && Video.Packets.Count <= Constants.ExternalClockMinFrames ||
+            HasAudio && Audio.Packets.Count <= Constants.ExternalClockMinFrames)
         {
             ExternalClock.SetSpeed(Math.Max(Constants.EXTERNAL_CLOCK_SPEED_MIN, ExternalClock.SpeedRatio - Constants.EXTERNAL_CLOCK_SPEED_STEP));
         }
-        else if ((Video.StreamIndex < 0 || Video.Packets.Count > Constants.EXTERNAL_CLOCK_MAX_FRAMES) &&
-                 (Audio.StreamIndex < 0 || Audio.Packets.Count > Constants.EXTERNAL_CLOCK_MAX_FRAMES))
+        else if ((Video.StreamIndex < 0 || Video.Packets.Count > Constants.ExternalClockMaxFrames) &&
+                 (Audio.StreamIndex < 0 || Audio.Packets.Count > Constants.ExternalClockMaxFrames))
         {
             ExternalClock.SetSpeed(Math.Min(Constants.EXTERNAL_CLOCK_SPEED_MAX, ExternalClock.SpeedRatio + Constants.EXTERNAL_CLOCK_SPEED_STEP));
         }
@@ -766,7 +769,7 @@ public unsafe class MediaContainer
 
                 if (IsPaused &&
                         (Input.InputFormat.Name == "rtsp" ||
-                         (Input.IO != null && Options.InputFileName.StartsWith("mmsh:"))))
+                         (Input.IO != null && Options.InputFileName.StartsWith("mmsh:", StringComparison.OrdinalIgnoreCase))))
                 {
                     // wait 10 ms to avoid trying to get another packet
                     // XXX: horrible

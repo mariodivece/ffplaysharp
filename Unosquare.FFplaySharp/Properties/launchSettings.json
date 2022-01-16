@@ -2,7 +2,7 @@
   "profiles": {
     "Unosquare.FFplaySharp": {
       "commandName": "Project",
-      "commandLineArgs": "C:\\Users\\UnoSp\\OneDrive\\ffme-testsuite\\video-transport-03.ts",
+      "commandLineArgs": "C:\\Users\\UnoSp\\OneDrive\\ffme-testsuite\\video-subtitles-03.mkv",
       "environmentVariables": {
         "ExampleCommandLineArgs": "C:\\Users\\UnoSp\\OneDrive\\ffme-testsuite\\video-subtitles-03.mkv -vf edgedetect=low=0.1:high=0.4 -vf gblur -vf graphmonitor -vf hflip -vf vflip -autoexit"
       },

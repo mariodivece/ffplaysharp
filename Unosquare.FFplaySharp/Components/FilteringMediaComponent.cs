@@ -2,9 +2,9 @@
 
 public abstract class FilteringMediaComponent : MediaComponent
 {
-    protected FFFilterGraph FilterGraph = null;
-    protected FFFilterContext InputFilter = null;
-    protected FFFilterContext OutputFilter = null;
+    protected FFFilterGraph FilterGraph;
+    protected FFFilterContext InputFilter;
+    protected FFFilterContext OutputFilter;
 
     protected FilteringMediaComponent(MediaContainer container)
         : base(container)

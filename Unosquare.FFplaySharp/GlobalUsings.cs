@@ -9,3 +9,4 @@ global using Unosquare.FFplaySharp;
 global using Unosquare.FFplaySharp.Components;
 global using Unosquare.FFplaySharp.Primitives;
 global using Unosquare.FFplaySharp.Rendering;
+global using System.Globalization;
