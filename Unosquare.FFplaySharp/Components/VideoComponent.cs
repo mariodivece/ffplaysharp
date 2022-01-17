@@ -133,7 +133,7 @@ public sealed class VideoComponent : FilteringMediaComponent
     {
         var queuedFrame = Frames.PeekWriteable();
 
-        if (queuedFrame == null)
+        if (queuedFrame is null)
             return -1;
 
         queuedFrame.Update(sourceFrame, groupIndex, frameTime, duration);

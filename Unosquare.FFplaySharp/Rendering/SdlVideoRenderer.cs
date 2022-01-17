@@ -184,7 +184,7 @@ public unsafe class SdlVideoRenderer : IVideoRenderer
     /// <param name="container"></param>
     private void ComposePicture()
     {
-        FrameHolder subtitle = null;
+        FrameHolder? subtitle = default;
         var video = Container.Video.Frames.PeekPrevious();
 
         if (Container.HasSubtitles && Container.Subtitle.Frames.PendingCount > 0)
@@ -252,7 +252,7 @@ public unsafe class SdlVideoRenderer : IVideoRenderer
         var point = new SDL.SDL_Point();
         _ = SDL.SDL_RenderCopyEx(SdlRenderer, VideoTexture, ref rect, ref rect, 0, ref point, video.IsPictureVerticalFlipped ? SDL.SDL_RendererFlip.SDL_FLIP_VERTICAL : SDL.SDL_RendererFlip.SDL_FLIP_NONE);
 
-        if (subtitle != null)
+        if (subtitle is not null)
         {
             if (Constants.UseOnePassSubtitleRender)
             {
@@ -517,8 +517,8 @@ public unsafe class SdlVideoRenderer : IVideoRenderer
                             : null;
 
                         if (sp.GroupIndex != Container.Subtitle.Packets.GroupIndex
-                                || (Container.VideoClock.BaseTime > sp.EndDisplayTime)
-                                || (sp2 != null && Container.VideoClock.BaseTime > sp2.StartDisplayTime))
+                            || (Container.VideoClock.BaseTime > sp.EndDisplayTime)
+                            || (sp2 is not null && Container.VideoClock.BaseTime > sp2.StartDisplayTime))
                         {
                             if (sp.IsUploaded)
                             {

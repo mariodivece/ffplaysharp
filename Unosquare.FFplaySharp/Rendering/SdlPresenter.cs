@@ -271,7 +271,7 @@ public unsafe class SdlPresenter : IPresenter
     /// </summary>
     public void Stop()
     {
-        if (Container != null)
+        if (Container is not null)
             Container.Close();
 
         Video.Close();

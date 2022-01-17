@@ -57,7 +57,7 @@ public sealed class FrameQueue : IDisposable
 
     public void SignalChanged() => ChangedEvent.Set();
 
-    public FrameHolder PeekWriteable()
+    public FrameHolder? PeekWriteable()
     {
         // wait until we have space to put a new frame
         while (Count >= Capacity && !Packets.IsClosed)
@@ -66,7 +66,7 @@ public sealed class FrameQueue : IDisposable
         lock (SyncLock)
         {
             if (Packets.IsClosed)
-                return null;
+                return default;
             else
                 return Frames[WriteIndex];
         }
@@ -78,14 +78,14 @@ public sealed class FrameQueue : IDisposable
             return Frames[(ReadIndex + (IsReadIndexShown ? 1 : 0)) % Capacity];
     }
 
-    public FrameHolder PeekWaitCurrent()
+    public FrameHolder? PeekWaitCurrent()
     {
         // wait until we have a readable a new frame
         while (Count - (IsReadIndexShown ? 1 : 0) <= 0 && !Packets.IsClosed)
             ChangedEvent.WaitOne();
 
         if (Packets.IsClosed)
-            return null;
+            return default;
 
         return PeekCurrent();
     }

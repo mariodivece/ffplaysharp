@@ -19,7 +19,7 @@ public unsafe sealed class FFFilterGraph : UnmanagedCountedReference<AVFilterGra
     public string SoftwareScalerOptions
     {
         get => Helpers.PtrToString(Pointer->scale_sws_opts);
-        set => Pointer->scale_sws_opts = value == null ? null : ffmpeg.av_strdup(value);
+        set => Pointer->scale_sws_opts = value is null ? null : ffmpeg.av_strdup(value);
     }
 
     public void ParseLiteral(string graphLiteral, FFFilterInOut input, FFFilterInOut output)

@@ -8,9 +8,9 @@ public unsafe sealed class FFFilter : UnmanagedReference<AVFilter>
         // placeholder
     }
 
-    public static FFFilter FromName(string name)
+    public static FFFilter? FromName(string name)
     {
         var pointer = ffmpeg.avfilter_get_by_name(name);
-        return pointer != null ? new FFFilter(pointer) : null;
+        return pointer is not null ? new FFFilter(pointer) : default;
     }
 }

@@ -89,7 +89,7 @@ public unsafe class FFDictionary : UnmanagedCountedReference<AVDictionary>
 
     private static FFDictionaryEntry? FindEntry(AVDictionary* dictionary, string key, bool matchCase = false)
     {
-        if (dictionary == null)
+        if (dictionary is null)
             return default;
 
         var flags = matchCase ? ffmpeg.AV_DICT_MATCH_CASE : 0;

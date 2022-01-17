@@ -239,9 +239,9 @@ public unsafe class ProgramOptions
             var definition = Definitions.Where(d => d.Name == argumentName || d.ArgumentName == argumentName).FirstOrDefault();
 
             // handle catch-all option
-            if (definition == null)
+            if (definition is null)
             {
-                if (nextItem != null)
+                if (nextItem is not null)
                 {
                     options.ApplyDefaultOption(argumentName, nextItem);
                     i++;

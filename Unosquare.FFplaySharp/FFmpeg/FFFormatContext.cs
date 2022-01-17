@@ -181,13 +181,13 @@
 
             var filteredOptions = new FFDictionary();
 
-            int optionFlags = Pointer->oformat != null
+            int optionFlags = Pointer->oformat is not null
                 ? ffmpeg.AV_OPT_FLAG_ENCODING_PARAM
                 : ffmpeg.AV_OPT_FLAG_DECODING_PARAM;
 
             if (codec.IsNull())
             {
-                codec = Pointer->oformat != null
+                codec = Pointer->oformat is not null
                     ? FFCodec.FromEncoderId(codecId)
                     : FFCodec.FromDecoderId(codecId);
             }
@@ -222,7 +222,7 @@
                 var optionName = keyParts[0];
                 var specifier = keyParts.Length > 1 ? keyParts[1] : null;
 
-                var checkResult = specifier != null
+                var checkResult = specifier is not null
                     ? CheckStreamSpecifier(stream, specifier)
                     : -1;
 

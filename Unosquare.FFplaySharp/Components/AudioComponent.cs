@@ -98,7 +98,7 @@ public unsafe sealed class AudioComponent : FilteringMediaComponent, ISerialGrou
     public BufferReference RefillOutputBuffer()
     {
         var result = new BufferReference(null, -1);
-        FrameHolder audio;
+        FrameHolder? audio;
 
         if (Container.IsPaused)
             return result;
@@ -109,14 +109,14 @@ public unsafe sealed class AudioComponent : FilteringMediaComponent, ISerialGrou
 
             while (Frames.PendingCount == 0)
             {
-                var elapsedCallback = Clock.SystemTime - Container.Renderer.Audio.AudioCallbackTime;
+                var elapsedCallback = Clock.SystemTime - Container.Renderer.Audio.LastCallbackTime;
                 if (elapsedCallback > callbackTimeout)
                     return result;
 
                 ffmpeg.av_usleep(1000);
             }
 
-            if ((audio = Frames.PeekWaitCurrent()) == null)
+            if ((audio = Frames.PeekWaitCurrent()) is null)
                 return result;
 
             Frames.Dequeue();
@@ -433,7 +433,7 @@ public unsafe sealed class AudioComponent : FilteringMediaComponent, ISerialGrou
                 }
             }
 
-            if ((resultCode = EnqueueFilteringFrame(decodedFrame)) < 0)
+            if (EnqueueFilteringFrame(decodedFrame) < 0)
                 break;
 
             var isFrameQueueAvailable = true;
@@ -441,7 +441,7 @@ public unsafe sealed class AudioComponent : FilteringMediaComponent, ISerialGrou
             {
                 var queuedFrame = Frames.PeekWriteable();
 
-                if (queuedFrame == null)
+                if (queuedFrame is null)
                 {
                     isFrameQueueAvailable = false;
                     break;

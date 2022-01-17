@@ -15,7 +15,7 @@ public unsafe sealed class RescalerContext : UnmanagedCountedReference<SwsContex
         var updatedPointer = ffmpeg.sws_getCachedContext(
             Pointer, inW, inH, inFormat, outW, outH, outFormat, interpolationFlags, null, null, null);
 
-        if (updatedPointer == null)
+        if (updatedPointer is null)
         {
             Release();
             return;

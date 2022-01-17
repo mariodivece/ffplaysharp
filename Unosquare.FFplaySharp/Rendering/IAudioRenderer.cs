@@ -2,7 +2,7 @@
 
 public interface IAudioRenderer : IComponentRenderer
 {
-    public double AudioCallbackTime { get; }
+    public double LastCallbackTime { get; }
 
     public int Volume { get; }
 

@@ -36,7 +36,7 @@ public unsafe sealed class FFStream : UnmanagedReference<AVStream>
     public double ComputeDisplayRotation()
     {
         var displayMatrix = ffmpeg.av_stream_get_side_data(Pointer, AVPacketSideDataType.AV_PKT_DATA_DISPLAYMATRIX, null);
-        var theta = displayMatrix != null ? -ComputeMatrixRotation((int*)displayMatrix) : 0d;
+        var theta = displayMatrix is not null ? -ComputeMatrixRotation((int*)displayMatrix) : 0d;
         theta -= 360 * Math.Floor(theta / 360 + 0.9 / 360);
 
         if (Math.Abs(theta - 90 * Math.Round(theta / 90, 0)) > 2)

@@ -14,10 +14,10 @@ public unsafe sealed class FFFilterInOut : UnmanagedReference<AVFilterInOut>
         // placeholder
     }
 
-    public string Name
+    public string? Name
     {
         get => Helpers.PtrToString(Pointer->name);
-        set => Pointer->name = value != null ? ffmpeg.av_strdup(value) : null;
+        set => Pointer->name = value is not null ? ffmpeg.av_strdup(value) : default;
     }
 
     public int PadIndex

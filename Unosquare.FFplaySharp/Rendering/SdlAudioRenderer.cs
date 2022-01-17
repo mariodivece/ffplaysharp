@@ -10,7 +10,7 @@ public unsafe class SdlAudioRenderer : IAudioRenderer
     private int ReadBufferIndex;
     private BufferReference ReadBuffer;
 
-    public double AudioCallbackTime { get; private set; }
+    public double LastCallbackTime { get; private set; }
 
     public MediaContainer Container => Presenter.Container;
 
@@ -26,8 +26,7 @@ public unsafe class SdlAudioRenderer : IAudioRenderer
         Presenter = presenter;
 
         var parent = Presenter as SdlPresenter;
-        var o = Presenter.Container.Options;
-        if (o.IsAudioDisabled)
+        if (Presenter.Container.Options.IsAudioDisabled)
         {
             parent.SdlInitFlags &= ~SDL.SDL_INIT_AUDIO;
         }
@@ -36,7 +35,7 @@ public unsafe class SdlAudioRenderer : IAudioRenderer
             const string AlsaBufferSizeName = "SDL_AUDIO_ALSA_SET_BUFFER_SIZE";
             // Try to work around an occasional ALSA buffer underflow issue when the
             // period size is NPOT due to ALSA resampling by forcing the buffer size.
-            if (Environment.GetEnvironmentVariable(AlsaBufferSizeName) == null)
+            if (Environment.GetEnvironmentVariable(AlsaBufferSizeName) is null)
                 Environment.SetEnvironmentVariable(AlsaBufferSizeName, "1", EnvironmentVariableTarget.Process);
         }
     }
@@ -159,7 +158,7 @@ public unsafe class SdlAudioRenderer : IAudioRenderer
     private void OnAudioDeviceCallback(IntPtr opaque, IntPtr audioStream, int pendingByteCount)
     {
         // prepare a new audio buffer
-        AudioCallbackTime = Clock.SystemTime;
+        LastCallbackTime = Clock.SystemTime;
 
         while (pendingByteCount > 0)
         {
@@ -218,7 +217,7 @@ public unsafe class SdlAudioRenderer : IAudioRenderer
         {
             var readBufferAvailable = ReadBufferSize - ReadBufferIndex;
             var bufferDuration = (2d * Container.Audio.HardwareSpec.BufferSize + readBufferAvailable) / Container.Audio.HardwareSpec.BytesPerSecond;
-            Container.AudioClock.Set(Container.Audio.FrameTime - bufferDuration, Container.Audio.GroupIndex, AudioCallbackTime);
+            Container.AudioClock.Set(Container.Audio.FrameTime - bufferDuration, Container.Audio.GroupIndex, LastCallbackTime);
             Container.ExternalClock.SyncToSlave(Container.AudioClock);
         }
     }

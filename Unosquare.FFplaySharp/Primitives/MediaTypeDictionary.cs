@@ -15,14 +15,14 @@ public class MediaTypeDictionary<T> : Dictionary<AVMediaType, T>
         MediaTypes = result;
     }
 
-    public MediaTypeDictionary(T defaultValue = default)
+    public MediaTypeDictionary(T? defaultValue = default)
         : base(MediaTypeCount)
     {
         DefaultValue = defaultValue;
         Clear();
     }
 
-    public T DefaultValue { get; }
+    public T? DefaultValue { get; }
 
     public T this[int mediaType]
     {

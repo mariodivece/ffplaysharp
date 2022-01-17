@@ -5,7 +5,7 @@ public unsafe class FFDictionaryEntry : UnmanagedReference<AVDictionaryEntry>
     public FFDictionaryEntry(AVDictionaryEntry* pointer)
         : base(pointer)
     {
-        if (pointer == null)
+        if (pointer is null)
             return;
 
         Key = Helpers.PtrToString(pointer->key);

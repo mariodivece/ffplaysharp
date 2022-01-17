@@ -29,7 +29,7 @@ class Program
         var presenter = new SdlPresenter();
         var container = MediaContainer.Open(o, presenter);
 
-        if (container == null)
+        if (container is null)
         {
             ("Failed to initialize Video State!").LogFatal();
             presenter.Stop();

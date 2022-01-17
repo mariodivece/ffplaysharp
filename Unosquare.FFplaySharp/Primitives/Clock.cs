@@ -6,7 +6,7 @@ public class Clock : ISerialGroupable
     /// Typically a packet queue to read the group index from.
     /// But it could also hold a reference to itself in case of external clocks.
     /// </summary>
-    private readonly ISerialGroupable GroupIndexProvider;
+    private readonly ISerialGroupable? GroupIndexProvider;
 
     /// <summary>
     /// Clock base minus time at which we updated the clock.
@@ -56,9 +56,9 @@ public class Clock : ISerialGroupable
     /// </summary>
     public int QueueGroupIndex
     {
-        get => GroupIndexProvider != null
+        get => GroupIndexProvider is not null
             ? GroupIndexProvider.GroupIndex
-            : 0;
+            : default;
     }
 
     /// <summary>
@@ -103,6 +103,9 @@ public class Clock : ISerialGroupable
     /// <param name="slaveClock">The clock to synchronize to.</param>
     public void SyncToSlave(Clock slaveClock)
     {
+        if (slaveClock is null)
+            throw new ArgumentNullException(nameof(slaveClock));
+
         var currentTime = Value;
         var slaveTime = slaveClock.Value;
         if (!slaveTime.IsNaN() && (currentTime.IsNaN() || Math.Abs(currentTime - slaveTime) > Constants.MediaNoSyncThreshold))

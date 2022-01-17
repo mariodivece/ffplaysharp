@@ -486,7 +486,7 @@ public unsafe class MediaContainer
             {
                 codecContext.Open(codec, codecOptions);
                 var invalidKey = codecOptions.First?.Key;
-                if (invalidKey != null)
+                if (invalidKey is not null)
                 {
                     ($"Option {invalidKey} not found.").LogError();
                     throw new FFmpegException(ffmpeg.AVERROR_OPTION_NOT_FOUND, $"Option {invalidKey} not found.");
@@ -578,7 +578,7 @@ public unsafe class MediaContainer
         NeedsMorePacketsEvent.Set();
     }
 
-    private MediaComponent FindComponentByStreamIndex(int streamIndex)
+    private MediaComponent? FindComponentByStreamIndex(int streamIndex)
     {
         foreach (var c in Components)
         {
@@ -586,7 +586,7 @@ public unsafe class MediaContainer
                 return c;
         }
 
-        return null;
+        return default;
     }
 
     private void PrepareInput()
@@ -603,7 +603,7 @@ public unsafe class MediaContainer
         {
             Input.OpenInput(FileName, InputFormat, formatOptions);
             var invalidOptionKey = formatOptions.First?.Key;
-            if (invalidOptionKey != null)
+            if (invalidOptionKey is not null)
             {
                 ($"Option {invalidOptionKey} not found.").LogError();
                 throw new FFmpegException(ffmpeg.AVERROR_OPTION_NOT_FOUND, $"Option {invalidOptionKey} not found.");
@@ -673,7 +673,7 @@ public unsafe class MediaContainer
 
             var hasStreamSpec = mediaType >= 0 &&
                 Options.WantedStreams.ContainsKey(mediaType) &&
-                Options.WantedStreams[mediaType] != null &&
+                Options.WantedStreams[mediaType] is not null &&
                 !streamIndexes.HasValue(mediaType);
 
             var isStreamSpecMatch = hasStreamSpec &&
@@ -685,7 +685,7 @@ public unsafe class MediaContainer
 
         foreach (var mediaType in MediaTypeDictionary<int>.MediaTypes)
         {
-            if (!Options.WantedStreams.ContainsKey(mediaType) || Options.WantedStreams[mediaType] == null)
+            if (!Options.WantedStreams.ContainsKey(mediaType) || Options.WantedStreams[mediaType] is null)
                 continue;
 
             if (streamIndexes[mediaType] != streamIndexes.DefaultValue)
@@ -905,7 +905,7 @@ public unsafe class MediaContainer
                 <= (Options.Duration / Clock.TimeBaseMicros);
 
         var component = FindComponentByStreamIndex(readPacket.StreamIndex);
-        if (component != null && !component.IsPictureAttachmentStream && isPacketInPlayRange)
+        if (component is not null && !component.IsPictureAttachmentStream && isPacketInPlayRange)
             component.Packets.Enqueue(readPacket);
         else
             readPacket.Release();
