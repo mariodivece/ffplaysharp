@@ -72,24 +72,52 @@ public static class Constants
     /// </summary>
     public const double SampleCorrectionPercentMax = 10;
 
-    /* external clock speed adjustment constants for realtime sources based on buffer fullness */
-    public const double EXTERNAL_CLOCK_SPEED_MIN = 0.900;
-    public const double EXTERNAL_CLOCK_SPEED_MAX = 1.010;
-    public const double EXTERNAL_CLOCK_SPEED_STEP = 0.001;
+    /// <summary>
+    /// External clock speed adjustment constants for realtime sources based on buffer fullness.
+    /// Port of EXTERNAL_CLOCK_SPEED_MIN
+    /// </summary>
+    public const double ExternalClockSpeedMin = 0.900;
 
-    /* we use about AUDIO_DIFF_AVG_NB A-V differences to make the average */
-    public const int AUDIO_DIFF_AVG_NB = 20;
+    /// <summary>
+    /// External clock speed adjustment constants for realtime sources based on buffer fullness.
+    /// Port of EXTERNAL_CLOCK_SPEED_MAX
+    /// </summary>
+    public const double ExternalClockSpeedMax = 1.010;
 
-    /* polls for possible required screen refresh at least this often, should be less than 1/fps */
-    public const double REFRESH_RATE = 0.01;
+    /// <summary>
+    /// External clock speed adjustment constants for realtime sources based on buffer fullness.
+    /// Port of EXTERNAL_CLOCK_SPEED_STEP
+    /// </summary>
+    public const double ExternalClockSpeedStep = 0.001;
 
-    /* NOTE: the size must be big enough to compensate the hardware audio buffersize size */
-    /* TODO: We assume that a decoded and resampled frame fits into this buffer */
-    public const int SAMPLE_ARRAY_SIZE = (8 * 65536);
+    /// <summary>
+    /// We use about AUDIO_DIFF_AVG_NB A-V differences to make the average.
+    /// Port of AUDIO_DIFF_AVG_NB
+    /// </summary>
+    public const int AudioDiffAveragesCount = 20;
 
-    public const double CURSOR_HIDE_DELAY = 1d;
+    /// <summary>
+    /// Polls for possible required screen refresh at least this often, should be less than 1/fps.
+    /// Port of REFRESH_RATE
+    /// </summary>
+    public const double RefreshRate = 0.01;
 
-    public const int USE_ONEPASS_SUBTITLE_RENDER = 1;
+    /// <summary>
+    /// The size must be big enough to compensate the hardware audio buffersize size.
+    /// TODO: We assume that a decoded and resampled frame fits into this buffer.
+    /// Port of SAMPLE_ARRAY_SIZE
+    /// </summary>
+    public const int SampleArraySize = 8 * 65536;
+
+    /// <summary>
+    /// Port of CURSOR_HIDE_DELAY
+    /// </summary>
+    public const double CursorHideDelay = 1d;
+
+    /// <summary>
+    /// Port of USE_ONEPASS_SUBTITLE_RENDER
+    /// </summary>
+    public const bool UseOnePassSubtitleRender = true;
 
     /// <summary>
     /// Port of sws_flags. Represents the rescaler interpolation flags.
@@ -123,7 +151,7 @@ public static class Constants
     public static readonly AVPixelFormat AV_PIX_FMT_0BGRLE = AV_PIX_FMT_NE(AVPixelFormat.AV_PIX_FMT_RGB0, AVPixelFormat.AV_PIX_FMT_0BGR);
     public static readonly AVPixelFormat AV_PIX_FMT_0RGBLE = AV_PIX_FMT_NE(AVPixelFormat.AV_PIX_FMT_BGR0, AVPixelFormat.AV_PIX_FMT_0RGB);
 
-    public static AVPixelFormat AV_PIX_FMT_NE(AVPixelFormat bigEndian, AVPixelFormat littleEndian)
-        => BitConverter.IsLittleEndian ? littleEndian : bigEndian;
+    public static AVPixelFormat AV_PIX_FMT_NE(AVPixelFormat bigEndian, AVPixelFormat littleEndian) =>
+        BitConverter.IsLittleEndian ? littleEndian : bigEndian;
 #pragma warning restore CA1707 // Identifiers should not contain underscores
 }

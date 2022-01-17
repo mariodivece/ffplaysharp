@@ -299,7 +299,7 @@ public unsafe class SdlPresenter : IPresenter
 
         while (SDL.SDL_PeepEvents(events, 1, SDL.SDL_eventaction.SDL_GETEVENT, SDL.SDL_EventType.SDL_FIRSTEVENT, SDL.SDL_EventType.SDL_LASTEVENT) == 0)
         {
-            if (!IsCursorHidden && Clock.SystemTime - LastCursorShownTime > Constants.CURSOR_HIDE_DELAY)
+            if (!IsCursorHidden && Clock.SystemTime - LastCursorShownTime > Constants.CursorHideDelay)
             {
                 _ = SDL.SDL_ShowCursor(0);
                 IsCursorHidden = true;
@@ -308,7 +308,7 @@ public unsafe class SdlPresenter : IPresenter
             if (remainingTime > 0.0)
                 ffmpeg.av_usleep(Convert.ToUInt32(remainingTime * ffmpeg.AV_TIME_BASE));
 
-            remainingTime = Constants.REFRESH_RATE;
+            remainingTime = Constants.RefreshRate;
 
             if (Container.ShowMode != ShowMode.None && (!Container.IsPaused || Video.ForceRefresh))
                 Video.Present(ref remainingTime);

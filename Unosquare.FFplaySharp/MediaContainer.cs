@@ -225,18 +225,18 @@ public unsafe class MediaContainer
         if (HasVideo && Video.Packets.Count <= Constants.ExternalClockMinFrames ||
             HasAudio && Audio.Packets.Count <= Constants.ExternalClockMinFrames)
         {
-            ExternalClock.SetSpeed(Math.Max(Constants.EXTERNAL_CLOCK_SPEED_MIN, ExternalClock.SpeedRatio - Constants.EXTERNAL_CLOCK_SPEED_STEP));
+            ExternalClock.SetSpeed(Math.Max(Constants.ExternalClockSpeedMin, ExternalClock.SpeedRatio - Constants.ExternalClockSpeedStep));
         }
         else if ((Video.StreamIndex < 0 || Video.Packets.Count > Constants.ExternalClockMaxFrames) &&
                  (Audio.StreamIndex < 0 || Audio.Packets.Count > Constants.ExternalClockMaxFrames))
         {
-            ExternalClock.SetSpeed(Math.Min(Constants.EXTERNAL_CLOCK_SPEED_MAX, ExternalClock.SpeedRatio + Constants.EXTERNAL_CLOCK_SPEED_STEP));
+            ExternalClock.SetSpeed(Math.Min(Constants.ExternalClockSpeedMax, ExternalClock.SpeedRatio + Constants.ExternalClockSpeedStep));
         }
         else
         {
             var speed = ExternalClock.SpeedRatio;
             if (speed != 1.0)
-                ExternalClock.SetSpeed(speed + Constants.EXTERNAL_CLOCK_SPEED_STEP * (1.0 - speed) / Math.Abs(1.0 - speed));
+                ExternalClock.SetSpeed(speed + Constants.ExternalClockSpeedStep * (1.0 - speed) / Math.Abs(1.0 - speed));
         }
     }
 

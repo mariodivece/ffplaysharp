@@ -2,7 +2,7 @@
 
 public unsafe sealed class AudioComponent : FilteringMediaComponent, ISerialGroupable
 {
-    private readonly double SyncDiffAverageCoffiecient = Math.Exp(Math.Log(0.01) / Constants.AUDIO_DIFF_AVG_NB);
+    private readonly double SyncDiffAverageCoffiecient = Math.Exp(Math.Log(0.01) / Constants.AudioDiffAveragesCount);
 
     private ResamplerContext ConvertContext;
     private ByteBuffer ResampledOutputBuffer;
@@ -252,7 +252,7 @@ public unsafe sealed class AudioComponent : FilteringMediaComponent, ISerialGrou
         if (!clockDelay.IsNaN() && Math.Abs(clockDelay) < Constants.MediaNoSyncThreshold)
         {
             SyncDiffTotalDelay = clockDelay + (SyncDiffAverageCoffiecient * SyncDiffTotalDelay);
-            if (SyncDiffAverageCount < Constants.AUDIO_DIFF_AVG_NB)
+            if (SyncDiffAverageCount < Constants.AudioDiffAveragesCount)
             {
                 // not enough measures to have a correct estimate.
                 SyncDiffAverageCount++;

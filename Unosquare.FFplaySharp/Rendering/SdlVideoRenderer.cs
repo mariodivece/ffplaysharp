@@ -254,30 +254,37 @@ public unsafe class SdlVideoRenderer : IVideoRenderer
 
         if (subtitle != null)
         {
-            var xratio = (double)rect.w / subtitle.Width;
-            var yratio = (double)rect.h / subtitle.Height;
-
-            for (var i = 0; i < subtitle.Subtitle.Rects.Count; i++)
+            if (Constants.UseOnePassSubtitleRender)
             {
-                var sourceRect = subtitle.Subtitle.Rects[i];
+                _ = SDL.SDL_RenderCopy(SdlRenderer, SubtitleTexture, IntPtr.Zero, ref rect);
+            }
+            else
+            {
+                var xratio = (double)rect.w / subtitle.Width;
+                var yratio = (double)rect.h / subtitle.Height;
 
-                SDL.SDL_Rect sdlSourceRect = new()
+                for (var i = 0; i < subtitle.Subtitle.Rects.Count; i++)
                 {
-                    x = sourceRect.X,
-                    y = sourceRect.Y,
-                    w = sourceRect.W,
-                    h = sourceRect.H,
-                };
+                    var sourceRect = subtitle.Subtitle.Rects[i];
 
-                SDL.SDL_Rect target = new()
-                {
-                    x = (int)(rect.x + sdlSourceRect.x * xratio),
-                    y = (int)(rect.y + sdlSourceRect.y * yratio),
-                    w = (int)(sdlSourceRect.w * xratio),
-                    h = (int)(sdlSourceRect.h * yratio)
-                };
+                    SDL.SDL_Rect sdlSourceRect = new()
+                    {
+                        x = sourceRect.X,
+                        y = sourceRect.Y,
+                        w = sourceRect.W,
+                        h = sourceRect.H,
+                    };
 
-                _ = SDL.SDL_RenderCopy(SdlRenderer, SubtitleTexture, ref sdlSourceRect, ref target);
+                    SDL.SDL_Rect target = new()
+                    {
+                        x = (int)(rect.x + sdlSourceRect.x * xratio),
+                        y = (int)(rect.y + sdlSourceRect.y * yratio),
+                        w = (int)(sdlSourceRect.w * xratio),
+                        h = (int)(sdlSourceRect.h * yratio)
+                    };
+
+                    _ = SDL.SDL_RenderCopy(SdlRenderer, SubtitleTexture, ref sdlSourceRect, ref target);
+                }
             }
         }
     }

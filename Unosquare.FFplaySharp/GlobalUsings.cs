@@ -2,6 +2,7 @@
 global using FFmpeg.AutoGen;
 global using System.Collections;
 global using System.Diagnostics;
+global using System.Globalization;
 global using System.Runtime.CompilerServices;
 global using System.Runtime.InteropServices;
 global using System.Text;
@@ -9,4 +10,3 @@ global using Unosquare.FFplaySharp;
 global using Unosquare.FFplaySharp.Components;
 global using Unosquare.FFplaySharp.Primitives;
 global using Unosquare.FFplaySharp.Rendering;
-global using System.Globalization;
