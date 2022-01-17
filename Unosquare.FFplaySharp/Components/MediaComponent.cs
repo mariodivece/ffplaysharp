@@ -76,7 +76,7 @@ public abstract class MediaComponent
         AbortDecoder();
         DisposeDecoder();
         Container.Input.Streams[StreamIndex].DiscardFlags = AVDiscard.AVDISCARD_ALL;
-        Stream = null;
+        Stream = default;
         StreamIndex = -1;
     }
 
@@ -219,7 +219,7 @@ public abstract class MediaComponent
     {
         PendingPacket?.Release();
         CodecContext.Release();
-        CodecContext = null;
+        CodecContext = default;
     }
 
     public void AbortDecoder()
@@ -227,7 +227,7 @@ public abstract class MediaComponent
         Packets.Close();
         Frames.SignalChanged();
         Worker.Join();
-        Worker = null;
+        Worker = default;
         Packets.Clear();
     }
 

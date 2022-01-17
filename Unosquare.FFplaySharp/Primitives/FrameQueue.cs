@@ -170,7 +170,7 @@ public sealed class FrameQueue : IDisposable
         for (var i = 0; i < Frames.Length; i++)
         {
             Frames[i].Dispose();
-            Frames[i] = null;
+            Frames[i] = default;
         }
 
         ChangedEvent.Dispose();

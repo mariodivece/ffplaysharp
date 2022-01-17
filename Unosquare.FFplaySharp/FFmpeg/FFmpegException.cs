@@ -8,7 +8,7 @@ public class FFmpegException : Exception
         ErrorCode = errorCode;
     }
 
-    public FFmpegException(int errorCode, string userMessage, Exception innerException = null)
+    public FFmpegException(int errorCode, string userMessage, Exception? innerException = default)
         : base($"{userMessage}\r\nFFmpeg Error: {DescribeError(errorCode)}", innerException)
     {
         ErrorCode = errorCode;

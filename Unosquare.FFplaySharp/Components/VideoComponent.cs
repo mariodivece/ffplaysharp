@@ -188,7 +188,7 @@ public sealed class VideoComponent : FilteringMediaComponent
     /// <param name="filterArgs"></param>
     /// <param name="lastFilter"></param>
     /// <returns></returns>
-    private unsafe FFFilterContext InsertFilter(
+    private FFFilterContext InsertFilter(
         string filterName, string filterArgs, FFFilterContext lastFilter)
     {
         var insertedFilter = FFFilterContext.Create(
@@ -213,10 +213,9 @@ public sealed class VideoComponent : FilteringMediaComponent
                 : $"{kvp.Key}={kvp.Value}:{softwareScalerFlags}";
         }
 
-        if (string.IsNullOrWhiteSpace(softwareScalerFlags))
-            softwareScalerFlags = null;
-
-        FilterGraph.SoftwareScalerOptions = softwareScalerFlags;
+        FilterGraph.SoftwareScalerOptions = string.IsNullOrWhiteSpace(softwareScalerFlags)
+            ? default
+            : softwareScalerFlags;
 
         var sourceFilterArguments =
             $"video_size={decoderFrame.Width}x{decoderFrame.Height}" +

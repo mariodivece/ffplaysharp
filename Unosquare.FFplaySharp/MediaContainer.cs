@@ -535,7 +535,7 @@ public unsafe class MediaContainer
 
         // Close the input context.
         Input?.Release();
-        Input = null;
+        Input = default;
 
         // Release packets and frames
         foreach (var component in Components)
@@ -819,7 +819,7 @@ public unsafe class MediaContainer
         catch
         {
             Input?.Release();
-            Input = null;
+            Input = default;
             SDL.SDL_Event sdlEvent = new();
             sdlEvent.type = (SDL.SDL_EventType)Constants.FF_QUIT_EVENT;
             _ = SDL.SDL_PushEvent(ref sdlEvent);

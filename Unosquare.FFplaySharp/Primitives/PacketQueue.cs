@@ -72,7 +72,7 @@ public sealed class PacketQueue : ISerialGroupable, IDisposable
         var result = true;
         lock (SyncLock)
         {
-            packet.Next = null;
+            packet.Next = default;
 
             if (m_IsClosed)
             {
@@ -147,8 +147,8 @@ public sealed class PacketQueue : ISerialGroupable, IDisposable
             for (var currentPacket = First; currentPacket.IsNotNull(); currentPacket = currentPacket?.Next)
                 currentPacket?.Release();
 
-            Last = null;
-            First = null;
+            Last = default;
+            First = default;
             Count = 0;
             ByteSize = 0;
             DurationUnits = 0;

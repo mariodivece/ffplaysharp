@@ -22,7 +22,7 @@ public unsafe sealed class FFFilterContext : UnmanagedReference<AVFilterContext>
 
     public AVRational TimeBase => ffmpeg.av_buffersink_get_time_base(Pointer);
 
-    public static FFFilterContext Create(FFFilterGraph graph, FFFilter filter, string name, string options)
+    public static FFFilterContext Create(FFFilterGraph graph, FFFilter filter, string name, string? options = default)
     {
         if (graph.IsNull())
             throw new ArgumentNullException(nameof(graph));
@@ -30,20 +30,23 @@ public unsafe sealed class FFFilterContext : UnmanagedReference<AVFilterContext>
         if (filter.IsNull())
             throw new ArgumentNullException(nameof(graph));
 
-        AVFilterContext* pointer = null;
+        AVFilterContext* pointer = default;
         var resultCode = ffmpeg.avfilter_graph_create_filter(
             &pointer, filter.Pointer, name, options, null, graph.Pointer);
 
-        var result = pointer is not null ? new FFFilterContext(pointer) : null;
-
-        if (resultCode < 0 || result.IsNull())
-            throw new FFmpegException(resultCode, $"Failed to create filter context '{name}'");
-
-        return result;
+        return pointer is not null && resultCode >= 0
+            ? new FFFilterContext(pointer)
+            : throw new FFmpegException(resultCode, $"Failed to create filter context '{name}'");
     }
 
     public static void Link(FFFilterContext input, FFFilterContext output)
     {
+        if (input.IsNull())
+            throw new ArgumentNullException(nameof(input));
+
+        if (output.IsNull())
+            throw new ArgumentNullException(nameof(output));
+
         var resultCode = ffmpeg.avfilter_link(input.Pointer, 0, output.Pointer, 0);
         if (resultCode != 0)
             throw new FFmpegException(resultCode, "Failed to link filters.");

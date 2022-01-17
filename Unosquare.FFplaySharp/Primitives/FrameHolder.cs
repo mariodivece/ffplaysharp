@@ -101,15 +101,15 @@ public sealed class FrameHolder : IDisposable, ISerialGroupable
     {
         Frame?.Reset();
         Subtitle?.Release();
-        Subtitle = null;
+        Subtitle = default;
     }
 
     public void Dispose()
     {
         Frame?.Release();
-        Frame = null;
+        Frame = default;
 
         Subtitle?.Release();
-        Subtitle = null;
+        Subtitle = default;
     }
 }

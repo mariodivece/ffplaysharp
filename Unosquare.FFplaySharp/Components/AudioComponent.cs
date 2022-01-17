@@ -297,10 +297,10 @@ public unsafe sealed class AudioComponent : FilteringMediaComponent, ISerialGrou
         ReleaseConvertContext();
 
         ResampledOutputBuffer?.Release();
-        ResampledOutputBuffer = null;
+        ResampledOutputBuffer = default;
 
         Container.Input.Streams[StreamIndex].DiscardFlags = AVDiscard.AVDISCARD_ALL;
-        Stream = null;
+        Stream = default;
         StreamIndex = -1;
     }
 
@@ -353,7 +353,7 @@ public unsafe sealed class AudioComponent : FilteringMediaComponent, ISerialGrou
     private void ReleaseConvertContext()
     {
         ConvertContext?.Release();
-        ConvertContext = null;
+        ConvertContext = default;
     }
 
     private int DecodeFrame(FFFrame frame)

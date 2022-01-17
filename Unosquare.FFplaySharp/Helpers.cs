@@ -85,6 +85,7 @@ public static class Helpers
         return Encoding.UTF8.GetString(target, length);
     }
 
+    [MethodImpl(MethodImplOptions.AggressiveInlining)]
     public static bool IsValidPts(this long pts) => pts != ffmpeg.AV_NOPTS_VALUE;
 
     public static bool IsAuto(this int x) => x < 0;
@@ -97,11 +98,15 @@ public static class Helpers
 
     public static bool IsNaN(this double x) => double.IsNaN(x);
 
+    [MethodImpl(MethodImplOptions.AggressiveInlining)]
     public static bool IsNull(this IntPtr address) => address == IntPtr.Zero;
 
+    [MethodImpl(MethodImplOptions.AggressiveInlining)]
     public static bool IsNotNull(this IntPtr address) => address != IntPtr.Zero;
 
+    [MethodImpl(MethodImplOptions.AggressiveInlining)]
     public static bool IsNull(this INativeReference? obj) => obj is null || obj.Address == IntPtr.Zero;
 
+    [MethodImpl(MethodImplOptions.AggressiveInlining)]
     public static bool IsNotNull(this INativeReference? obj) => obj is not null && obj.Address != IntPtr.Zero;
 }

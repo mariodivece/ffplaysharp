@@ -233,7 +233,7 @@ public unsafe class SdlVideoRenderer : IVideoRenderer
             }
             else
             {
-                subtitle = null;
+                subtitle = default;
             }
 
         }

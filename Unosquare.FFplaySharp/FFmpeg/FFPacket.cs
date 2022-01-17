@@ -62,7 +62,7 @@ public unsafe sealed class FFPacket : UnmanagedCountedReference<AVPacket>, ISeri
 
     public static FFPacket CreateNullPacket(int streamIndex) => new()
     {
-        Data = null,
+        Data = default,
         Size = 0,
         StreamIndex = streamIndex
     };

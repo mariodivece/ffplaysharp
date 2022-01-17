@@ -9,18 +9,18 @@ public unsafe class FFDictionary : UnmanagedCountedReference<AVDictionary>
         ReferenceCounter.Remove(this);
     }
 
-    public FFDictionaryEntry First => FirstEntry(Pointer);
+    public FFDictionaryEntry? First => FirstEntry(Pointer);
 
-    public string this[string key]
+    public string? this[string key]
     {
-        get => Find(key).Value;
+        get => Find(key)?.Value;
         set => Set(key, value);
     }
 
     public static StringDictionary Extract(AVDictionary* dictionary)
     {
         var result = new StringDictionary();
-        FFDictionaryEntry? entry = null;
+        FFDictionaryEntry? entry = default;
         while ((entry = NextEntry(dictionary, entry)).IsNotNull())
             result[entry!.Key] = entry.Value;
 
@@ -44,7 +44,7 @@ public unsafe class FFDictionary : UnmanagedCountedReference<AVDictionary>
         Set(key, value, 0);
 
     public void Remove(string key) =>
-        Set(key, null);
+        Set(key, default);
 
     public FFDictionaryEntry? Next(FFDictionaryEntry? previous) =>
         NextEntry(Pointer, previous);
@@ -62,6 +62,9 @@ public unsafe class FFDictionary : UnmanagedCountedReference<AVDictionary>
         [CallerFilePath] string? filePath = default,
         [CallerLineNumber] int? lineNumber = default)
     {
+        if (other is null)
+            throw new ArgumentNullException(nameof(other));
+
         var result = new FFDictionary(filePath, lineNumber);
         foreach (var kvp in other)
             result[kvp.Key] = kvp.Value;

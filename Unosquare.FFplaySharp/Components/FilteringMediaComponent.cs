@@ -26,7 +26,7 @@ public abstract class FilteringMediaComponent : MediaComponent
                 Name = "in",
                 Filter = inputFilterContext,
                 PadIndex = 0,
-                Next = null
+                Next = default
             };
 
             var input = new FFFilterInOut
@@ -34,7 +34,7 @@ public abstract class FilteringMediaComponent : MediaComponent
                 Name = "out",
                 Filter = outputFilterContext,
                 PadIndex = 0,
-                Next = null
+                Next = default
             };
 
             try
@@ -69,9 +69,9 @@ public abstract class FilteringMediaComponent : MediaComponent
     protected void ReleaseFilterGraph()
     {
         FilterGraph?.Release();
-        FilterGraph = null;
-        InputFilter = null;
-        OutputFilter = null;
+        FilterGraph = default;
+        InputFilter = default;
+        OutputFilter = default;
     }
 
     protected void ReallocateFilterGraph()
