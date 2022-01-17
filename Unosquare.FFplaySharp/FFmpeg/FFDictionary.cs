@@ -2,7 +2,7 @@
 
 public unsafe class FFDictionary : UnmanagedCountedReference<AVDictionary>
 {
-    public FFDictionary([CallerFilePath] string filePath = default, [CallerLineNumber] int lineNumber = default)
+    public FFDictionary([CallerFilePath] string? filePath = default, [CallerLineNumber] int? lineNumber = default)
         : base(filePath, lineNumber)
     {
         // We don't count the reference yet until the pointer is not null.
@@ -20,47 +20,47 @@ public unsafe class FFDictionary : UnmanagedCountedReference<AVDictionary>
     public static StringDictionary Extract(AVDictionary* dictionary)
     {
         var result = new StringDictionary();
-        FFDictionaryEntry entry = null;
-        while ((entry = NextEntry(dictionary, entry)) != null)
-            result[entry.Key] = entry.Value;
+        FFDictionaryEntry? entry = null;
+        while ((entry = NextEntry(dictionary, entry)).IsNotNull())
+            result[entry!.Key] = entry.Value;
 
         return result;
     }
 
-    public void Set(string key, string value, int flags)
+    public void Set(string key, string? value, int flags)
     {
-        var wasNull = IsNull;
+        var wasNull = Address.IsNull();
         var pointer = Pointer;
         pointer = SetEntry(pointer, key, value, flags);
         Update(pointer);
 
-        if (wasNull && !IsNull)
+        if (wasNull && Address.IsNotNull())
             ObjectId = ReferenceCounter.Add(this, Source);
-        else if (!wasNull && IsNull)
+        else if (!wasNull && Address.IsNull())
             ReferenceCounter.Remove(this);
     }
 
-    public void Set(string key, string value) =>
+    public void Set(string key, string? value) =>
         Set(key, value, 0);
 
     public void Remove(string key) =>
         Set(key, null);
 
-    public FFDictionaryEntry Next(FFDictionaryEntry previous) =>
+    public FFDictionaryEntry? Next(FFDictionaryEntry? previous) =>
         NextEntry(Pointer, previous);
 
-    public FFDictionaryEntry Find(string key, bool matchCase = false) =>
+    public FFDictionaryEntry? Find(string key, bool matchCase = false) =>
         FindEntry(Pointer, key, matchCase);
 
     public bool ContainsKey(string key, bool matchCase = false) =>
-        Find(key, matchCase) != null;
+        Find(key, matchCase).IsNotNull();
 
     public Dictionary<string, string> ToDictionary() =>
         Extract(Pointer);
 
     public static FFDictionary FromManaged(Dictionary<string, string> other,
-        [CallerFilePath] string filePath = default,
-        [CallerLineNumber] int lineNumber = default)
+        [CallerFilePath] string? filePath = default,
+        [CallerLineNumber] int? lineNumber = default)
     {
         var result = new FFDictionary(filePath, lineNumber);
         foreach (var kvp in other)
@@ -72,32 +72,32 @@ public unsafe class FFDictionary : UnmanagedCountedReference<AVDictionary>
     protected override void ReleaseInternal(AVDictionary* pointer) =>
          ffmpeg.av_dict_free(&pointer);
 
-    private static FFDictionaryEntry FirstEntry(AVDictionary* dictionary)
+    private static FFDictionaryEntry? FirstEntry(AVDictionary* dictionary)
     {
-        return NextEntry(dictionary, null);
+        return NextEntry(dictionary, default);
     }
 
-    private static FFDictionaryEntry NextEntry(AVDictionary* dictionary, FFDictionaryEntry previousEntry)
+    private static FFDictionaryEntry? NextEntry(AVDictionary* dictionary, FFDictionaryEntry? previousEntry)
     {
-        if (dictionary == null)
-            return null;
+        if (dictionary is null)
+            return default;
 
-        var previous = previousEntry != null ? previousEntry.Pointer : null;
+        var previous = previousEntry.IsNotNull() ? previousEntry!.Pointer : default;
         var entry = ffmpeg.av_dict_get(dictionary, string.Empty, previous, ffmpeg.AV_DICT_IGNORE_SUFFIX);
-        return entry != null ? new(entry) : null;
+        return entry is not null ? new(entry) : default;
     }
 
-    private static FFDictionaryEntry FindEntry(AVDictionary* dictionary, string key, bool matchCase = false)
+    private static FFDictionaryEntry? FindEntry(AVDictionary* dictionary, string key, bool matchCase = false)
     {
         if (dictionary == null)
-            return null;
+            return default;
 
         var flags = matchCase ? ffmpeg.AV_DICT_MATCH_CASE : 0;
         var entry = ffmpeg.av_dict_get(dictionary, key, null, flags);
-        return entry != null ? new(entry) : null;
+        return entry is not null ? new(entry) : default;
     }
 
-    private static AVDictionary* SetEntry(AVDictionary* dictionary, string key, string value, int flags)
+    private static AVDictionary* SetEntry(AVDictionary* dictionary, string key, string? value, int flags)
     {
         var resultCode = ffmpeg.av_dict_set(&dictionary, key, value, flags);
         if (resultCode < 0)

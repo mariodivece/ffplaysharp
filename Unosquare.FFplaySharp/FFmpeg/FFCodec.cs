@@ -15,25 +15,25 @@ public unsafe sealed class FFCodec : UnmanagedReference<AVCodec>
 
     public int MaxLowResFactor => Pointer->max_lowres;
 
-    public string Name => IsNull ? null : GetName(Pointer->id);
+    public string? Name => Address.IsNull() ? default : GetName(Pointer->id);
 
     public static string GetName(AVCodecID codecId) => ffmpeg.avcodec_get_name(codecId);
 
-    public static FFCodec FromDecoderId(AVCodecID codecId)
+    public static FFCodec? FromDecoderId(AVCodecID codecId)
     {
         var pointer = ffmpeg.avcodec_find_decoder(codecId);
-        return pointer != null ? new(pointer) : null;
+        return pointer is not null ? new(pointer) : default;
     }
 
-    public static FFCodec FromEncoderId(AVCodecID codecId)
+    public static FFCodec? FromEncoderId(AVCodecID codecId)
     {
         var pointer = ffmpeg.avcodec_find_decoder(codecId);
-        return pointer != null ? new(pointer) : null;
+        return pointer is not null ? new(pointer) : default;
     }
 
-    public static FFCodec FromDecoderName(string name)
+    public static FFCodec? FromDecoderName(string name)
     {
         var pointer = ffmpeg.avcodec_find_decoder_by_name(name);
-        return pointer != null ? new(pointer) : null;
+        return pointer is not null ? new(pointer) : default;
     }
 }

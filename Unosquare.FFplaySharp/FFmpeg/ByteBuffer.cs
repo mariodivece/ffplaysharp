@@ -14,7 +14,7 @@ public unsafe sealed class ByteBuffer : UnmanagedCountedReference<byte>
 
     public static ByteBuffer Reallocate(ByteBuffer original, ulong length)
     {
-        if (original == null || original.Length < length)
+        if (original.IsNull() || original.Length < length)
         {
             original?.Release();
             return new(length);

@@ -24,13 +24,19 @@ public unsafe sealed class FFFilterContext : UnmanagedReference<AVFilterContext>
 
     public static FFFilterContext Create(FFFilterGraph graph, FFFilter filter, string name, string options)
     {
+        if (graph.IsNull())
+            throw new ArgumentNullException(nameof(graph));
+
+        if (filter.IsNull())
+            throw new ArgumentNullException(nameof(graph));
+
         AVFilterContext* pointer = null;
         var resultCode = ffmpeg.avfilter_graph_create_filter(
             &pointer, filter.Pointer, name, options, null, graph.Pointer);
 
-        var result = pointer != null ? new FFFilterContext(pointer) : null;
+        var result = pointer is not null ? new FFFilterContext(pointer) : null;
 
-        if (resultCode < 0 || result == null)
+        if (resultCode < 0 || result.IsNull())
             throw new FFmpegException(resultCode, $"Failed to create filter context '{name}'");
 
         return result;

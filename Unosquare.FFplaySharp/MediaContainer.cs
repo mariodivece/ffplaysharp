@@ -159,11 +159,11 @@ public unsafe class MediaContainer
 
     public IReadOnlyList<MediaComponent> Components { get; }
 
-    public bool HasVideo => Video != null && Video.Stream != null && Video.StreamIndex >= 0;
+    public bool HasVideo => Video is not null && Video.Stream.IsNotNull() && Video.StreamIndex >= 0;
 
-    public bool HasAudio => Audio != null && Audio.Stream != null && Audio.StreamIndex >= 0;
+    public bool HasAudio => Audio is not null && Audio.Stream.IsNotNull() && Audio.StreamIndex >= 0;
 
-    public bool HasSubtitles => Subtitle != null && Subtitle.Stream != null && Subtitle.StreamIndex >= 0;
+    public bool HasSubtitles => Subtitle is not null && Subtitle.Stream.IsNotNull() && Subtitle.StreamIndex >= 0;
 
     private bool HasEnoughPacketCount => Components.All(c => c.HasEnoughPackets);
 
@@ -277,11 +277,11 @@ public unsafe class MediaContainer
         var startStreamIndex = component.LastStreamIndex;
         var nextStreamIndex = startStreamIndex;
 
-        FFProgram program = null;
+        FFProgram? program = default;
         if (component.IsVideo && component.StreamIndex != -1)
         {
             program = Input.FindProgramByStream(component.StreamIndex);
-            if (program != null)
+            if (program.IsNotNull())
             {
                 var streamIndices = program.StreamIndices;
 
@@ -316,8 +316,8 @@ public unsafe class MediaContainer
             if (nextStreamIndex == startStreamIndex)
                 return;
 
-            var resultStreamIndex = program != null
-                ? Convert.ToInt32(program.StreamIndices[nextStreamIndex])
+            var resultStreamIndex = program.IsNotNull()
+                ? Convert.ToInt32(program!.StreamIndices[nextStreamIndex])
                 : nextStreamIndex;
 
             var st = Input.Streams[resultStreamIndex];
@@ -341,8 +341,8 @@ public unsafe class MediaContainer
             }
         }
     the_end:
-        if (program != null && nextStreamIndex != -1)
-            nextStreamIndex = program.StreamIndices[nextStreamIndex];
+        if (program.IsNotNull() && nextStreamIndex != -1)
+            nextStreamIndex = program!.StreamIndices[nextStreamIndex];
 
         ($"Switch {component.MediaTypeString} stream from #{component.StreamIndex} to #{nextStreamIndex}.").LogInfo();
         component.Close();
@@ -440,7 +440,7 @@ public unsafe class MediaContainer
                 ? FFCodec.FromDecoderName(forcedCodecName)
                 : codec;
 
-            if (codec == null)
+            if (codec.IsNull())
             {
                 var codecName = !string.IsNullOrWhiteSpace(forcedCodecName)
                     ? forcedCodecName
@@ -618,8 +618,8 @@ public unsafe class MediaContainer
             if (Options.IsStreamInfoEnabled)
                 Input.FindStreamInfo(Options.CodecOptions);
 
-            if (Input.IO != null)
-                Input.IO.EndOfStream = false; // FIXME hack, ffplay maybe should not use avio_feof() to test for the end
+            if (Input.IO.IsNotNull())
+                Input.IO!.EndOfStream = false; // FIXME hack, ffplay maybe should not use avio_feof() to test for the end
 
             if (Options.IsByteSeekingEnabled.IsAuto())
             {
@@ -769,7 +769,7 @@ public unsafe class MediaContainer
 
                 if (IsPaused &&
                         (Input.InputFormat.Name == "rtsp" ||
-                         (Input.IO != null && Options.InputFileName.StartsWith("mmsh:", StringComparison.OrdinalIgnoreCase))))
+                         (Input.IO.IsNotNull() && Options.InputFileName.StartsWith("mmsh:", StringComparison.OrdinalIgnoreCase))))
                 {
                     // wait 10 ms to avoid trying to get another packet
                     // XXX: horrible
@@ -882,7 +882,7 @@ public unsafe class MediaContainer
                 IsAtEndOfStream = true;
             }
 
-            if (Input.IO != null && Input.IO.Error != 0)
+            if (Input.IO.IsNotNull() && Input.IO!.Error != 0)
                 return false;
 
             NeedsMorePacketsEvent.WaitOne(10);

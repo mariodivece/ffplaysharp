@@ -188,7 +188,7 @@ public unsafe class SdlAudioRenderer : IAudioRenderer
             var outputStreamPointer = (byte*)audioStream.ToPointer();
             var inputStreamPointer = ReadBuffer.Pointer + ReadBufferIndex;
 
-            if (!Container.IsMuted && ReadBuffer != null && Volume == SDL.SDL_MIX_MAXVOLUME)
+            if (!Container.IsMuted && ReadBuffer.IsNotNull() && Volume == SDL.SDL_MIX_MAXVOLUME)
             {
                 Buffer.MemoryCopy(inputStreamPointer, outputStreamPointer, readByteCount, readByteCount);
             }
@@ -199,7 +199,7 @@ public unsafe class SdlAudioRenderer : IAudioRenderer
                     outputStreamPointer[i] = 0;
                 });
 
-                if (!Container.IsMuted && ReadBuffer != null)
+                if (!Container.IsMuted && ReadBuffer.IsNotNull())
                     SDL.SDL_MixAudioFormat(
                         outputStreamPointer,
                         inputStreamPointer,

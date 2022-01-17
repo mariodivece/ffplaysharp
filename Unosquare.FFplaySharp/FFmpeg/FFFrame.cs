@@ -64,14 +64,19 @@ public unsafe sealed class FFFrame : UnmanagedCountedReference<AVFrame>
 
     public void Reset()
     {
-        if (IsNull)
+        if (Address.IsNull())
             return;
 
         ffmpeg.av_frame_unref(Pointer);
     }
 
-    public void MoveTo(FFFrame destination) =>
-        ffmpeg.av_frame_move_ref(destination.Pointer, Pointer);
+    public void MoveTo(FFFrame? destination)
+    {
+        if (destination.IsNull())
+            throw new ArgumentNullException(nameof(destination));
+
+        ffmpeg.av_frame_move_ref(destination!.Pointer, Pointer);
+    }
 
     protected override unsafe void ReleaseInternal(AVFrame* pointer) =>
         ffmpeg.av_frame_free(&pointer);

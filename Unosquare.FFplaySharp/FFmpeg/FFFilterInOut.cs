@@ -26,21 +26,21 @@ public unsafe sealed class FFFilterInOut : UnmanagedReference<AVFilterInOut>
         set => Pointer->pad_idx = value;
     }
 
-    public FFFilterInOut Next
+    public FFFilterInOut? Next
     {
-        get => Pointer->next != null ? new(Pointer->next) : null;
-        set => Pointer->next = value != null ? value.Pointer : null;
+        get => Address.IsNotNull() && Pointer->next is not null ? new(Pointer->next) : default;
+        set => Pointer->next = value.IsNotNull() ? value!.Pointer : default;
     }
 
-    public FFFilterContext Filter
+    public FFFilterContext? Filter
     {
-        get => Pointer->filter_ctx != null ? new(Pointer->filter_ctx) : null;
-        set => Pointer->filter_ctx = value != null ? value.Pointer : null;
+        get => Address.IsNotNull() && Pointer->filter_ctx is not null ? new(Pointer->filter_ctx) : default;
+        set => Pointer->filter_ctx = value.IsNotNull() ? value!.Pointer : default;
     }
 
     public void Release()
     {
-        if (!Address.IsNull())
+        if (Address.IsNotNull())
         {
             var pointer = Pointer;
             ffmpeg.avfilter_inout_free(&pointer);

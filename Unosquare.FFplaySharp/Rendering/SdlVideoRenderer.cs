@@ -209,7 +209,7 @@ public unsafe class SdlVideoRenderer : IVideoRenderer
                             targetRect.w, targetRect.h, AVPixelFormat.AV_PIX_FMT_PAL8,
                             targetRect.w, targetRect.h, AVPixelFormat.AV_PIX_FMT_BGRA, 0);
 
-                        if (Container.Subtitle.ConvertContext == null)
+                        if (Container.Subtitle.ConvertContext.IsNull())
                         {
                             ("Cannot initialize the conversion context.").LogFatal();
                             return;
@@ -370,7 +370,7 @@ public unsafe class SdlVideoRenderer : IVideoRenderer
             convertContext.Reallocate(
                 video.Width, video.Height, frame.PixelFormat, video.Width, video.Height, AVPixelFormat.AV_PIX_FMT_BGRA);
 
-            if (convertContext != null)
+            if (convertContext.IsNotNull())
             {
                 if (SDL.SDL_LockTexture(texture, ref textureRect, out var textureAddress, out var texturePitch) == 0)
                 {

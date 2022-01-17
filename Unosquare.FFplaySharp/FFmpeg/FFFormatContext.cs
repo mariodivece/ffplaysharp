@@ -27,13 +27,13 @@
 
         public ChapterCollection Chapters { get; }
 
-        public FFInputFormat InputFormat => Pointer->iformat != null
+        public FFInputFormat? InputFormat => Pointer->iformat is not null
             ? new(Pointer->iformat)
-            : null;
+            : default;
 
-        public FFIOContext IO => Pointer->pb != null
+        public FFIOContext? IO => Pointer->pb is not null
             ? new(Pointer->pb)
-            : null;
+            : default;
 
         public IReadOnlyDictionary<string, string> Metadata =>
             FFDictionary.Extract(Pointer->metadata);
@@ -50,9 +50,9 @@
 
         public long StartTime => Pointer->start_time;
 
-        public string Url => Pointer->url != null
+        public string? Url => Pointer->url is not null
             ? Helpers.PtrToString(Pointer->url)
-            : null;
+            : default;
 
         public int FindBestStream(AVMediaType mediaType, int wantedStreamIndex, int relatedStreamIndex) =>
             ffmpeg.av_find_best_stream(Pointer, mediaType, wantedStreamIndex, relatedStreamIndex, null, 0);
@@ -76,9 +76,9 @@
             ffmpeg.av_dump_format(Pointer, 0, fileName, 0);
 
         public bool IsSeekMethodUnknown =>
-            IsNull == false &&
-            InputFormat != null &&
-            InputFormat.Flags.HasFlag(Constants.SeekMethodUnknownFlags) &&
+            Address.IsNotNull() &&
+            InputFormat.IsNotNull() &&
+            InputFormat!.Flags.HasFlag(Constants.SeekMethodUnknownFlags) &&
             InputFormat.Pointer->read_seek.Pointer.IsNull();
 
         public bool IsRealTime
@@ -92,7 +92,7 @@
                 var url = Url?.ToLowerInvariant();
                 url = string.IsNullOrWhiteSpace(url) ? string.Empty : url;
 
-                if (IO != null && (url.StartsWith("rtp:") || url.StartsWith("udp:")))
+                if (IO.IsNotNull() && (url.StartsWith("rtp:") || url.StartsWith("udp:")))
                     return true;
 
                 return false;
@@ -110,16 +110,16 @@
             return ffmpeg.av_read_frame(Pointer, packet.Pointer);
         }
 
-        public FFProgram FindProgramByStream(int streamIndex)
+        public FFProgram? FindProgramByStream(int streamIndex)
         {
             var program = ffmpeg.av_find_program_from_stream(Pointer, null, streamIndex);
-            return program != null ? new(program) : null;
+            return program is not null ? new(program) : default;
         }
 
         public AVRational GuessFrameRate(FFStream stream) => ffmpeg.av_guess_frame_rate(Pointer, stream.Pointer, null);
 
         public AVRational GuessAspectRatio(FFStream stream, FFFrame frame) =>
-            ffmpeg.av_guess_sample_aspect_ratio(Pointer, stream.Pointer, frame != null ? frame.Pointer : null);
+            ffmpeg.av_guess_sample_aspect_ratio(Pointer, stream.Pointer, frame.IsNotNull() ? frame!.Pointer : default);
 
         public void OpenInput(string filePath, FFInputFormat format, FFDictionary formatOptions)
         {
@@ -176,7 +176,7 @@
             StringDictionary allOptions,
             AVCodecID codecId,
             FFStream stream,
-            FFCodec codec)
+            FFCodec? codec)
         {
 
             var filteredOptions = new FFDictionary();
@@ -185,7 +185,7 @@
                 ? ffmpeg.AV_OPT_FLAG_ENCODING_PARAM
                 : ffmpeg.AV_OPT_FLAG_DECODING_PARAM;
 
-            if (codec == null)
+            if (codec.IsNull())
             {
                 codec = Pointer->oformat != null
                     ? FFCodec.FromEncoderId(codecId)
@@ -229,8 +229,8 @@
                 if (checkResult <= 0)
                     continue;
 
-                if (FFMediaClass.Codec.HasOption(optionName, optionFlags) || codec == null ||
-                    codec.PrivateClass.HasOption(optionName, optionFlags))
+                if (FFMediaClass.Codec.HasOption(optionName, optionFlags) || codec.IsNull() ||
+                    codec!.PrivateClass.HasOption(optionName, optionFlags))
                 {
                     filteredOptions[optionName] = t.Value;
                 }

@@ -20,22 +20,21 @@ public unsafe sealed class FFMediaClass : UnmanagedReference<AVClass>
     /// <param name="optionName"></param>
     /// <param name="searchFlags"></param>
     /// <returns></returns>
-    public FFOption FindOption(string optionName, int optionFlags = default, int searchFlags = ffmpeg.AV_OPT_SEARCH_FAKE_OBJ)
+    public FFOption? FindOption(string optionName, int optionFlags = default, int searchFlags = ffmpeg.AV_OPT_SEARCH_FAKE_OBJ)
     {
-        if (Pointer == null)
-            return null;
+        if (Address.IsNull())
+            return default;
 
         var option = ffmpeg.av_opt_find(Pointer, optionName, null, optionFlags, searchFlags);
-        if (option != null && option->flags == 0)
-            return null;
-
-        return option != null ? new(option) : null;
+        return option is not null && option->flags != (int)AVOptionType.AV_OPT_TYPE_FLAGS
+            ? new(option)
+            : default;
     }
 
     public bool HasOption(string optionName, int optionFlags = default, int searchFlags = ffmpeg.AV_OPT_SEARCH_FAKE_OBJ) =>
-        FindOption(optionName, optionFlags, searchFlags) != null;
+        FindOption(optionName, optionFlags, searchFlags).IsNotNull();
 
 
-    public static FFMediaClass FromPrivateClass(AVClass* pointer) =>
-        pointer == null ? null : new FFMediaClass(pointer);
+    public static FFMediaClass? FromPrivateClass(AVClass* pointer) =>
+        pointer is null ? default : new FFMediaClass(pointer);
 }

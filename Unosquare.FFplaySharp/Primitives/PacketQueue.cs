@@ -5,8 +5,8 @@ public sealed class PacketQueue : ISerialGroupable, IDisposable
     private readonly object SyncLock = new();
     private readonly AutoResetEvent IsAvailableEvent = new(false);
     private bool m_IsClosed = true; // starts in a blocked state
-    private FFPacket First;
-    private FFPacket Last;
+    private FFPacket? First;
+    private FFPacket? Last;
 
     private int m_Count;
     private int m_ByteSize;
@@ -66,6 +66,9 @@ public sealed class PacketQueue : ISerialGroupable, IDisposable
 
     public bool Enqueue(FFPacket packet)
     {
+        if (packet.IsNull())
+            throw new ArgumentNullException(nameof(packet));
+
         var result = true;
         lock (SyncLock)
         {
@@ -82,10 +85,10 @@ public sealed class PacketQueue : ISerialGroupable, IDisposable
 
                 packet.GroupIndex = GroupIndex;
 
-                if (Last == null)
+                if (Last.IsNull())
                     First = packet;
                 else
-                    Last.Next = packet;
+                    Last!.Next = packet;
 
                 Last = packet;
                 Count++;
@@ -107,7 +110,7 @@ public sealed class PacketQueue : ISerialGroupable, IDisposable
     public bool EnqueueNull() =>
         Enqueue(FFPacket.CreateNullPacket(Component.StreamIndex));
 
-    public FFPacket Dequeue(bool blockWait)
+    public FFPacket? Dequeue(bool blockWait)
     {
         while (true)
         {
@@ -117,11 +120,11 @@ public sealed class PacketQueue : ISerialGroupable, IDisposable
             lock (SyncLock)
             {
                 var item = First;
-                if (item != null)
+                if (item.IsNotNull())
                 {
-                    First = item.Next;
-                    if (First == null)
-                        Last = null;
+                    First = item!.Next;
+                    if (First.IsNull())
+                        Last = default;
 
                     Count--;
                     ByteSize -= item.Size + FFPacket.StructureSize;
@@ -131,7 +134,7 @@ public sealed class PacketQueue : ISerialGroupable, IDisposable
             }
 
             if (!blockWait)
-                return null;
+                return default;
             else
                 IsAvailableEvent.WaitOne();
         }
@@ -141,7 +144,7 @@ public sealed class PacketQueue : ISerialGroupable, IDisposable
     {
         lock (SyncLock)
         {
-            for (var currentPacket = First; currentPacket != null; currentPacket = currentPacket?.Next)
+            for (var currentPacket = First; currentPacket.IsNotNull(); currentPacket = currentPacket?.Next)
                 currentPacket?.Release();
 
             Last = null;

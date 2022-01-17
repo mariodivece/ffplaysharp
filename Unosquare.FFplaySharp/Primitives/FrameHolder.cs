@@ -45,17 +45,17 @@ public sealed class FrameHolder : IDisposable, ISerialGroupable
     /// <summary>
     /// Gets whether the video frame is flipped vertically.
     /// </summary>
-    public bool IsPictureVerticalFlipped => Frame != null && Frame.LineSize[0] < 0;
+    public bool IsPictureVerticalFlipped => Frame.IsNotNull() && Frame.LineSize[0] < 0;
 
     public long ChannelLayout { get; private set; }
 
     public bool HasValidTime => !Time.IsNaN();
 
-    public double StartDisplayTime => Subtitle != null
+    public double StartDisplayTime => Subtitle.IsNotNull()
         ? Time + (Subtitle.StartDisplayTime / 1000d)
         : Time;
 
-    public double EndDisplayTime => Subtitle != null
+    public double EndDisplayTime => Subtitle.IsNotNull()
         ? Time + (Subtitle.EndDisplayTime / 1000d)
         : Time + Duration;
 
@@ -63,6 +63,9 @@ public sealed class FrameHolder : IDisposable, ISerialGroupable
 
     public void Update(FFFrame sourceFrame, int groupIndex, double time, double duration)
     {
+        if (sourceFrame.IsNull())
+            throw new ArgumentNullException(nameof(sourceFrame));
+
         sourceFrame.MoveTo(Frame);
         IsUploaded = false;
         GroupIndex = groupIndex;
@@ -75,6 +78,9 @@ public sealed class FrameHolder : IDisposable, ISerialGroupable
 
     public void Update(FFSubtitle sourceFrame, FFCodecContext codecContext, int groupIndex, double time)
     {
+        if (codecContext.IsNull())
+            throw new ArgumentNullException(nameof(codecContext));
+
         Subtitle?.Release();
         Subtitle = sourceFrame;
         IsUploaded = false;

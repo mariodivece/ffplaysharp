@@ -128,7 +128,7 @@ public unsafe sealed class AudioComponent : FilteringMediaComponent, ISerialGrou
         if (audio.Frame.SampleFormat != StreamSpec.SampleFormat ||
             audio.Frame.ChannelLayout != StreamSpec.ChannelLayout ||
             audio.Frame.SampleRate != StreamSpec.SampleRate ||
-            (wantedSampleCount != audio.Frame.SampleCount && ConvertContext == null))
+            (wantedSampleCount != audio.Frame.SampleCount && ConvertContext.IsNull()))
         {
             ReleaseConvertContext();
             ConvertContext = new(
@@ -139,7 +139,7 @@ public unsafe sealed class AudioComponent : FilteringMediaComponent, ISerialGrou
                 audio.Frame.SampleFormat,
                 audio.Frame.SampleRate);
 
-            if (ConvertContext == null || ConvertContext.Initialize() < 0)
+            if (ConvertContext.IsNull() || ConvertContext.Initialize() < 0)
             {
                 ($"Cannot create sample rate converter for conversion of {audio.Frame.SampleRate} Hz " +
                 $"{audio.Frame.SampleFormatName} {audio.Frame.Channels} channels to " +
@@ -156,7 +156,7 @@ public unsafe sealed class AudioComponent : FilteringMediaComponent, ISerialGrou
 
         int resampledBufferSize;
 
-        if (ConvertContext != null)
+        if (ConvertContext.IsNotNull())
         {
             var wantedOutputSize = wantedSampleCount * HardwareSpec.SampleRate / audio.Frame.SampleRate + 256;
             var outputBufferSize = AudioParams.ComputeSamplesBufferSize(

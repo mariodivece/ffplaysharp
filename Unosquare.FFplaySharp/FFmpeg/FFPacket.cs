@@ -2,13 +2,13 @@
 
 public unsafe sealed class FFPacket : UnmanagedCountedReference<AVPacket>, ISerialGroupable
 {
-    public FFPacket([CallerFilePath] string filePath = default, [CallerLineNumber] int lineNumber = default)
+    public FFPacket([CallerFilePath] string? filePath = default, [CallerLineNumber] int? lineNumber = default)
         : this(ffmpeg.av_packet_alloc(), filePath, lineNumber)
     {
         // placeholder
     }
 
-    private FFPacket(AVPacket* pointer, string filePath, int lineNumber = default)
+    private FFPacket(AVPacket* pointer, string? filePath, int? lineNumber = default)
         : base(filePath, lineNumber)
     {
         Update(pointer);
@@ -16,7 +16,7 @@ public unsafe sealed class FFPacket : UnmanagedCountedReference<AVPacket>, ISeri
 
     public static int StructureSize { get; } = Marshal.SizeOf<AVPacket>();
 
-    public FFPacket Next { get; set; }
+    public FFPacket? Next { get; set; }
 
     public int GroupIndex { get; set; }
 
@@ -46,7 +46,7 @@ public unsafe sealed class FFPacket : UnmanagedCountedReference<AVPacket>, ISeri
         set => Pointer->data = value;
     }
 
-    public bool HasData => !IsNull && Data != null;
+    public bool HasData => Address.IsNotNull() && Data is not null;
 
     public static FFPacket CreateFlushPacket()
     {
@@ -67,17 +67,17 @@ public unsafe sealed class FFPacket : UnmanagedCountedReference<AVPacket>, ISeri
         StreamIndex = streamIndex
     };
 
-    public static FFPacket Clone(AVPacket* packet, [CallerFilePath] string filePath = default, [CallerLineNumber] int lineNumber = default)
+    public static FFPacket Clone(AVPacket* packet, [CallerFilePath] string? filePath = default, [CallerLineNumber] int? lineNumber = default)
     {
-        if (packet == null)
+        if (packet is null)
             throw new ArgumentNullException(nameof(packet));
 
         var copy = ffmpeg.av_packet_clone(packet);
         return new FFPacket(copy, filePath, lineNumber);
     }
 
-    public FFPacket Clone([CallerFilePath] string filePath = default, [CallerLineNumber] int lineNumber = default) => Pointer == null
-        ? throw new NullReferenceException("Cannot clone a null packet pointer")
+    public FFPacket Clone([CallerFilePath] string? filePath = default, [CallerLineNumber] int? lineNumber = default) => Address.IsNull()
+        ? throw new InvalidOperationException("Cannot clone a null packet pointer")
         : new(ffmpeg.av_packet_clone(Pointer), filePath, lineNumber);
 
     public long Pts => Pointer->pts.IsValidPts()

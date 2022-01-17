@@ -296,20 +296,20 @@ public unsafe class ProgramOptions
             ? optionName[..optionName.IndexOf(Semicolon, StringComparison.Ordinal)]
             : optionName;
 
-        FFOption o = null;
+        FFOption? o = default;
         bool isConsumed = false;
 
-        if ((o = FFMediaClass.Codec.FindOption(strippedOptionName, default, SearchFlags)) != null || (
+        if ((o = FFMediaClass.Codec.FindOption(strippedOptionName, default, SearchFlags)).IsNotNull() || (
             (optionName.StartsWith('a') || optionName.StartsWith('v') || optionName.StartsWith('s')) &&
-            (o = FFMediaClass.Codec.FindOption(optionName[1..])) != null))
+            (o = FFMediaClass.Codec.FindOption(optionName[1..])).IsNotNull()))
         {
             CodecOptions.Set(o, optionName, optionValue);
             isConsumed = true;
         }
 
-        if ((o = FFMediaClass.Format.FindOption(optionName, SearchFlags)) != null)
+        if ((o = FFMediaClass.Format.FindOption(optionName, SearchFlags)).IsNotNull())
         {
-            FormatOptions.Set(o, optionName, optionValue);
+            FormatOptions.Set(o!, optionName, optionValue);
 
             if (isConsumed)
                 ($"Routing option {optionName} to both codec and muxer layer.").LogVerbose();
@@ -317,7 +317,7 @@ public unsafe class ProgramOptions
             isConsumed = true;
         }
 
-        if (!isConsumed && (o = FFMediaClass.Format.FindOption(optionName, SearchFlags)) != null)
+        if (!isConsumed && (o = FFMediaClass.Format.FindOption(optionName, SearchFlags)).IsNotNull())
         {
 
             var dummyScaler = new RescalerContext();
@@ -342,7 +342,7 @@ public unsafe class ProgramOptions
             isConsumed = true;
         }
 
-        if (!isConsumed && (o = FFMediaClass.Resampler.FindOption(optionName, SearchFlags)) != null)
+        if (!isConsumed && (o = FFMediaClass.Resampler.FindOption(optionName, SearchFlags)).IsNotNull())
         {
             var dummyResampler = new ResamplerContext();
             var setResult = dummyResampler.SetOption(optionName, optionValue);

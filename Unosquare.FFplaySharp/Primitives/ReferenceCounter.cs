@@ -3,11 +3,11 @@
 public static class ReferenceCounter
 {
     private static readonly object SyncLock = new();
-    private static readonly SortedDictionary<ulong, (IUnmanagedCountedReference obj, string source)> Graph = new();
+    private static readonly SortedDictionary<ulong, (INativeCountedReference obj, string source)> Graph = new();
     private static ulong LastObjectId = 0;
     private static ulong m_Count = 0;
 
-    public static ulong Add(IUnmanagedCountedReference item, string source)
+    public static ulong Add(INativeCountedReference item, string source)
     {
         lock (SyncLock)
         {
@@ -19,7 +19,7 @@ public static class ReferenceCounter
         }
     }
 
-    public static void Remove(IUnmanagedCountedReference item)
+    public static void Remove(INativeCountedReference item)
     {
         lock (SyncLock)
         {

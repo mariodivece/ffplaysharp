@@ -2,7 +2,7 @@
 
 public unsafe sealed class ResamplerContext : UnmanagedCountedReference<SwrContext>
 {
-    public ResamplerContext([CallerFilePath] string filePath = default, [CallerLineNumber] int lineNumber = default)
+    public ResamplerContext([CallerFilePath] string? filePath = default, [CallerLineNumber] int? lineNumber = default)
         : base(filePath, lineNumber)
     {
         Update(ffmpeg.swr_alloc());
@@ -15,8 +15,8 @@ public unsafe sealed class ResamplerContext : UnmanagedCountedReference<SwrConte
         long inLayout,
         AVSampleFormat inFormat,
         int inSampleRate,
-        [CallerFilePath] string filePath = default,
-        [CallerLineNumber] int lineNumber = default)
+        [CallerFilePath] string? filePath = default,
+        [CallerLineNumber] int? lineNumber = default)
         : base(filePath, lineNumber)
     {
         var pointer = ffmpeg.swr_alloc_set_opts(null,

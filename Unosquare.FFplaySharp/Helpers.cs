@@ -97,5 +97,11 @@ public static class Helpers
 
     public static bool IsNaN(this double x) => double.IsNaN(x);
 
-    public static bool IsNull(this IntPtr ptr) => ptr == IntPtr.Zero;
+    public static bool IsNull(this IntPtr address) => address == IntPtr.Zero;
+
+    public static bool IsNotNull(this IntPtr address) => address != IntPtr.Zero;
+
+    public static bool IsNull(this INativeReference? obj) => obj is null || obj.Address == IntPtr.Zero;
+
+    public static bool IsNotNull(this INativeReference? obj) => obj is not null && obj.Address != IntPtr.Zero;
 }

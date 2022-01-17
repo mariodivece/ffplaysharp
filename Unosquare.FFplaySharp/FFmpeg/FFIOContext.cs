@@ -18,7 +18,7 @@ public unsafe sealed class FFIOContext : UnmanagedReference<AVIOContext>
 
     public bool EndOfStream
     {
-        get => !IsNull && Pointer->eof_reached != 0;
+        get => Address.IsNotNull() && Pointer->eof_reached != 0;
         set => Pointer->eof_reached = (value) ? 1 : 0;
     }
 }

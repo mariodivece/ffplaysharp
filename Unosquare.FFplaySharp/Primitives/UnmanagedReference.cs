@@ -1,23 +1,21 @@
 ﻿namespace Unosquare.FFplaySharp.Primitives;
 
 
-public interface IUnmanagedReference : IEquatable<IUnmanagedReference>
+public interface INativeReference
 {
     IntPtr Address { get; }
-
-    bool IsNull { get; }
 
     void Update(IntPtr address);
 }
 
-public interface IUnmanagedCountedReference : IUnmanagedReference
+public interface INativeCountedReference : INativeReference
 {
     ulong ObjectId { get; }
 
     void Release();
 }
 
-public unsafe interface IUnmanagedReference<T> : IUnmanagedReference
+public unsafe interface IUnmanagedReference<T> : INativeReference
     where T : unmanaged
 {
     T* Pointer { get; }
@@ -40,18 +38,6 @@ public abstract unsafe class UnmanagedReference<T> : IUnmanagedReference<T>
         // placeholder
     }
 
-    public static bool operator ==(UnmanagedReference<T> a, object b)
-    {
-        var addressA = a?.Address ?? default;
-        var addressB = (b as IUnmanagedReference)?.Address ?? default;
-
-        return addressA == addressB;
-    }
-
-    public static bool operator !=(UnmanagedReference<T> a, object b) => !(a == b);
-
-    public bool IsNull => Address.IsNull();
-
     public IntPtr Address { get; protected set; } = IntPtr.Zero;
 
     public T* Pointer => (T*)Address;
@@ -61,20 +47,16 @@ public abstract unsafe class UnmanagedReference<T> : IUnmanagedReference<T>
     public void Update(IntPtr address) => Address = address;
 
     public void Update(T* pointer) => Address = new(pointer);
-
-    public bool Equals(IUnmanagedReference other) => other == this;
-
-    public override bool Equals(object obj) => Equals(obj as IUnmanagedReference);
-
-    public override int GetHashCode() => Address.GetHashCode();
 }
 
-public abstract unsafe class UnmanagedCountedReference<T> : UnmanagedReference<T>, IUnmanagedCountedReference
+public abstract unsafe class UnmanagedCountedReference<T> : UnmanagedReference<T>, INativeCountedReference
     where T : unmanaged
 {
-    protected UnmanagedCountedReference(string filePath, int lineNumber)
+    protected UnmanagedCountedReference(string? filePath, int? lineNumber)
         : base()
     {
+        filePath ??= "(No file)";
+        lineNumber ??= 0;
         Source = $"{Path.GetFileName(filePath)}: {lineNumber}";
         ObjectId = ReferenceCounter.Add(this, Source);
     }

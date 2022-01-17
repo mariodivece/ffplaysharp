@@ -43,7 +43,7 @@ public abstract class MediaComponent
 
     public bool IsPictureAttachmentStream =>
         MediaType.IsVideo() &&
-        Stream != null &&
+        Stream.IsNotNull() &&
         Stream.DispositionFlags.HasFlag(ffmpeg.AV_DISPOSITION_ATTACHED_PIC);
 
     public bool HasEnoughPackets
@@ -66,7 +66,7 @@ public abstract class MediaComponent
 
     public int FinalPacketGroupIndex { get; protected set; }
 
-    public bool HasFinishedDecoding => Stream == null || (FinalPacketGroupIndex == Packets.GroupIndex && Frames.PendingCount == 0);
+    public bool HasFinishedDecoding => Stream.IsNull() || (FinalPacketGroupIndex == Packets.GroupIndex && Frames.PendingCount == 0);
 
     public virtual void Close()
     {
@@ -144,7 +144,7 @@ public abstract class MediaComponent
                         return -1;
                     }
 
-                    if (currentPacket != null)
+                    if (currentPacket.IsNotNull())
                         PacketGroupIndex = currentPacket.GroupIndex;
                 }
 

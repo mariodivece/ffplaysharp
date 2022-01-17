@@ -1,8 +1,8 @@
 ﻿namespace FFmpeg;
 
 public abstract unsafe class ChildCollection<TParent, TChild> : IReadOnlyList<TChild>
-    where TParent : IUnmanagedReference
-    where TChild : IUnmanagedReference
+    where TParent : INativeReference
+    where TChild : INativeReference
 {
     protected ChildCollection(TParent parent)
     {
