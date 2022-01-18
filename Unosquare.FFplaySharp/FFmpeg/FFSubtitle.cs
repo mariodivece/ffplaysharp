@@ -1,6 +1,6 @@
 ﻿namespace FFmpeg;
 
-public unsafe sealed class FFSubtitle : UnmanagedCountedReference<AVSubtitle>
+public unsafe sealed class FFSubtitle : CountedReference<AVSubtitle>
 {
     public FFSubtitle([CallerFilePath] string filePath = default, [CallerLineNumber] int lineNumber = default)
         : base(filePath, lineNumber)
@@ -10,14 +10,14 @@ public unsafe sealed class FFSubtitle : UnmanagedCountedReference<AVSubtitle>
 
     public long Pts
     {
-        get => Pointer->pts;
+        get => Target->pts;
     }
 
-    public long StartDisplayTime => Pointer->start_display_time;
+    public long StartDisplayTime => Target->start_display_time;
 
-    public long EndDisplayTime => Pointer->end_display_time;
+    public long EndDisplayTime => Target->end_display_time;
 
-    public int Format => Pointer->format;
+    public int Format => Target->format;
 
     public SubtitleRectCollection Rects => new(this);
 

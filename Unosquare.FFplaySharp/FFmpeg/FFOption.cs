@@ -1,12 +1,12 @@
 ﻿namespace FFmpeg;
 
-public unsafe sealed class FFOption : UnmanagedReference<AVOption>
+public unsafe sealed class FFOption : NativeReference<AVOption>
 {
-    public FFOption(AVOption* pointer)
-        : base(pointer)
+    public FFOption(AVOption* target)
+        : base(target)
     {
 
     }
 
-    public AVOptionType Type => Pointer->type;
+    public AVOptionType Type => Target->type;
 }

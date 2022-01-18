@@ -1,21 +1,21 @@
 ﻿namespace FFmpeg;
 
-public unsafe sealed class FFCodec : UnmanagedReference<AVCodec>
+public unsafe sealed class FFCodec : NativeReference<AVCodec>
 {
-    public FFCodec(AVCodec* pointer)
-        : base(pointer)
+    public FFCodec(AVCodec* target)
+        : base(target)
     {
         // placeholder
     }
 
-    public AVCodecID Id => Pointer->id;
+    public AVCodecID Id => Target->id;
 
     public FFMediaClass PrivateClass =>
-        FFMediaClass.FromPrivateClass(Pointer->priv_class);
+        FFMediaClass.FromPrivateClass(Target->priv_class)!;
 
-    public int MaxLowResFactor => Pointer->max_lowres;
+    public int MaxLowResFactor => Target->max_lowres;
 
-    public string? Name => Address.IsNull() ? default : GetName(Pointer->id);
+    public string? Name => Address.IsNull() ? default : GetName(Target->id);
 
     public static string GetName(AVCodecID codecId) => ffmpeg.avcodec_get_name(codecId);
 

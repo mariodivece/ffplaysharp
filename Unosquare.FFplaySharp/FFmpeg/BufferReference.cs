@@ -1,9 +1,9 @@
 ﻿namespace FFmpeg;
 
-public unsafe class BufferReference : UnmanagedReference<byte>
+public unsafe class BufferReference : NativeReference<byte>
 {
-    public BufferReference(byte* pointer, long length)
-        : base(pointer)
+    public BufferReference(byte* target, long length)
+        : base(target)
     {
         Length = length;
     }

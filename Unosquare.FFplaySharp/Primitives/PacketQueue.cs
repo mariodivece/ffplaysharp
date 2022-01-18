@@ -3,8 +3,8 @@
 public sealed class PacketQueue : ISerialGroupable, IDisposable
 {
     private readonly object SyncLock = new();
-    private readonly AutoResetEvent IsAvailableEvent = new(false);
-    private bool m_IsClosed = true; // starts in a blocked state
+    private readonly ManualResetEventSlim IsAvailableEvent = new(false);
+    private long m_IsClosed = 1; // starts in a blocked state
     private FFPacket? First;
     private FFPacket? Last;
 
@@ -16,6 +16,7 @@ public sealed class PacketQueue : ISerialGroupable, IDisposable
     public PacketQueue(MediaComponent component)
     {
         Component = component;
+
     }
 
     public MediaComponent Component { get; }
@@ -52,16 +53,14 @@ public sealed class PacketQueue : ISerialGroupable, IDisposable
 
     public bool IsClosed
     {
-        get { lock (SyncLock) return m_IsClosed; }
+        get => Interlocked.Read(ref m_IsClosed) != 0;
+        set => Interlocked.Exchange(ref m_IsClosed, value ? 1 : 0);
     }
 
     public void Open()
     {
-        lock (SyncLock)
-        {
-            m_IsClosed = false;
-            EnqueueFlush();
-        }
+        IsClosed = false;
+        EnqueueFlush();
     }
 
     public bool Enqueue(FFPacket packet)
@@ -74,7 +73,7 @@ public sealed class PacketQueue : ISerialGroupable, IDisposable
         {
             packet.Next = default;
 
-            if (m_IsClosed)
+            if (IsClosed)
             {
                 result = false;
             }
@@ -115,7 +114,7 @@ public sealed class PacketQueue : ISerialGroupable, IDisposable
         while (true)
         {
             if (IsClosed)
-                return null;
+                return default;
 
             lock (SyncLock)
             {
@@ -135,8 +134,11 @@ public sealed class PacketQueue : ISerialGroupable, IDisposable
 
             if (!blockWait)
                 return default;
-            else
-                IsAvailableEvent.WaitOne();
+
+            if (!IsAvailableEvent.Wait(Constants.EventWaitTime))
+                continue;
+
+            IsAvailableEvent.Reset();
         }
     }
 
@@ -157,9 +159,7 @@ public sealed class PacketQueue : ISerialGroupable, IDisposable
 
     public void Close()
     {
-        lock (SyncLock)
-            m_IsClosed = true;
-
+        IsClosed = true;
         IsAvailableEvent.Set();
     }
 

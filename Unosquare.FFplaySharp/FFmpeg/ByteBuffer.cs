@@ -1,6 +1,6 @@
 ﻿namespace FFmpeg;
 
-public unsafe sealed class ByteBuffer : UnmanagedCountedReference<byte>
+public unsafe sealed class ByteBuffer : CountedReference<byte>
 {
     public ByteBuffer(ulong length, [CallerFilePath] string filePath = default, [CallerLineNumber] int lineNumber = default)
         : base(filePath, lineNumber)
@@ -26,7 +26,7 @@ public unsafe sealed class ByteBuffer : UnmanagedCountedReference<byte>
     public void Write(byte* source, int length)
     {
         var maxLength = Math.Min(Convert.ToInt32(Length), length);
-        Buffer.MemoryCopy(source, Pointer, maxLength, maxLength);
+        Buffer.MemoryCopy(source, Target, maxLength, maxLength);
     }
 
     protected override void ReleaseInternal(byte* pointer)

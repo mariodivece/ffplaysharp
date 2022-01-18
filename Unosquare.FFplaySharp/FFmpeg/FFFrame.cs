@@ -1,6 +1,6 @@
 ﻿namespace FFmpeg;
 
-public unsafe sealed class FFFrame : UnmanagedCountedReference<AVFrame>
+public unsafe sealed class FFFrame : CountedReference<AVFrame>
 {
     public FFFrame([CallerFilePath] string filePath = default, [CallerLineNumber] int lineNumber = default)
         : base(filePath, lineNumber)
@@ -8,56 +8,56 @@ public unsafe sealed class FFFrame : UnmanagedCountedReference<AVFrame>
         Update(ffmpeg.av_frame_alloc());
     }
 
-    public long PacketPosition => Pointer->pkt_pos;
+    public long PacketPosition => Target->pkt_pos;
 
     public AVRational SampleAspectRatio
     {
-        get => Pointer->sample_aspect_ratio;
-        set => Pointer->sample_aspect_ratio = value;
+        get => Target->sample_aspect_ratio;
+        set => Target->sample_aspect_ratio = value;
     }
 
-    public AVSampleFormat SampleFormat => (AVSampleFormat)Pointer->format;
+    public AVSampleFormat SampleFormat => (AVSampleFormat)Target->format;
 
     public string SampleFormatName => AudioParams.GetSampleFormatName(SampleFormat);
 
-    public AVPixelFormat PixelFormat => (AVPixelFormat)Pointer->format;
+    public AVPixelFormat PixelFormat => (AVPixelFormat)Target->format;
 
-    public int_array8 LineSize => Pointer->linesize;
+    public int_array8 LineSize => Target->linesize;
 
     public int_array8 PixelStride => LineSize;
 
-    public byte_ptrArray8 Data => Pointer->data;
+    public byte_ptrArray8 Data => Target->data;
 
-    public int Width => Pointer->width;
+    public int Width => Target->width;
 
-    public int Height => Pointer->height;
+    public int Height => Target->height;
 
-    public int SampleCount => Pointer->nb_samples;
+    public int SampleCount => Target->nb_samples;
 
-    public int Channels => Pointer->channels;
+    public int Channels => Target->channels;
 
-    public int SampleRate => Pointer->sample_rate;
+    public int SampleRate => Target->sample_rate;
 
     public double AudioComputedDuration => (double)SampleCount / SampleRate;
 
     public long Pts
     {
-        get => Pointer->pts;
-        set => Pointer->pts = value;
+        get => Target->pts;
+        set => Target->pts = value;
     }
 
-    public long PacketDts => Pointer->pkt_dts;
+    public long PacketDts => Target->pkt_dts;
 
-    public long BestEffortPts => Pointer->best_effort_timestamp;
+    public long BestEffortPts => Target->best_effort_timestamp;
 
     public byte** ExtendedData
     {
-        get => Pointer->extended_data;
-        set => Pointer->extended_data = value;
+        get => Target->extended_data;
+        set => Target->extended_data = value;
     }
 
     public long ChannelLayout =>
-        Convert.ToInt64(Pointer->channel_layout);
+        Convert.ToInt64(Target->channel_layout);
 
     public int SamplesBufferSize =>
         AudioParams.ComputeSamplesBufferSize(Channels, SampleCount, SampleFormat, true);
@@ -67,7 +67,7 @@ public unsafe sealed class FFFrame : UnmanagedCountedReference<AVFrame>
         if (Address.IsNull())
             return;
 
-        ffmpeg.av_frame_unref(Pointer);
+        ffmpeg.av_frame_unref(Target);
     }
 
     public void MoveTo(FFFrame? destination)
@@ -75,7 +75,7 @@ public unsafe sealed class FFFrame : UnmanagedCountedReference<AVFrame>
         if (destination.IsNull())
             throw new ArgumentNullException(nameof(destination));
 
-        ffmpeg.av_frame_move_ref(destination!.Pointer, Pointer);
+        ffmpeg.av_frame_move_ref(destination!.Target, Target);
     }
 
     protected override unsafe void ReleaseInternal(AVFrame* pointer) =>

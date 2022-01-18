@@ -1,14 +1,14 @@
 ﻿namespace FFmpeg;
 
-public unsafe sealed class FFChapter : UnmanagedReference<AVChapter>
+public unsafe sealed class FFChapter : NativeReference<AVChapter>
 {
-    public FFChapter(AVChapter* pointer)
-        : base(pointer)
+    public FFChapter(AVChapter* target)
+        : base(target)
     {
         // placeholder
     }
 
-    public long StartTime => Pointer->start;
+    public long StartTime => Target->start;
 
-    public AVRational TimeBase => Pointer->time_base;
+    public AVRational TimeBase => Target->time_base;
 }

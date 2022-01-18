@@ -30,7 +30,7 @@ public unsafe sealed class AudioComponent : FilteringMediaComponent, ISerialGrou
 
     public int GroupIndex { get; private set; } = -1;
 
-    public override string WantedCodecName => Container.Options.AudioForcedCodecName;
+    public override string? WantedCodecName => Container.Options.AudioForcedCodecName;
 
     public AudioParams HardwareSpec { get; private set; } = new();
 
@@ -50,18 +50,17 @@ public unsafe sealed class AudioComponent : FilteringMediaComponent, ISerialGrou
             ReallocateFilterGraph();
             var resamplerOptions = RetrieveResamplerOptions();
 
-            FilterGraph.SetOption("aresample_swr_opts", resamplerOptions);
+            if (!string.IsNullOrEmpty(resamplerOptions))
+                FilterGraph.SetOption("aresample_swr_opts", resamplerOptions);
+
             var sourceBufferOptions = $"sample_rate={FilterSpec.SampleRate}:sample_fmt={FilterSpec.SampleFormatName}:" +
                 $"channels={FilterSpec.Channels}:time_base={1}/{FilterSpec.SampleRate}";
 
             if (FilterSpec.ChannelLayout != 0)
                 sourceBufferOptions = $"{sourceBufferOptions}:channel_layout=0x{FilterSpec.ChannelLayout:x16}";
 
-            var inputFilterContext = FFFilterContext.Create(
-                FilterGraph, FFFilter.FromName("abuffer"), "audioSourceBuffer", sourceBufferOptions);
-
-            var outputFilterContext = FFFilterContext.Create(
-                FilterGraph, FFFilter.FromName("abuffersink"), "audioSinkBuffer", null);
+            var inputFilterContext = FFFilterContext.Create(FilterGraph, "abuffer", "audioSourceBuffer", sourceBufferOptions);
+            var outputFilterContext = FFFilterContext.Create(FilterGraph, "abuffersink", "audioSinkBuffer");
 
             outputFilterContext.SetOptionList("sample_fmts", outputSampleFormats);
             outputFilterContext.SetOption("all_channel_counts", 1);
@@ -182,7 +181,7 @@ public unsafe sealed class AudioComponent : FilteringMediaComponent, ISerialGrou
 
             ResampledOutputBuffer = ByteBuffer.Reallocate(ResampledOutputBuffer, (ulong)outputBufferSize);
             var audioBufferIn = audio.Frame.ExtendedData;
-            var audioBufferOut = ResampledOutputBuffer.Pointer;
+            var audioBufferOut = ResampledOutputBuffer.Target;
             var outputSampleCount = ConvertContext.Convert(
                 &audioBufferOut, wantedOutputSize, audioBufferIn, audio.Frame.SampleCount);
 
@@ -202,7 +201,7 @@ public unsafe sealed class AudioComponent : FilteringMediaComponent, ISerialGrou
                     ReleaseConvertContext();
             }
 
-            result.Update(ResampledOutputBuffer.Pointer);
+            result.Update(ResampledOutputBuffer.Target);
             resampledBufferSize = outputSampleCount * HardwareSpec.Channels * HardwareSpec.BytesPerSample;
         }
         else
@@ -347,7 +346,7 @@ public unsafe sealed class AudioComponent : FilteringMediaComponent, ISerialGrou
     private string RetrieveResamplerOptions()
     {
         var result = string.Join(":", Container.Options.ResamplerOptions.Select(kvp => $"{kvp.Key}={kvp.Value}").ToArray());
-        return string.IsNullOrWhiteSpace(result) ? null : result;
+        return string.IsNullOrWhiteSpace(result) ? string.Empty : result;
     }
 
     private void ReleaseConvertContext()

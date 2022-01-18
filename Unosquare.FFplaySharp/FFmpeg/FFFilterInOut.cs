@@ -1,6 +1,6 @@
 ﻿namespace FFmpeg;
 
-public unsafe sealed class FFFilterInOut : UnmanagedReference<AVFilterInOut>
+public unsafe sealed class FFFilterInOut : NativeReference<AVFilterInOut>
 {
     public FFFilterInOut()
         : base(ffmpeg.avfilter_inout_alloc())
@@ -16,33 +16,33 @@ public unsafe sealed class FFFilterInOut : UnmanagedReference<AVFilterInOut>
 
     public string? Name
     {
-        get => Helpers.PtrToString(Pointer->name);
-        set => Pointer->name = value is not null ? ffmpeg.av_strdup(value) : default;
+        get => Helpers.PtrToString(Target->name);
+        set => Target->name = value is not null ? ffmpeg.av_strdup(value) : default;
     }
 
     public int PadIndex
     {
-        get => Pointer->pad_idx;
-        set => Pointer->pad_idx = value;
+        get => Target->pad_idx;
+        set => Target->pad_idx = value;
     }
 
     public FFFilterInOut? Next
     {
-        get => Address.IsNotNull() && Pointer->next is not null ? new(Pointer->next) : default;
-        set => Pointer->next = value.IsNotNull() ? value!.Pointer : default;
+        get => Address.IsNotNull() && Target->next is not null ? new(Target->next) : default;
+        set => Target->next = value.IsNotNull() ? value!.Target : default;
     }
 
     public FFFilterContext? Filter
     {
-        get => Address.IsNotNull() && Pointer->filter_ctx is not null ? new(Pointer->filter_ctx) : default;
-        set => Pointer->filter_ctx = value.IsNotNull() ? value!.Pointer : default;
+        get => Address.IsNotNull() && Target->filter_ctx is not null ? new(Target->filter_ctx) : default;
+        set => Target->filter_ctx = value.IsNotNull() ? value!.Target : default;
     }
 
     public void Release()
     {
         if (Address.IsNotNull())
         {
-            var pointer = Pointer;
+            var pointer = Target;
             ffmpeg.avfilter_inout_free(&pointer);
         }
 

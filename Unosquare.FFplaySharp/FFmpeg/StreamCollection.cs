@@ -10,9 +10,9 @@ public unsafe sealed class StreamCollection : ChildCollection<FFFormatContext, F
 
     public override FFStream this[int index]
     {
-        get => new(Parent.Pointer->streams[index]);
-        set => Parent.Pointer->streams[index] = value.Pointer;
+        get => new(Parent.Target->streams[index]);
+        set => Parent.Target->streams[index] = value.Target;
     }
 
-    public override int Count => Convert.ToInt32(Parent.Pointer->nb_streams);
+    public override int Count => Convert.ToInt32(Parent.Target->nb_streams);
 }

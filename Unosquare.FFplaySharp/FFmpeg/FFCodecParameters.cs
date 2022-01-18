@@ -1,24 +1,24 @@
 ﻿namespace FFmpeg;
 
-public unsafe sealed class FFCodecParameters : UnmanagedReference<AVCodecParameters>
+public unsafe sealed class FFCodecParameters : NativeReference<AVCodecParameters>
 {
-    public FFCodecParameters(AVCodecParameters* pointer)
-        : base(pointer)
+    public FFCodecParameters(AVCodecParameters* target)
+        : base(target)
     {
         // placeholder
     }
 
-    public AVMediaType CodecType => Pointer->codec_type;
+    public AVMediaType CodecType => Target->codec_type;
 
-    public AVCodecID CodecId => Pointer->codec_id;
+    public AVCodecID CodecId => Target->codec_id;
 
-    public int SampleRate => Pointer->sample_rate;
+    public int SampleRate => Target->sample_rate;
 
-    public int Channels => Pointer->channels;
+    public int Channels => Target->channels;
 
-    public int Width => Pointer->width;
+    public int Width => Target->width;
 
-    public int Height => Pointer->height;
+    public int Height => Target->height;
 
-    public AVRational SampleAspectRatio => Pointer->sample_aspect_ratio;
+    public AVRational SampleAspectRatio => Target->sample_aspect_ratio;
 }

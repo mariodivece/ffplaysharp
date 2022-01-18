@@ -3,14 +3,14 @@
 public sealed class FrameQueue : IDisposable
 {
     private readonly object SyncLock = new();
-    private readonly AutoResetEvent ChangedEvent = new(false);
+    private readonly ManualResetEventSlim ChangedEvent = new(false);
     private readonly FrameHolder[] Frames;
     private readonly PacketQueue Packets;
 
-    private bool m_IsReadIndexShown;
-    private int m_ReadIndex;
-    private int m_WriteIndex;
-    private int m_Count;
+    private long m_IsReadIndexShown;
+    private long m_ReadIndex;
+    private long m_WriteIndex;
+    private long m_Count;
 
     public FrameQueue(PacketQueue packets, int capacity, bool keepLast)
     {
@@ -29,8 +29,8 @@ public sealed class FrameQueue : IDisposable
 
     public bool IsReadIndexShown
     {
-        get { lock (SyncLock) return m_IsReadIndexShown; }
-        private set { lock (SyncLock) m_IsReadIndexShown = value; }
+        get => Interlocked.Read(ref m_IsReadIndexShown) != 0;
+        private set => Interlocked.Exchange(ref m_IsReadIndexShown, value ? 1 : 0);
     }
 
     public int Capacity { get; }
@@ -39,20 +39,20 @@ public sealed class FrameQueue : IDisposable
 
     public int ReadIndex
     {
-        get { lock (SyncLock) return m_ReadIndex; }
-        private set { lock (SyncLock) m_ReadIndex = value; }
+        get => (int)Interlocked.Read(ref m_ReadIndex);
+        private set => Interlocked.Exchange(ref m_ReadIndex, value);
     }
 
     public int WriteIndex
     {
-        get { lock (SyncLock) return m_WriteIndex; }
-        private set { lock (SyncLock) m_WriteIndex = value; }
+        get => (int)Interlocked.Read(ref m_WriteIndex);
+        private set => Interlocked.Exchange(ref m_WriteIndex, value);
     }
 
     public int Count
     {
-        get { lock (SyncLock) return m_Count; }
-        private set { lock (SyncLock) m_Count = value; }
+        get => (int)Interlocked.Read(ref m_Count);
+        private set => Interlocked.Exchange(ref m_Count, value);
     }
 
     public void SignalChanged() => ChangedEvent.Set();
@@ -61,7 +61,9 @@ public sealed class FrameQueue : IDisposable
     {
         // wait until we have space to put a new frame
         while (Count >= Capacity && !Packets.IsClosed)
-            ChangedEvent.WaitOne();
+            ChangedEvent.Wait(Constants.EventWaitTime);
+
+        ChangedEvent.Reset();
 
         lock (SyncLock)
         {
@@ -82,12 +84,13 @@ public sealed class FrameQueue : IDisposable
     {
         // wait until we have a readable a new frame
         while (Count - (IsReadIndexShown ? 1 : 0) <= 0 && !Packets.IsClosed)
-            ChangedEvent.WaitOne();
+            ChangedEvent.Wait(Constants.EventWaitTime);
 
-        if (Packets.IsClosed)
-            return default;
+        ChangedEvent.Reset();
 
-        return PeekCurrent();
+        return Packets.IsClosed
+            ? default
+            : PeekCurrent();
     }
 
     public FrameHolder PeekNext()

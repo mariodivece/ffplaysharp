@@ -10,10 +10,10 @@ public unsafe sealed class SubtitleRectCollection : ChildCollection<FFSubtitle, 
 
     public override FFSubtitleRect this[int index]
     {
-        get => new(Parent.Pointer->rects[index]);
-        set => Parent.Pointer->rects[index] = value.IsNotNull() ? value.Pointer : default;
+        get => new(Parent.Target->rects[index]);
+        set => Parent.Target->rects[index] = value.IsNotNull() ? value.Target : default;
     }
 
     public override int Count =>
-        Convert.ToInt32(Parent.Pointer->num_rects);
+        Convert.ToInt32(Parent.Target->num_rects);
 }

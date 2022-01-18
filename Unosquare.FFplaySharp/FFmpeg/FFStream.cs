@@ -1,30 +1,30 @@
 ﻿namespace FFmpeg;
 
-public unsafe sealed class FFStream : UnmanagedReference<AVStream>
+public unsafe sealed class FFStream : NativeReference<AVStream>
 {
-    public FFStream(AVStream* pointer)
-        : base(pointer)
+    public FFStream(AVStream* target)
+        : base(target)
     {
         // placeholder
     }
 
     public AVDiscard DiscardFlags
     {
-        get => Pointer->discard;
-        set => Pointer->discard = value;
+        get => Target->discard;
+        set => Target->discard = value;
     }
 
-    public FFCodecParameters CodecParameters => new(Pointer->codecpar);
+    public FFCodecParameters CodecParameters => new(Target->codecpar);
 
-    public AVRational TimeBase => Pointer->time_base;
+    public AVRational TimeBase => Target->time_base;
 
-    public long StartTime => Pointer->start_time;
+    public long StartTime => Target->start_time;
 
-    public int DispositionFlags => Pointer->disposition;
+    public int DispositionFlags => Target->disposition;
 
     public FFPacket CloneAttachedPicture()
     {
-        var packet = &Pointer->attached_pic;
+        var packet = &Target->attached_pic;
         return FFPacket.Clone(packet);
     }
 
@@ -35,7 +35,7 @@ public unsafe sealed class FFStream : UnmanagedReference<AVStream>
     /// <returns></returns>
     public double ComputeDisplayRotation()
     {
-        var displayMatrix = ffmpeg.av_stream_get_side_data(Pointer, AVPacketSideDataType.AV_PKT_DATA_DISPLAYMATRIX, null);
+        var displayMatrix = ffmpeg.av_stream_get_side_data(Target, AVPacketSideDataType.AV_PKT_DATA_DISPLAYMATRIX, null);
         var theta = displayMatrix is not null ? -ComputeMatrixRotation((int*)displayMatrix) : 0d;
         theta -= 360 * Math.Floor(theta / 360 + 0.9 / 360);
 

@@ -14,8 +14,9 @@ public abstract class FilteringMediaComponent : MediaComponent
 
     protected AVRational OutputFilterTimeBase => OutputFilter.TimeBase;
 
-    protected void MaterializeFilterGraph(
-        string filterGraphLiteral, FFFilterContext inputFilterContext, FFFilterContext outputFilterContext)
+    protected void MaterializeFilterGraph(string? filterGraphLiteral,
+        FFFilterContext inputFilterContext,
+        FFFilterContext outputFilterContext)
     {
         var initialFilterCount = FilterGraph.Filters.Count;
 

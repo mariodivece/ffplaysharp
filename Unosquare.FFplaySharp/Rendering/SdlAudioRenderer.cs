@@ -185,7 +185,7 @@ public unsafe class SdlAudioRenderer : IAudioRenderer
                 readByteCount = pendingByteCount;
 
             var outputStreamPointer = (byte*)audioStream.ToPointer();
-            var inputStreamPointer = ReadBuffer.Pointer + ReadBufferIndex;
+            var inputStreamPointer = ReadBuffer.Target + ReadBufferIndex;
 
             if (!Container.IsMuted && ReadBuffer.IsNotNull() && Volume == SDL.SDL_MIX_MAXVOLUME)
             {

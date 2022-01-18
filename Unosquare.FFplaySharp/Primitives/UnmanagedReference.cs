@@ -15,44 +15,46 @@ public interface INativeCountedReference : INativeReference
     void Release();
 }
 
-public unsafe interface IUnmanagedReference<T> : INativeReference
+public unsafe interface INativeReference<T> : INativeReference
     where T : unmanaged
 {
-    T* Pointer { get; }
+    T* Target { get; }
 
-    void Update(T* pointer);
+    void Update(T* target);
 
-    T PointerValue { get; }
+    T Value { get; }
 }
 
-public abstract unsafe class UnmanagedReference<T> : IUnmanagedReference<T>
+public abstract unsafe class NativeReference<T> : INativeReference<T>
     where T : unmanaged
 {
-    protected UnmanagedReference(T* pointer)
+    protected NativeReference(T* target)
     {
-        Update(pointer);
+        Update(target);
     }
 
-    protected UnmanagedReference()
+    protected NativeReference()
     {
         // placeholder
     }
 
     public IntPtr Address { get; protected set; } = IntPtr.Zero;
 
-    public T* Pointer => (T*)Address;
+    public T* Target => (T*)Address;
 
-    public T PointerValue => Address.IsNull() ? default : *Pointer;
+    public T Value => Address.IsNull() ? default : *Target;
 
     public void Update(IntPtr address) => Address = address;
 
-    public void Update(T* pointer) => Address = new(pointer);
+    public void Update(T* target) => Address = target is null
+        ? IntPtr.Zero
+        : new(target);
 }
 
-public abstract unsafe class UnmanagedCountedReference<T> : UnmanagedReference<T>, INativeCountedReference
+public abstract unsafe class CountedReference<T> : NativeReference<T>, INativeCountedReference
     where T : unmanaged
 {
-    protected UnmanagedCountedReference(string? filePath, int? lineNumber)
+    protected CountedReference(string? filePath, int? lineNumber)
         : base()
     {
         filePath ??= "(No file)";
@@ -67,12 +69,12 @@ public abstract unsafe class UnmanagedCountedReference<T> : UnmanagedReference<T
 
     public void Release()
     {
-        if (!Address.IsNull())
-            ReleaseInternal(Pointer);
+        if (Address.IsNotNull())
+            ReleaseInternal(Target);
 
         Update(IntPtr.Zero);
         ReferenceCounter.Remove(this);
     }
 
-    protected abstract void ReleaseInternal(T* pointer);
+    protected abstract void ReleaseInternal(T* target);
 }

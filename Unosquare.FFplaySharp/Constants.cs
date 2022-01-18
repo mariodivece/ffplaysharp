@@ -5,6 +5,8 @@ using SDL2;
 
 public static class Constants
 {
+    public const int EventWaitTime = 1;
+
     public const string ProgramName = "ffplay";
     public const int ProgramBirthYear = 2003;
 

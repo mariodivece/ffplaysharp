@@ -1,6 +1,6 @@
 ﻿namespace FFmpeg;
 
-public unsafe class FFDictionary : UnmanagedCountedReference<AVDictionary>
+public unsafe class FFDictionary : CountedReference<AVDictionary>
 {
     public FFDictionary([CallerFilePath] string? filePath = default, [CallerLineNumber] int? lineNumber = default)
         : base(filePath, lineNumber)
@@ -9,7 +9,7 @@ public unsafe class FFDictionary : UnmanagedCountedReference<AVDictionary>
         ReferenceCounter.Remove(this);
     }
 
-    public FFDictionaryEntry? First => FirstEntry(Pointer);
+    public FFDictionaryEntry? First => Target is null ? default : FirstEntry(Target);
 
     public string? this[string key]
     {
@@ -30,7 +30,7 @@ public unsafe class FFDictionary : UnmanagedCountedReference<AVDictionary>
     public void Set(string key, string? value, int flags)
     {
         var wasNull = Address.IsNull();
-        var pointer = Pointer;
+        var pointer = Target;
         pointer = SetEntry(pointer, key, value, flags);
         Update(pointer);
 
@@ -47,16 +47,16 @@ public unsafe class FFDictionary : UnmanagedCountedReference<AVDictionary>
         Set(key, default);
 
     public FFDictionaryEntry? Next(FFDictionaryEntry? previous) =>
-        NextEntry(Pointer, previous);
+        NextEntry(Target, previous);
 
     public FFDictionaryEntry? Find(string key, bool matchCase = false) =>
-        FindEntry(Pointer, key, matchCase);
+        FindEntry(Target, key, matchCase);
 
     public bool ContainsKey(string key, bool matchCase = false) =>
         Find(key, matchCase).IsNotNull();
 
     public Dictionary<string, string> ToDictionary() =>
-        Extract(Pointer);
+        Extract(Target);
 
     public static FFDictionary FromManaged(Dictionary<string, string> other,
         [CallerFilePath] string? filePath = default,
@@ -72,8 +72,8 @@ public unsafe class FFDictionary : UnmanagedCountedReference<AVDictionary>
         return result;
     }
 
-    protected override void ReleaseInternal(AVDictionary* pointer) =>
-         ffmpeg.av_dict_free(&pointer);
+    protected override void ReleaseInternal(AVDictionary* target) =>
+         ffmpeg.av_dict_free(&target);
 
     private static FFDictionaryEntry? FirstEntry(AVDictionary* dictionary)
     {
@@ -85,7 +85,7 @@ public unsafe class FFDictionary : UnmanagedCountedReference<AVDictionary>
         if (dictionary is null)
             return default;
 
-        var previous = previousEntry.IsNotNull() ? previousEntry!.Pointer : default;
+        var previous = previousEntry.IsNotNull() ? previousEntry!.Target : default;
         var entry = ffmpeg.av_dict_get(dictionary, string.Empty, previous, ffmpeg.AV_DICT_IGNORE_SUFFIX);
         return entry is not null ? new(entry) : default;
     }

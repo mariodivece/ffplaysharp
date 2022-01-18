@@ -1,15 +1,15 @@
 ﻿namespace FFmpeg;
 
-public unsafe class FFDictionaryEntry : UnmanagedReference<AVDictionaryEntry>
+public unsafe class FFDictionaryEntry : NativeReference<AVDictionaryEntry>
 {
-    public FFDictionaryEntry(AVDictionaryEntry* pointer)
-        : base(pointer)
+    public FFDictionaryEntry(AVDictionaryEntry* target)
+        : base(target)
     {
-        if (pointer is null)
+        if (target is null)
             return;
 
-        Key = Helpers.PtrToString(pointer->key);
-        Value = Helpers.PtrToString(pointer->value);
+        Key = Helpers.PtrToString(target->key);
+        Value = Helpers.PtrToString(target->value);
     }
 
     public string Key { get; }

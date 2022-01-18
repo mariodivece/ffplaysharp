@@ -1,22 +1,22 @@
 ﻿namespace FFmpeg;
 
-public unsafe sealed class FFSubtitleRect : UnmanagedReference<AVSubtitleRect>
+public unsafe sealed class FFSubtitleRect : NativeReference<AVSubtitleRect>
 {
-    public FFSubtitleRect(AVSubtitleRect* pointer)
-        : base(pointer)
+    public FFSubtitleRect(AVSubtitleRect* target)
+        : base(target)
     {
         // placeholder
     }
 
-    public int X => Pointer->x;
+    public int X => Target->x;
 
-    public int Y => Pointer->y;
+    public int Y => Target->y;
 
-    public int W => Pointer->w;
+    public int W => Target->w;
 
-    public int H => Pointer->h;
+    public int H => Target->h;
 
-    public byte_ptrArray4 Data => Pointer->data;
+    public byte_ptrArray4 Data => Target->data;
 
-    public int_array4 LineSize => Pointer->linesize;
+    public int_array4 LineSize => Target->linesize;
 }

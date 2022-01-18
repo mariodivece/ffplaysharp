@@ -183,11 +183,11 @@ public unsafe class MediaContainer
             container.Video.LastStreamIndex = container.Video.StreamIndex = -1;
             container.Audio.LastStreamIndex = container.Audio.StreamIndex = -1;
             container.Subtitle.LastStreamIndex = container.Subtitle.StreamIndex = -1;
-            container.FileName = o.InputFileName;
-            if (string.IsNullOrWhiteSpace(container.FileName))
+            if (string.IsNullOrWhiteSpace(o.InputFileName))
                 throw new ArgumentException($"{nameof(options)}.{nameof(options.InputFileName)} cannot be null.");
 
-            container.InputFormat = o.InputFormat ?? FFInputFormat.None;
+            container.FileName = o.InputFileName;
+            container.InputFormat = o.InputFormat ?? new();
             container.ytop = 0;
             container.xleft = 0;
 
@@ -624,7 +624,7 @@ public unsafe class MediaContainer
             if (Options.IsByteSeekingEnabled.IsAuto())
             {
                 Options.IsByteSeekingEnabled = Input.InputFormat.Flags.HasFlag(ffmpeg.AVFMT_TS_DISCONT) &&
-                    Input.InputFormat.Name != "ogg" ? ThreeState.On : ThreeState.Off;
+                    !Input.InputFormat.ShortNames.Any(c => c == "ogg") ? ThreeState.On : ThreeState.Off;
             }
 
             MaxPictureDuration = Input.InputFormat.Flags.HasFlag(ffmpeg.AVFMT_TS_DISCONT) ? 10.0 : 3600.0;
@@ -768,7 +768,7 @@ public unsafe class MediaContainer
                 }
 
                 if (IsPaused &&
-                        (Input.InputFormat.Name == "rtsp" ||
+                        (Input.InputFormat.ShortNames.Any(c => c == "rtsp") ||
                          (Input.IO.IsNotNull() && Options.InputFileName.StartsWith("mmsh:", StringComparison.OrdinalIgnoreCase))))
                 {
                     // wait 10 ms to avoid trying to get another packet

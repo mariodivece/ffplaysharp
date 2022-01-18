@@ -39,7 +39,7 @@ public abstract class MediaComponent
 
     public bool IsSubtitle => MediaType == AVMediaType.AVMEDIA_TYPE_SUBTITLE;
 
-    public abstract string WantedCodecName { get; }
+    public abstract string? WantedCodecName { get; }
 
     public bool IsPictureAttachmentStream =>
         MediaType.IsVideo() &&
@@ -80,7 +80,7 @@ public abstract class MediaComponent
         StreamIndex = -1;
     }
 
-    protected int DecodeFrame(FFFrame decodedFrame, FFSubtitle decodedSubtitle)
+    protected int DecodeFrame(FFFrame? decodedFrame, FFSubtitle? decodedSubtitle)
     {
         var resultCode = ffmpeg.AVERROR(ffmpeg.EAGAIN);
 
@@ -124,7 +124,7 @@ public abstract class MediaComponent
                 } while (resultCode != ffmpeg.AVERROR(ffmpeg.EAGAIN));
             }
 
-            FFPacket currentPacket;
+            FFPacket? currentPacket;
             do
             {
                 if (Packets.Count == 0)
@@ -145,7 +145,7 @@ public abstract class MediaComponent
                     }
 
                     if (currentPacket.IsNotNull())
-                        PacketGroupIndex = currentPacket.GroupIndex;
+                        PacketGroupIndex = currentPacket!.GroupIndex;
                 }
 
                 if (Packets.GroupIndex == PacketGroupIndex)

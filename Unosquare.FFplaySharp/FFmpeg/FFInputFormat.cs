@@ -1,21 +1,33 @@
 ﻿namespace FFmpeg;
 
-public unsafe sealed class FFInputFormat : UnmanagedReference<AVInputFormat>
+public unsafe sealed class FFInputFormat : NativeReference<AVInputFormat>
 {
-    public static readonly FFInputFormat None = new(null);
+    private const StringSplitOptions SplitOptions = StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries;
 
-    public FFInputFormat(AVInputFormat* pointer)
+    public FFInputFormat()
     {
-        Update(pointer);
+        // placeholder
     }
 
-    public int Flags => Pointer->flags;
+    public FFInputFormat(AVInputFormat* target)
+        : base(target)
+    {
+        // placeholder
+    }
 
-    public string Name => Helpers.PtrToString(Pointer->name);
+    public int Flags => Target->flags;
+
+    public IReadOnlyList<string> ShortNames => Target is null
+        ? Array.Empty<string>()
+        : Helpers.PtrToString(Target->name)!.Split(',', SplitOptions);
 
     public static FFInputFormat Find(string shortName)
     {
         var pointer = ffmpeg.av_find_input_format(shortName);
+
+        if (pointer is null)
+            throw new ArgumentException($"Could not find input format '{shortName}'", nameof(shortName));
+
         return new(pointer);
     }
 }

@@ -85,6 +85,9 @@ public class AudioParams
 
     public static long ComputeChannelLayout(FFFrame frame)
     {
+        if (frame.IsNull())
+            throw new ArgumentNullException(nameof(frame));
+
         return frame.ChannelLayout != 0 && frame.Channels == ChannelCountFor(frame.ChannelLayout)
             ? frame.ChannelLayout
             : DefaultChannelLayoutFor(frame.Channels);

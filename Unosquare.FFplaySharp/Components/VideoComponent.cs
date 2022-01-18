@@ -20,7 +20,7 @@ public sealed class VideoComponent : FilteringMediaComponent
 
     public override AVMediaType MediaType => AVMediaType.AVMEDIA_TYPE_VIDEO;
 
-    public override string WantedCodecName => Container.Options.AudioForcedCodecName;
+    public override string? WantedCodecName => Container.Options.AudioForcedCodecName;
 
     protected override FrameQueue CreateFrameQueue() => new(Packets, Constants.VideoFrameQueueCapacity, true);
 
@@ -189,17 +189,21 @@ public sealed class VideoComponent : FilteringMediaComponent
     /// <param name="lastFilter"></param>
     /// <returns></returns>
     private FFFilterContext InsertFilter(
-        string filterName, string filterArgs, FFFilterContext lastFilter)
+        string filterName, string? filterArgs, FFFilterContext lastFilter)
     {
+        var filter = FFFilter.FromName(filterName);
+        if (filter.IsNull())
+            throw new ArgumentException($"Known filter name '{filterName}' not found.", nameof(filterName));
+
         var insertedFilter = FFFilterContext.Create(
-            FilterGraph, FFFilter.FromName(filterName), $"ff_{filterName}", filterArgs);
+            FilterGraph, filter!, $"ff_{filterName}", filterArgs);
 
         FFFilterContext.Link(insertedFilter, lastFilter);
 
         return insertedFilter;
     }
 
-    private void ConfigureFilters(string filterGraphLiteral, FFFrame decoderFrame)
+    private void ConfigureFilters(string? filterGraphLiteral, FFFrame decoderFrame)
     {
         var codecParameters = Stream.CodecParameters;
         var frameRate = Container.Input.GuessFrameRate(Stream);
@@ -226,11 +230,8 @@ public sealed class VideoComponent : FilteringMediaComponent
         if (frameRate.num != 0 && frameRate.den != 0)
             sourceFilterArguments = $"{sourceFilterArguments}:frame_rate={frameRate.num}/{frameRate.den}";
 
-        var sourceFilter = FFFilterContext.Create(
-            FilterGraph, FFFilter.FromName("buffer"), "videoSourceBuffer", sourceFilterArguments);
-
-        var outputFilter = FFFilterContext.Create(
-            FilterGraph, FFFilter.FromName("buffersink"), "videoSinkBuffer", null);
+        var sourceFilter = FFFilterContext.Create(FilterGraph, "buffer", "videoSourceBuffer", sourceFilterArguments);
+        var outputFilter = FFFilterContext.Create(FilterGraph, "buffersink", "videoSinkBuffer");
 
         outputFilter.SetOptionList("pix_fmts", outputPixelFormats.ToArray());
 

@@ -1,6 +1,6 @@
 ﻿namespace FFmpeg;
 
-public unsafe sealed class FFPacket : UnmanagedCountedReference<AVPacket>, ISerialGroupable
+public unsafe sealed class FFPacket : CountedReference<AVPacket>, ISerialGroupable
 {
     public FFPacket([CallerFilePath] string? filePath = default, [CallerLineNumber] int? lineNumber = default)
         : this(ffmpeg.av_packet_alloc(), filePath, lineNumber)
@@ -24,26 +24,26 @@ public unsafe sealed class FFPacket : UnmanagedCountedReference<AVPacket>, ISeri
 
     public int StreamIndex
     {
-        get => Pointer->stream_index;
-        set => Pointer->stream_index = value;
+        get => Target->stream_index;
+        set => Target->stream_index = value;
     }
 
     public int Size
     {
-        get => Pointer->size;
-        set => Pointer->size = value;
+        get => Target->size;
+        set => Target->size = value;
     }
 
     public long DurationUnits
     {
-        get => Pointer->duration;
-        set => Pointer->duration = value;
+        get => Target->duration;
+        set => Target->duration = value;
     }
 
     public byte* Data
     {
-        get => Pointer->data;
-        set => Pointer->data = value;
+        get => Target->data;
+        set => Target->data = value;
     }
 
     public bool HasData => Address.IsNotNull() && Data is not null;
@@ -56,7 +56,7 @@ public unsafe sealed class FFPacket : UnmanagedCountedReference<AVPacket>, ISeri
             IsFlushPacket = true
         };
 
-        packet.Data = (byte*)packet.Pointer;
+        packet.Data = (byte*)packet.Target;
         return packet;
     }
 
@@ -78,12 +78,12 @@ public unsafe sealed class FFPacket : UnmanagedCountedReference<AVPacket>, ISeri
 
     public FFPacket Clone([CallerFilePath] string? filePath = default, [CallerLineNumber] int? lineNumber = default) => Address.IsNull()
         ? throw new InvalidOperationException("Cannot clone a null packet pointer")
-        : new(ffmpeg.av_packet_clone(Pointer), filePath, lineNumber);
+        : new(ffmpeg.av_packet_clone(Target), filePath, lineNumber);
 
-    public long Pts => Pointer->pts.IsValidPts()
-        ? Pointer->pts
-        : Pointer->dts;
+    public long Pts => Target->pts.IsValidPts()
+        ? Target->pts
+        : Target->dts;
 
-    protected override void ReleaseInternal(AVPacket* pointer) =>
-        ffmpeg.av_packet_free(&pointer);
+    protected override void ReleaseInternal(AVPacket* target) =>
+        ffmpeg.av_packet_free(&target);
 }

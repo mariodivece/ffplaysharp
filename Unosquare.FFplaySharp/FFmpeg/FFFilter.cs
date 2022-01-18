@@ -1,6 +1,6 @@
 ﻿namespace FFmpeg;
 
-public unsafe sealed class FFFilter : UnmanagedReference<AVFilter>
+public unsafe sealed class FFFilter : NativeReference<AVFilter>
 {
     private FFFilter(AVFilter* pointer)
         : base(pointer)

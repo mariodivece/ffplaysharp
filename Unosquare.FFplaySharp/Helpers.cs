@@ -65,12 +65,14 @@ public static class Helpers
 
     public static string ToName(this AVMediaType t) => ffmpeg.av_get_media_type_string(t);
 
-    public static unsafe string PtrToString(byte* ptr) => PtrToString((IntPtr)ptr);
+    public static unsafe string? PtrToString(byte* target) => target is null
+        ? default
+        : PtrToString((IntPtr)target);
 
-    public static unsafe string PtrToString(IntPtr address)
+    public static unsafe string? PtrToString(IntPtr address)
     {
         if (address.IsNull())
-            return null;
+            return default;
 
         var source = (byte*)address.ToPointer();
         var length = 0;

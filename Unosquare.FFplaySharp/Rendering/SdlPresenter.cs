@@ -1,7 +1,5 @@
 ﻿namespace Unosquare.FFplaySharp.Rendering;
-
 using SDL2;
-
 
 public unsafe class SdlPresenter : IPresenter
 {
@@ -157,8 +155,8 @@ public unsafe class SdlPresenter : IPresenter
                             {
                                 pos = Container.StreamBytePosition;
 
-                                if (Container.Input.Pointer->bit_rate != 0)
-                                    incr *= Container.Input.Pointer->bit_rate / 8.0;
+                                if (Container.Input.Target->bit_rate != 0)
+                                    incr *= Container.Input.Target->bit_rate / 8.0;
                                 else
                                     incr *= 180000.0;
 
@@ -206,7 +204,7 @@ public unsafe class SdlPresenter : IPresenter
                 case (int)SDL.SDL_EventType.SDL_MOUSEMOTION:
                     if (IsCursorHidden)
                     {
-                        SDL.SDL_ShowCursor(1);
+                        _ = SDL.SDL_ShowCursor(1);
                         IsCursorHidden = false;
                     }
 
