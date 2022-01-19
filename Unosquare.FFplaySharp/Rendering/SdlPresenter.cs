@@ -281,7 +281,7 @@ public unsafe class SdlPresenter : IPresenter
 
         SDL.SDL_Quit();
         (string.Empty).LogQuiet();
-        ReferenceCounter.VeirfyZero();
+        ReferenceCounter.VerifyZero();
         Environment.Exit(0);
     }
 

@@ -193,10 +193,9 @@ public unsafe class SdlAudioRenderer : IAudioRenderer
             }
             else
             {
-                Parallel.For(0, readByteCount, (i) =>
-                {
+                // Clear the output stream.
+                for (var i = 0; i < readByteCount; i++)
                     outputStreamPointer[i] = 0;
-                });
 
                 if (!Container.IsMuted && ReadBuffer.IsNotNull())
                     SDL.SDL_MixAudioFormat(

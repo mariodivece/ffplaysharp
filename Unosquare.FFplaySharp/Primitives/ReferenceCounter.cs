@@ -4,8 +4,8 @@ public static class ReferenceCounter
 {
     private static readonly object SyncLock = new();
     private static readonly SortedDictionary<ulong, (INativeCountedReference obj, string source)> Graph = new();
-    private static ulong LastObjectId = 0;
-    private static ulong m_Count = 0;
+    private static ulong LastObjectId;
+    private static ulong m_Count;
 
     public static ulong Add(INativeCountedReference item, string source)
     {
@@ -42,7 +42,7 @@ public static class ReferenceCounter
         }
     }
 
-    public static void VeirfyZero()
+    public static void VerifyZero()
     {
         if (Count != 0)
         {
