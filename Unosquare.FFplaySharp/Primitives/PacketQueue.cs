@@ -3,34 +3,33 @@
 public sealed class PacketQueue : ISerialGroupable, IDisposable
 {
     private readonly object SyncLock = new();
-    private readonly ManualResetEventSlim IsAvailableEvent = new(false);
+    private readonly AutoResetEvent IsAvailableEvent = new(false);
     private long m_IsClosed = 1; // starts in a blocked state
     private FFPacket? First;
     private FFPacket? Last;
 
-    private int m_Count;
-    private int m_ByteSize;
+    private long m_Count;
+    private long m_ByteSize;
     private long m_DurationUnits;
-    private int m_GroupIndex;
+    private long m_GroupIndex;
 
     public PacketQueue(MediaComponent component)
     {
         Component = component;
-
     }
 
     public MediaComponent Component { get; }
 
     public int Count
     {
-        get { lock (SyncLock) return m_Count; }
-        private set { lock (SyncLock) m_Count = value; }
+        get => (int)Interlocked.Read(ref m_Count);
+        private set => Interlocked.Exchange(ref m_Count, value);
     }
 
     public int ByteSize
     {
-        get { lock (SyncLock) return m_ByteSize; }
-        private set { lock (SyncLock) m_ByteSize = value; }
+        get => (int)Interlocked.Read(ref m_ByteSize);
+        private set => Interlocked.Exchange(ref m_ByteSize, value);
     }
 
     /// <summary>
@@ -38,8 +37,8 @@ public sealed class PacketQueue : ISerialGroupable, IDisposable
     /// </summary>
     public long DurationUnits
     {
-        get { lock (SyncLock) return m_DurationUnits; }
-        private set { lock (SyncLock) m_DurationUnits = value; }
+        get => Interlocked.Read(ref m_DurationUnits);
+        private set => Interlocked.Exchange(ref m_DurationUnits, value);
     }
 
     /// <summary>
@@ -47,8 +46,8 @@ public sealed class PacketQueue : ISerialGroupable, IDisposable
     /// </summary>
     public int GroupIndex
     {
-        get { lock (SyncLock) return m_GroupIndex; }
-        private set { lock (SyncLock) m_GroupIndex = value; }
+        get => (int)Interlocked.Read(ref m_GroupIndex);
+        private set => Interlocked.Exchange(ref m_GroupIndex, value);
     }
 
     public bool IsClosed
@@ -135,10 +134,8 @@ public sealed class PacketQueue : ISerialGroupable, IDisposable
             if (!blockWait)
                 return default;
 
-            if (!IsAvailableEvent.Wait(Constants.EventWaitTime))
+            if (!IsAvailableEvent.WaitOne())
                 continue;
-
-            IsAvailableEvent.Reset();
         }
     }
 

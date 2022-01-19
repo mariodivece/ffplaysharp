@@ -3,7 +3,7 @@
 public sealed class FrameQueue : IDisposable
 {
     private readonly object SyncLock = new();
-    private readonly ManualResetEventSlim ChangedEvent = new(false);
+    private readonly AutoResetEvent ChangedEvent = new(false);
     private readonly FrameHolder[] Frames;
     private readonly PacketQueue Packets;
 
@@ -61,9 +61,7 @@ public sealed class FrameQueue : IDisposable
     {
         // wait until we have space to put a new frame
         while (Count >= Capacity && !Packets.IsClosed)
-            ChangedEvent.Wait(Constants.EventWaitTime);
-
-        ChangedEvent.Reset();
+            ChangedEvent.WaitOne();
 
         lock (SyncLock)
         {
@@ -84,9 +82,7 @@ public sealed class FrameQueue : IDisposable
     {
         // wait until we have a readable a new frame
         while (Count - (IsReadIndexShown ? 1 : 0) <= 0 && !Packets.IsClosed)
-            ChangedEvent.Wait(Constants.EventWaitTime);
-
-        ChangedEvent.Reset();
+            ChangedEvent.WaitOne();
 
         return Packets.IsClosed
             ? default
@@ -141,14 +137,7 @@ public sealed class FrameQueue : IDisposable
     /// <summary>
     /// Gets the number the number of undisplayed frames in the queue.
     /// </summary>
-    public int PendingCount
-    {
-        get
-        {
-            lock (SyncLock)
-                return Count - (IsReadIndexShown ? 1 : 0);
-        }
-    }
+    public int PendingCount => Count - (IsReadIndexShown ? 1 : 0);
 
     /// <summary>
     /// Gets the last shown byte position within the stream.
