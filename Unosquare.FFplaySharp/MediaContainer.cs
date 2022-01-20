@@ -743,6 +743,9 @@ public unsafe class MediaContainer
             PrepareInput();
             OpenComponents();
 
+            var isRstpStream = Input.InputFormat?.ShortNames.Any(c => c.ToUpperInvariant().Equals("RTSP", StringComparison.Ordinal)) ?? false;
+            var isMmshProtocol = Options.InputFileName?.StartsWith("mmsh:", StringComparison.OrdinalIgnoreCase) ?? false;
+
             while (true)
             {
                 if (IsAbortRequested)
@@ -757,14 +760,12 @@ public unsafe class MediaContainer
                         Input.ReadPlay();
                 }
 
-                if (IsPaused &&
-                        (Input.InputFormat.ShortNames.Any(c => c == "rtsp") ||
-                         (Input.IO.IsNotNull() && Options.InputFileName.StartsWith("mmsh:", StringComparison.OrdinalIgnoreCase))))
+                if (IsPaused && (isRstpStream || (Input.IO.IsNotNull() && isMmshProtocol)))
                 {
                     // wait 10 ms to avoid trying to get another packet
                     // XXX: horrible
-                    // ffmpeg.av_usleep(10000);
-                    Helpers.Sleep(10);
+                    // SDL.SDL_Delay(10)
+                    ffmpeg.av_usleep(10000);
                     continue;
                 }
 
@@ -784,7 +785,7 @@ public unsafe class MediaContainer
                 }
 
                 // if the queue are full, no need to read more
-                if (Options.IsInfiniteBufferEnabled != ThreeState.On && (HasEnoughPacketBuffer || HasEnoughPacketCount))
+                if (Options.IsInfiniteBufferEnabled is not ThreeState.On && (HasEnoughPacketBuffer || HasEnoughPacketCount))
                 {
                     // wait 10 ms
                     NeedsMorePacketsEvent.WaitOne(10, true);
@@ -793,7 +794,7 @@ public unsafe class MediaContainer
 
                 if (!IsPaused && Audio.HasFinishedDecoding && Video.HasFinishedDecoding)
                 {
-                    if (Options.LoopCount != 1 && (Options.LoopCount == 0 || (--Options.LoopCount) > 0))
+                    if (Options.LoopCount is not 1 && (Options.LoopCount is 0 || (--Options.LoopCount) > 0))
                     {
                         SeekByTimestamp(Options.StartOffset.IsValidPts() ? Options.StartOffset : 0);
                     }

@@ -112,8 +112,7 @@ public unsafe sealed class AudioComponent : FilteringMediaComponent, ISerialGrou
                 if (elapsedCallback > callbackTimeout)
                     return result;
 
-                // ffmpeg.av_usleep(1000);
-                Helpers.Sleep(1);
+                ffmpeg.av_usleep(1000);
             }
 
             if ((audio = Frames.PeekWaitCurrent()) is null)

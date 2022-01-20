@@ -149,8 +149,7 @@ public sealed class PacketQueue : ISerialGroupable, IDisposable
             if (!blockWait)
                 return default;
 
-            if (!IsAvailableEvent.WaitOne(10, true))
-                continue;
+            IsAvailableEvent.WaitOne(10, true);
         }
     }
 
