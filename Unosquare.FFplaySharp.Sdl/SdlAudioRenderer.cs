@@ -1,6 +1,4 @@
-﻿namespace Unosquare.FFplaySharp.Rendering;
-
-using SDL2;
+﻿namespace Unosquare.FFplaySharp.Sdl;
 
 public unsafe class SdlAudioRenderer : IAudioRenderer
 {
@@ -29,15 +27,24 @@ public unsafe class SdlAudioRenderer : IAudioRenderer
         if (Presenter.Container.Options.IsAudioDisabled)
         {
             parent.SdlInitFlags &= ~SDL.SDL_INIT_AUDIO;
+            return;
         }
-        else
-        {
-            const string AlsaBufferSizeName = "SDL_AUDIO_ALSA_SET_BUFFER_SIZE";
-            // Try to work around an occasional ALSA buffer underflow issue when the
-            // period size is NPOT due to ALSA resampling by forcing the buffer size.
-            if (Environment.GetEnvironmentVariable(AlsaBufferSizeName) is null)
-                Environment.SetEnvironmentVariable(AlsaBufferSizeName, "1", EnvironmentVariableTarget.Process);
-        }
+
+        const string AlsaBufferSizeName = "SDL_AUDIO_ALSA_SET_BUFFER_SIZE";
+        // Try to work around an occasional ALSA buffer underflow issue when the
+        // period size is NPOT due to ALSA resampling by forcing the buffer size.
+        if (Environment.GetEnvironmentVariable(AlsaBufferSizeName) is null)
+            Environment.SetEnvironmentVariable(AlsaBufferSizeName, "1", EnvironmentVariableTarget.Process);
+
+        var o = Container.Options;
+        if (o.StartupVolume < 0)
+            ($"-volume={o.StartupVolume} < 0, setting to 0.").LogWarning();
+
+        if (o.StartupVolume > 100)
+            ($"-volume={o.StartupVolume} > 100, setting to 100.").LogWarning();
+
+        o.StartupVolume = o.StartupVolume.Clamp(0, 100);
+        o.StartupVolume = (SDL.SDL_MIX_MAXVOLUME * o.StartupVolume / 100).Clamp(0, SDL.SDL_MIX_MAXVOLUME);
     }
 
     public int Volume { get; set; }

@@ -108,11 +108,12 @@ public unsafe sealed class AudioComponent : FilteringMediaComponent, ISerialGrou
 
             while (Frames.PendingCount == 0)
             {
-                var elapsedCallback = Clock.SystemTime - Container.Renderer.Audio.LastCallbackTime;
+                var elapsedCallback = Clock.SystemTime - Container.Presenter.Audio.LastCallbackTime;
                 if (elapsedCallback > callbackTimeout)
                     return result;
 
-                ffmpeg.av_usleep(1000);
+                // ffmpeg.av_usleep(1000);
+                Helpers.Sleep(1);
             }
 
             if ((audio = Frames.PeekWaitCurrent()) is null)
@@ -290,7 +291,7 @@ public unsafe sealed class AudioComponent : FilteringMediaComponent, ISerialGrou
             return;
 
         AbortDecoder();
-        Container.Renderer.Audio.Close();
+        Container.Presenter.Audio.Close();
         DisposeDecoder();
 
         ReleaseConvertContext();
@@ -310,7 +311,7 @@ public unsafe sealed class AudioComponent : FilteringMediaComponent, ISerialGrou
         ConfigureFilters(codecContext);
 
         var wantedSpec = AudioParams.FromFilterContext(OutputFilter);
-        var audioHardwareSpec = Container.Renderer.Audio.Open(wantedSpec);
+        var audioHardwareSpec = Container.Presenter.Audio.Open(wantedSpec);
         if (audioHardwareSpec.BufferSize < 0)
             throw new FFmpegException(-1, "Could not initialize audio hardware buffer.");
 

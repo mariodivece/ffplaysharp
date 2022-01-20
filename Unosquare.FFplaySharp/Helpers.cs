@@ -3,6 +3,9 @@
 public static class Helpers
 {
     private const string FFmpegDirectory = @"c:\ffmpeg\x64";
+    private static readonly ManualResetEvent SleepEvent = new(false);
+
+    internal static void Sleep(int timeoutMilliseconds = 1) => SleepEvent.WaitOne(timeoutMilliseconds, true);
 
     public static void SetFFmpegRootPath(string path = FFmpegDirectory) => ffmpeg.RootPath = path;
 

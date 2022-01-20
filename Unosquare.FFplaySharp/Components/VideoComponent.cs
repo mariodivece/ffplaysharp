@@ -1,7 +1,5 @@
 ﻿namespace Unosquare.FFplaySharp.Components;
 
-using SDL2;
-
 public sealed class VideoComponent : FilteringMediaComponent
 {
     private double FilterDelay;
@@ -68,10 +66,9 @@ public sealed class VideoComponent : FilteringMediaComponent
                 {
                     ConfigureFilters(filterLiteral, decodedFrame);
                 }
-                catch
+                catch (Exception ex)
                 {
-                    var evt = new SDL.SDL_Event() { type = (SDL.SDL_EventType)Constants.FF_QUIT_EVENT, };
-                    _ = SDL.SDL_PushEvent(ref evt);
+                    Container.Presenter.HandleFatalException(ex);
                     break;
                 }
 
@@ -139,7 +136,7 @@ public sealed class VideoComponent : FilteringMediaComponent
         queuedFrame.Update(sourceFrame, groupIndex, frameTime, duration);
         Frames.Enqueue();
 
-        Container.Renderer.Video.SetDefaultWindowSize(
+        Container.Presenter.Video.SetDefaultWindowSize(
             queuedFrame.Width, queuedFrame.Height, queuedFrame.Frame.SampleAspectRatio);
 
         return 0;
@@ -207,7 +204,7 @@ public sealed class VideoComponent : FilteringMediaComponent
     {
         var codecParameters = Stream.CodecParameters;
         var frameRate = Container.Input.GuessFrameRate(Stream);
-        var outputPixelFormats = Container.Renderer.Video.RetrieveSupportedPixelFormats().Cast<int>();
+        var outputPixelFormats = Container.Presenter.Video.RetrieveSupportedPixelFormats().Cast<int>();
         var softwareScalerFlags = string.Empty;
 
         foreach (var kvp in Container.Options.ScalerOptions)

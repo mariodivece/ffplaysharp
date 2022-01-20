@@ -13,4 +13,6 @@ public interface IPresenter
     public void Start();
 
     public void Stop();
+
+    public void HandleFatalException(Exception ex);
 }

@@ -205,6 +205,9 @@ public unsafe class ProgramOptions
 
     public static ProgramOptions FromCommandLineArguments(string[] args)
     {
+        // TODO: cmdutils.c
+        // https://github.com/FFmpeg/FFmpeg/blob/master/fftools/cmdutils.c
+
         var options = new ProgramOptions();
         var arguments = args.ToList();
 

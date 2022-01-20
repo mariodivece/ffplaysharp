@@ -61,7 +61,7 @@ public sealed class FrameQueue : IDisposable
     {
         // wait until we have space to put a new frame
         while (Count >= Capacity && !Packets.IsClosed)
-            ChangedEvent.WaitOne();
+            ChangedEvent.WaitOne(10, true);
 
         lock (SyncLock)
         {
@@ -82,7 +82,7 @@ public sealed class FrameQueue : IDisposable
     {
         // wait until we have a readable a new frame
         while (Count - (IsReadIndexShown ? 1 : 0) <= 0 && !Packets.IsClosed)
-            ChangedEvent.WaitOne();
+            ChangedEvent.WaitOne(10, true);
 
         return Packets.IsClosed
             ? default

@@ -1,7 +1,5 @@
 ﻿namespace Unosquare.FFplaySharp;
 
-using SDL2;
-
 public unsafe class MediaContainer
 {
     private readonly AVIOInterruptCB_callback InputInterruptCallback;
@@ -22,20 +20,20 @@ public unsafe class MediaContainer
     public int xleft;
     public int ytop;
 
-    private MediaContainer(ProgramOptions options, IPresenter renderer)
+    private MediaContainer(ProgramOptions options, IPresenter presenter)
     {
         InputInterruptCallback = new(InputInterrupt);
         Options = options ?? new();
         Audio = new(this);
         Video = new(this);
         Subtitle = new(this);
-        Renderer = renderer;
+        Presenter = presenter;
         Components = new List<MediaComponent>() { Audio, Video, Subtitle };
     }
 
     public FFFormatContext Input { get; private set; }
 
-    public IPresenter Renderer { get; }
+    public IPresenter Presenter { get; }
 
     public ProgramOptions Options { get; }
 
@@ -195,14 +193,6 @@ public unsafe class MediaContainer
             container.AudioClock = new Clock(container.Audio.Packets);
             container.ExternalClock = new Clock(container.ExternalClock);
 
-            if (container.Options.StartupVolume < 0)
-                ($"-volume={container.Options.StartupVolume} < 0, setting to 0.").LogWarning();
-
-            if (container.Options.StartupVolume > 100)
-                ($"-volume={container.Options.StartupVolume} > 100, setting to 100.").LogWarning();
-
-            container.Options.StartupVolume = container.Options.StartupVolume.Clamp(0, 100);
-            container.Options.StartupVolume = (SDL.SDL_MIX_MAXVOLUME * container.Options.StartupVolume / 100).Clamp(0, SDL.SDL_MIX_MAXVOLUME);
 
             container.IsMuted = false;
             container.ClockSyncMode = container.Options.ClockSyncType;
@@ -511,7 +501,7 @@ public unsafe class MediaContainer
                 IsPictureAttachmentPending = true;
 
             if (targetComponent.IsAudio)
-                Renderer.Audio.Pause();
+                Presenter.Audio.Pause();
         }
         catch
         {
@@ -630,8 +620,8 @@ public unsafe class MediaContainer
             MaxPictureDuration = Input.InputFormat.Flags.HasFlag(ffmpeg.AVFMT_TS_DISCONT) ? 10.0 : 3600.0;
 
             var metadata = Input.Metadata;
-            if (string.IsNullOrWhiteSpace(Renderer.Video.WindowTitle) && metadata.ContainsKey("title"))
-                Renderer.Video.WindowTitle = $"{metadata["title"]} - {Options.InputFileName}";
+            if (string.IsNullOrWhiteSpace(Presenter.Video.WindowTitle) && metadata.ContainsKey("title"))
+                Presenter.Video.WindowTitle = $"{metadata["title"]} - {Options.InputFileName}";
 
             // if seeking requested, we execute it
             if (Options.StartOffset.IsValidPts())
@@ -712,7 +702,7 @@ public unsafe class MediaContainer
             var codecpar = st.CodecParameters;
             var sar = Input.GuessAspectRatio(st, null);
             if (codecpar.Width != 0)
-                Renderer.Video.SetDefaultWindowSize(codecpar.Width, codecpar.Height, sar);
+                Presenter.Video.SetDefaultWindowSize(codecpar.Width, codecpar.Height, sar);
         }
 
         // open the streams
@@ -773,7 +763,8 @@ public unsafe class MediaContainer
                 {
                     // wait 10 ms to avoid trying to get another packet
                     // XXX: horrible
-                    SDL.SDL_Delay(10);
+                    // ffmpeg.av_usleep(10000);
+                    Helpers.Sleep(10);
                     continue;
                 }
 
@@ -796,7 +787,7 @@ public unsafe class MediaContainer
                 if (Options.IsInfiniteBufferEnabled != ThreeState.On && (HasEnoughPacketBuffer || HasEnoughPacketCount))
                 {
                     // wait 10 ms
-                    NeedsMorePacketsEvent.WaitOne(10);
+                    NeedsMorePacketsEvent.WaitOne(10, true);
                     continue;
                 }
 
@@ -816,13 +807,11 @@ public unsafe class MediaContainer
                     break;
             }
         }
-        catch
+        catch (Exception ex)
         {
             Input?.Release();
             Input = default;
-            SDL.SDL_Event sdlEvent = new();
-            sdlEvent.type = (SDL.SDL_EventType)Constants.FF_QUIT_EVENT;
-            _ = SDL.SDL_PushEvent(ref sdlEvent);
+            Presenter.HandleFatalException(ex);
         }
     }
 
@@ -885,7 +874,7 @@ public unsafe class MediaContainer
             if (Input.IO.IsNotNull() && Input.IO!.Error != 0)
                 return false;
 
-            NeedsMorePacketsEvent.WaitOne(10);
+            NeedsMorePacketsEvent.WaitOne(10, true);
             return true;
         }
         else

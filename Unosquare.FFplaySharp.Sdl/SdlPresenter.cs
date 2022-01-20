@@ -1,5 +1,4 @@
-﻿namespace Unosquare.FFplaySharp.Rendering;
-using SDL2;
+﻿namespace Unosquare.FFplaySharp.Sdl;
 
 public unsafe class SdlPresenter : IPresenter
 {
@@ -285,6 +284,12 @@ public unsafe class SdlPresenter : IPresenter
         Environment.Exit(0);
     }
 
+    public void HandleFatalException(Exception ex)
+    {
+        var evt = new SDL.SDL_Event() { type = (SDL.SDL_EventType)Constants.FF_QUIT_EVENT, };
+        _ = SDL.SDL_PushEvent(ref evt);
+    }
+
     /// <summary>
     /// Port of refresh_loop_wait_event.
     /// </summary>
@@ -303,12 +308,12 @@ public unsafe class SdlPresenter : IPresenter
                 IsCursorHidden = true;
             }
 
-            if (remainingTime > 0.0)
+            if (remainingTime <= double.Epsilon)
                 ffmpeg.av_usleep(Convert.ToUInt32(remainingTime * ffmpeg.AV_TIME_BASE));
 
             remainingTime = Constants.RefreshRate;
 
-            if (Container.ShowMode != ShowMode.None && (!Container.IsPaused || Video.ForceRefresh))
+            if (Container.ShowMode is not ShowMode.None && (!Container.IsPaused || Video.ForceRefresh))
                 Video.Present(ref remainingTime);
 
             SDL.SDL_PumpEvents();
@@ -336,6 +341,4 @@ public unsafe class SdlPresenter : IPresenter
             Container.ShowMode = (ShowMode)next;
         }
     }
-
-
 }

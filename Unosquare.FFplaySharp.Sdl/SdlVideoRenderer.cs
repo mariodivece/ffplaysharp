@@ -1,4 +1,4 @@
-﻿namespace Unosquare.FFplaySharp.Rendering;
+﻿namespace Unosquare.FFplaySharp.Sdl;
 
 using SDL2;
 
@@ -575,9 +575,9 @@ public unsafe class SdlVideoRenderer : IVideoRenderer
                 var ci = CultureInfo.InvariantCulture;
 
                 var buf = new StringBuilder()
-                    .Append(ci, $"{Container.MasterTime,-8:0.####} | ")
+                    .Append(ci, $"{Container.MasterTime,11:n3} | ")
                     .Append((Container.HasAudio && Container.HasVideo) ? "A-V" : (Container.HasVideo ? "M-V" : (Container.HasAudio ? "M-A" : "   ")))
-                    .Append(ci, $":{audioVideoDelay,9:0.####} | ")
+                    .Append(ci, $":{audioVideoDelay,11:n3} | ")
                     .Append(ci, $"fd={(Container.Video.DroppedFrameCount + DroppedPictureCount)} | ")
                     .Append(ci, $"aq={(audioQueueSize / 1024)}KB | ")
                     .Append(ci, $"vq={(videoQueueSize / 1024)}KB | ")
