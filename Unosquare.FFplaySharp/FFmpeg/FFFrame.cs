@@ -2,7 +2,7 @@
 
 public unsafe sealed class FFFrame : CountedReference<AVFrame>
 {
-    public FFFrame([CallerFilePath] string filePath = default, [CallerLineNumber] int lineNumber = default)
+    public FFFrame([CallerFilePath] string? filePath = default, [CallerLineNumber] int lineNumber = default)
         : base(filePath, lineNumber)
     {
         Update(ffmpeg.av_frame_alloc());

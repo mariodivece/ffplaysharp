@@ -173,7 +173,7 @@ public unsafe class SdlVideoRenderer : IVideoRenderer
                 SDL.SDL_UnlockTexture(texture);
             }
 
-            ($"Created {pixelWidth}x{pixelHeight} texture with {SDL.SDL_GetPixelFormatName(sdlFormat)}.").LogVerbose();
+            $"Created {pixelWidth}x{pixelHeight} texture with {SDL.SDL_GetPixelFormatName(sdlFormat)}.".LogVerbose();
         }
         return 0;
     }

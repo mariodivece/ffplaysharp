@@ -137,7 +137,7 @@ public abstract class MediaComponent
                 }
                 else
                 {
-                    currentPacket = Packets.Dequeue(true);
+                    Packets.TryDequeue(true, out currentPacket);
                     if (Packets.IsClosed)
                     {
                         currentPacket?.Release();

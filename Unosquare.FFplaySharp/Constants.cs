@@ -5,119 +5,117 @@ using SDL2;
 
 public static class Constants
 {
-    public const int EventWaitTime = 1;
-
     public const string ProgramName = "ffplay";
     public const int ProgramBirthYear = 2003;
 
     /// <summary>
-    /// Port of MAX_QUEUE_SIZE
+    /// Port of MAX_QUEUE_SIZE.
     /// </summary>
     public const int MaxQueueSize = 15 * 1024 * 1024;
     public const int MinPacketCount = 25;
 
     /// <summary>
-    /// Port of EXTERNAL_CLOCK_MIN_FRAMES
+    /// Port of EXTERNAL_CLOCK_MIN_FRAMES.
     /// </summary>
     public const int ExternalClockMinFrames = 2;
 
     /// <summary>
-    /// Port of EXTERNAL_CLOCK_MAX_FRAMES
+    /// Port of EXTERNAL_CLOCK_MAX_FRAMES.
     /// </summary>
     public const int ExternalClockMaxFrames = 10;
 
     /// <summary>
     /// Minimum SDL audio buffer size, in samples.
-    /// Port of SDL_AUDIO_MIN_BUFFER_SIZE
+    /// Port of SDL_AUDIO_MIN_BUFFER_SIZE.
     /// </summary>
     public const int SdlAudioMinBufferSize = 512;
 
     /// <summary>
     /// Calculate actual buffer size keeping in mind not cause too frequent audio callbacks.
-    /// Port of SDL_AUDIO_MAX_CALLBACKS_PER_SEC
+    /// Port of SDL_AUDIO_MAX_CALLBACKS_PER_SEC.
     /// </summary>
     public const int SdlAudioMaxCallbacksPerSec = 30;
 
     /// <summary>
-    /// Step size for volume control in dB
-    /// Port of SDL_VOLUME_STEP
+    /// Step size for volume control in dB.
+    /// Port of SDL_VOLUME_STEP.
     /// </summary>
     public const double SdlVolumeStep = 0.75;
 
     /// <summary>
     /// No AV sync correction is done if below the minimum AV sync threshold.
-    /// Port of AV_SYNC_THRESHOLD_MIN
+    /// Port of AV_SYNC_THRESHOLD_MIN.
     /// </summary>
     public const double MediaSyncThresholdMin = 0.04;
 
     /// <summary>
     /// AV sync correction is done if above the maximum AV sync threshold.
-    /// Port of AV_SYNC_THRESHOLD_MAX
+    /// Port of AV_SYNC_THRESHOLD_MAX.
     /// </summary>
     public const double MediaSyncThresholdMax = 0.1;
 
     /// <summary>
     /// If a frame duration is longer than this, it will not be duplicated to compensate AV sync.
-    /// Port of AV_SYNC_FRAMEDUP_THRESHOLD
+    /// Port of AV_SYNC_FRAMEDUP_THRESHOLD.
     /// </summary>
     public const double MediaSyncFrameDupThreshold = 0.1;
 
     /// <summary>
     /// no AV correction is done if too big error.
-    /// Port of AV_NOSYNC_THRESHOLD
+    /// Port of AV_NOSYNC_THRESHOLD.
     /// </summary>
     public const double MediaNoSyncThreshold = 10.0;
 
     /// <summary>
     /// maximum audio speed change to get correct sync.
-    /// Port of SAMPLE_CORRECTION_PERCENT_MAX
+    /// Port of SAMPLE_CORRECTION_PERCENT_MAX.
     /// </summary>
     public const double SampleCorrectionPercentMax = 10;
 
     /// <summary>
     /// External clock speed adjustment constants for realtime sources based on buffer fullness.
-    /// Port of EXTERNAL_CLOCK_SPEED_MIN
+    /// Port of EXTERNAL_CLOCK_SPEED_MIN.
     /// </summary>
     public const double ExternalClockSpeedMin = 0.900;
 
     /// <summary>
     /// External clock speed adjustment constants for realtime sources based on buffer fullness.
-    /// Port of EXTERNAL_CLOCK_SPEED_MAX
+    /// Port of EXTERNAL_CLOCK_SPEED_MAX.
     /// </summary>
     public const double ExternalClockSpeedMax = 1.010;
 
     /// <summary>
     /// External clock speed adjustment constants for realtime sources based on buffer fullness.
-    /// Port of EXTERNAL_CLOCK_SPEED_STEP
+    /// Port of EXTERNAL_CLOCK_SPEED_STEP.
     /// </summary>
     public const double ExternalClockSpeedStep = 0.001;
 
     /// <summary>
     /// We use about AUDIO_DIFF_AVG_NB A-V differences to make the average.
-    /// Port of AUDIO_DIFF_AVG_NB
+    /// Port of AUDIO_DIFF_AVG_NB.
     /// </summary>
     public const int AudioDiffAveragesCount = 20;
 
     /// <summary>
     /// Polls for possible required screen refresh at least this often, should be less than 1/fps.
-    /// Port of REFRESH_RATE
+    /// Port of REFRESH_RATE.
     /// </summary>
     public const double RefreshRate = 0.01;
 
     /// <summary>
     /// The size must be big enough to compensate the hardware audio buffersize size.
     /// TODO: We assume that a decoded and resampled frame fits into this buffer.
-    /// Port of SAMPLE_ARRAY_SIZE
+    /// Port of SAMPLE_ARRAY_SIZE.
     /// </summary>
     public const int SampleArraySize = 8 * 65536;
 
     /// <summary>
-    /// Port of CURSOR_HIDE_DELAY
+    /// Port of CURSOR_HIDE_DELAY.
     /// </summary>
     public const double CursorHideDelay = 1d;
 
     /// <summary>
-    /// Port of USE_ONEPASS_SUBTITLE_RENDER
+    /// Port of USE_ONEPASS_SUBTITLE_RENDER.
     /// </summary>
     public const bool UseOnePassSubtitleRender = true;
 
