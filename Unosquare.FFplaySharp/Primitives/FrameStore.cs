@@ -6,6 +6,7 @@
 public sealed class FrameStore : IDisposable, ISerialGroupable
 {
     private readonly object SyncLock = new();
+
     private readonly AutoResetEvent ChangedEvent = new(false);
     private readonly FrameHolder[] Frames;
     private readonly PacketStore Packets;
@@ -66,6 +67,11 @@ public sealed class FrameStore : IDisposable, ISerialGroupable
         private set => Interlocked.Exchange(ref m_IsReadIndexShown, value ? 1 : 0);
     }
 
+    public int ReadIndexShown
+    {
+        get { lock (SyncLock) return unchecked((int)m_IsReadIndexShown); }
+    }
+
     /// <summary>
     /// Gets the current frame index in the queue that can be read,
     /// regardless of whether or not the frame has been shown.
@@ -102,7 +108,7 @@ public sealed class FrameStore : IDisposable, ISerialGroupable
     /// </summary>
     public int PendingCount
     {
-        get { lock (SyncLock) return Count - (IsReadIndexShown ? 1 : 0); }
+        get { lock (SyncLock) return Count - ReadIndexShown; }
     }
 
     /// <summary>
@@ -115,9 +121,8 @@ public sealed class FrameStore : IDisposable, ISerialGroupable
         {
             lock (SyncLock)
             {
-                var currentFrame = Frames[ReadIndex];
-                return IsReadIndexShown && currentFrame.GroupIndex == GroupIndex
-                    ? currentFrame.Frame.PacketPosition
+                return IsReadIndexShown && Frames[ReadIndex] is FrameHolder item && item.GroupIndex == GroupIndex
+                    ? item.Frame.PacketPosition
                     : -1;
             }
         }
@@ -136,12 +141,12 @@ public sealed class FrameStore : IDisposable, ISerialGroupable
     /// Port of frame_queue_peek_writable.
     /// </summary>
     /// <returns>The frame.</returns>
-    public FrameHolder? PeekWriteable()
+    public FrameHolder? WaitPeekWriteable()
     {
         // wait until we have space to put a new frame
         // that is, our readable count is less than
         // the capacity of the queue.
-        while (Count >= Capacity && !IsClosed)
+        while (!IsClosed && Count >= Capacity)
             ChangedEvent.WaitOne(10, true);
 
         lock (SyncLock)
@@ -157,7 +162,7 @@ public sealed class FrameStore : IDisposable, ISerialGroupable
     public FrameHolder PeekShowable()
     {
         lock (SyncLock)
-            return Frames[(ReadIndex + (IsReadIndexShown ? 1 : 0)) % Capacity];
+            return Frames[(ReadIndex + ReadIndexShown) % Capacity];
     }
 
 
@@ -170,8 +175,9 @@ public sealed class FrameStore : IDisposable, ISerialGroupable
     public FrameHolder? WaitPeekShowable()
     {
         // wait until we have a readable a new frame
-        while (Count - (IsReadIndexShown ? 1 : 0) <= 0 && !IsClosed)
+        while (!IsClosed && PendingCount <= 0)
             ChangedEvent.WaitOne(10, true);
+            
 
         lock (SyncLock)
             return !IsClosed
@@ -186,7 +192,7 @@ public sealed class FrameStore : IDisposable, ISerialGroupable
     public FrameHolder PeekShowablePlus()
     {
         lock (SyncLock)
-            return Frames[(ReadIndex + (IsReadIndexShown ? 1 : 0) + 1) % Capacity];
+            return Frames[(ReadIndex + ReadIndexShown + 1) % Capacity];
     }
 
     /// <summary>
@@ -202,12 +208,13 @@ public sealed class FrameStore : IDisposable, ISerialGroupable
 
     /// <summary>
     /// After obtaining a writable frame by calling
-    /// <see cref="PeekWriteable"/> and writing to it,
+    /// <see cref="WaitPeekWriteable"/> and writing to it,
     /// call this method to commit it and make suck frame readable.
     /// Port of frame_queue_push.
     /// </summary>
     public void Enqueue()
     {
+
         lock (SyncLock)
         {
             if (++WriteIndex >= Capacity)

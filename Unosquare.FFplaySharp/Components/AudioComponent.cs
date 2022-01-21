@@ -438,7 +438,7 @@ public unsafe sealed class AudioComponent : FilteringMediaComponent, ISerialGrou
             var isFrameQueueAvailable = true;
             while ((resultCode = DequeueFilteringFrame(decodedFrame)) >= 0)
             {
-                var queuedFrame = Frames.PeekWriteable();
+                var queuedFrame = Frames.WaitPeekWriteable();
 
                 if (queuedFrame is null)
                 {

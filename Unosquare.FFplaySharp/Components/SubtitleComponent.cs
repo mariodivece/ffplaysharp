@@ -35,7 +35,7 @@ public sealed class SubtitleComponent : MediaComponent
                 continue;
             }
 
-            var queuedFrame = Frames.PeekWriteable();
+            var queuedFrame = Frames.WaitPeekWriteable();
             if (queuedFrame is null)
             {
                 frame.Release();

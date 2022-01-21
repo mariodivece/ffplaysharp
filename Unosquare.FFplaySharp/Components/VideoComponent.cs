@@ -128,7 +128,7 @@ public sealed class VideoComponent : FilteringMediaComponent
 
     private int EnqueueFrame(FFFrame sourceFrame, double frameTime, double duration, int groupIndex)
     {
-        var queuedFrame = Frames.PeekWriteable();
+        var queuedFrame = Frames.WaitPeekWriteable();
 
         if (queuedFrame is null)
             return -1;
