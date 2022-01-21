@@ -5,6 +5,7 @@
 /// </summary>
 public sealed class FrameStore : IDisposable, ISerialGroupable
 {
+    private readonly object SyncLock = new();
     private readonly AutoResetEvent ChangedEvent = new(false);
     private readonly FrameHolder[] Frames;
     private readonly PacketStore Packets;
@@ -61,7 +62,7 @@ public sealed class FrameStore : IDisposable, ISerialGroupable
     /// </summary>
     public bool IsReadIndexShown
     {
-        get => Interlocked.Read(ref m_IsReadIndexShown) != 0;
+        get { lock (SyncLock) return m_IsReadIndexShown != 0; }
         private set => Interlocked.Exchange(ref m_IsReadIndexShown, value ? 1 : 0);
     }
 
@@ -71,7 +72,7 @@ public sealed class FrameStore : IDisposable, ISerialGroupable
     /// </summary>
     public int ReadIndex
     {
-        get => (int)Interlocked.Read(ref m_ReadIndex);
+        get { lock (SyncLock) return unchecked((int)m_ReadIndex); }
         private set => Interlocked.Exchange(ref m_ReadIndex, value);
     }
 
@@ -81,7 +82,7 @@ public sealed class FrameStore : IDisposable, ISerialGroupable
     /// </summary>
     public int WriteIndex
     {
-        get => (int)Interlocked.Read(ref m_WriteIndex);
+        get { lock (SyncLock) return unchecked((int)m_WriteIndex); }
         private set => Interlocked.Exchange(ref m_WriteIndex, value);
     }
 
@@ -91,7 +92,7 @@ public sealed class FrameStore : IDisposable, ISerialGroupable
     /// </summary>
     public int Count
     {
-        get => (int)Interlocked.Read(ref m_Count);
+        get { lock (SyncLock) return unchecked((int)m_Count); }
         private set => Interlocked.Exchange(ref m_Count, value);
     }
 
@@ -99,7 +100,10 @@ public sealed class FrameStore : IDisposable, ISerialGroupable
     /// Gets the number the number of undisplayed frames in the queue.
     /// Port of frame_queue_nb_remaining.
     /// </summary>
-    public int PendingCount => Count - (IsReadIndexShown ? 1 : 0);
+    public int PendingCount
+    {
+        get { lock (SyncLock) return Count - (IsReadIndexShown ? 1 : 0); }
+    }
 
     /// <summary>
     /// Gets the last shown byte position within the stream.
@@ -109,10 +113,13 @@ public sealed class FrameStore : IDisposable, ISerialGroupable
     {
         get
         {
-            var currentFrame = Frames[ReadIndex];
-            return IsReadIndexShown && currentFrame.GroupIndex == GroupIndex
-                ? currentFrame.Frame.PacketPosition
-                : -1;
+            lock (SyncLock)
+            {
+                var currentFrame = Frames[ReadIndex];
+                return IsReadIndexShown && currentFrame.GroupIndex == GroupIndex
+                    ? currentFrame.Frame.PacketPosition
+                    : -1;
+            }
         }
     }
 
@@ -137,17 +144,22 @@ public sealed class FrameStore : IDisposable, ISerialGroupable
         while (Count >= Capacity && !IsClosed)
             ChangedEvent.WaitOne(10, true);
 
-        return !IsClosed
-            ? Frames[WriteIndex]
-            : default;
+        lock (SyncLock)
+            return !IsClosed
+                ? Frames[WriteIndex]
+                : default;
     }
 
     /// <summary>
     /// Gets the next available readable frame for showing.
     /// Port of frame_queue_peek.
     /// </summary>
-    public FrameHolder PeekShowable() =>
-        Frames[(ReadIndex + (IsReadIndexShown ? 1 : 0)) % Capacity];
+    public FrameHolder PeekShowable()
+    {
+        lock (SyncLock)
+            return Frames[(ReadIndex + (IsReadIndexShown ? 1 : 0)) % Capacity];
+    }
+
 
     /// <summary>
     /// Waits for a showable frame to be available and returns it.
@@ -161,25 +173,32 @@ public sealed class FrameStore : IDisposable, ISerialGroupable
         while (Count - (IsReadIndexShown ? 1 : 0) <= 0 && !IsClosed)
             ChangedEvent.WaitOne(10, true);
 
-        return !IsClosed
-            ? PeekShowable()
-            : default;
+        lock (SyncLock)
+            return !IsClosed
+                ? PeekShowable()
+                : default;
     }
 
     /// <summary>
     /// Gets the next+1 available readable frame for showing.
     /// Port of frame_queue_peek_next.
     /// </summary>
-    public FrameHolder PeekShowablePlus() =>
-        Frames[(ReadIndex + (IsReadIndexShown ? 1 : 0) + 1) % Capacity];
+    public FrameHolder PeekShowablePlus()
+    {
+        lock (SyncLock)
+            return Frames[(ReadIndex + (IsReadIndexShown ? 1 : 0) + 1) % Capacity];
+    }
 
     /// <summary>
     /// Returns the frame at the current read index
     /// regardless of its show state.
     /// Port of frame_queue_peek_last
     /// </summary>
-    public FrameHolder PeekReadable() =>
-        Frames[ReadIndex];
+    public FrameHolder PeekReadable()
+    {
+        lock (SyncLock)
+            return Frames[ReadIndex];
+    }
 
     /// <summary>
     /// After obtaining a writable frame by calling
@@ -189,10 +208,14 @@ public sealed class FrameStore : IDisposable, ISerialGroupable
     /// </summary>
     public void Enqueue()
     {
-        if (++WriteIndex >= Capacity)
-            WriteIndex = 0;
+        lock (SyncLock)
+        {
+            if (++WriteIndex >= Capacity)
+                WriteIndex = 0;
 
-        Count++;
+            Count++;
+        }
+
         ChangedEvent.Set();
     }
 
@@ -210,22 +233,29 @@ public sealed class FrameStore : IDisposable, ISerialGroupable
             return;
         }
 
-        Frames[ReadIndex].Reset();
-        if (++ReadIndex >= Capacity)
-            ReadIndex = 0;
+        lock (SyncLock)
+        {
+            Frames[ReadIndex].Reset();
+            if (++ReadIndex >= Capacity)
+                ReadIndex = 0;
 
-        Count--;
+            Count--;
+        }
+
         ChangedEvent.Set();
     }
 
     /// <inheritdoc />
     public void Dispose()
     {
-        // port of frame_queue_destory
-        for (var i = 0; i < Frames.Length; i++)
+        lock (SyncLock)
         {
-            Frames[i].Dispose();
-            Frames[i] = default;
+            // port of frame_queue_destory
+            for (var i = 0; i < Frames.Length; i++)
+            {
+                Frames[i].Dispose();
+                Frames[i] = default;
+            }
         }
 
         ChangedEvent.Dispose();

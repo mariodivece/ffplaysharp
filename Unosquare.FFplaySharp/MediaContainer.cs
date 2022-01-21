@@ -571,9 +571,17 @@ public unsafe class MediaContainer
 
     private MediaComponent? FindComponentByStreamIndex(int streamIndex)
     {
+        /*
         foreach (var c in Components)
         {
             if (c.StreamIndex == streamIndex)
+                return c;
+        }
+        */
+
+        for (var i = 0; i < Components.Count; i++)
+        {
+            if (Components[i] is MediaComponent c && c.StreamIndex == streamIndex)
                 return c;
         }
 
@@ -895,8 +903,7 @@ public unsafe class MediaContainer
                 (packetPtsOffset * streamTimeBase) - (startOffset / Clock.TimeBaseMicros)
                 <= (Options.Duration / Clock.TimeBaseMicros);
 
-        var component = FindComponentByStreamIndex(readPacket.StreamIndex);
-        if (component is not null && !component.IsPictureAttachmentStream && isPacketInPlayRange)
+        if (isPacketInPlayRange && FindComponentByStreamIndex(readPacket.StreamIndex) is MediaComponent component)
             component.Packets.Enqueue(readPacket);
         else
             readPacket.Release();

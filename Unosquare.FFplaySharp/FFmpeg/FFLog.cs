@@ -14,16 +14,16 @@ public static unsafe class FFLog
         set => ffmpeg.av_log_set_flags(value);
     }
 
-    private static void Log(void* opaque, int logLevel, string message, bool addNewLine = true) =>
+    private static void Log(void* opaque, int logLevel, in string message, bool addNewLine = true) =>
         ffmpeg.av_log(opaque, logLevel, addNewLine ? $"{message}\n" : message);
 
     public static void LogError(this string message, bool addNewLine = true) =>
         Log(null, ffmpeg.AV_LOG_ERROR, message, addNewLine);
 
-    public static void LogError(this FFCodecContext context, string message, bool addNewLine = true) =>
+    public static void LogError(this FFCodecContext context, in string message, bool addNewLine = true) =>
         Log(context.Target, ffmpeg.AV_LOG_ERROR, message, addNewLine);
 
-    public static void LogError(this FFFormatContext context, string message, bool addNewLine = true) =>
+    public static void LogError(this FFFormatContext context, in string message, bool addNewLine = true) =>
         Log(context.Target, ffmpeg.AV_LOG_ERROR, message, addNewLine);
 
     public static void LogWarning(this string message, bool addNewLine = true) =>
