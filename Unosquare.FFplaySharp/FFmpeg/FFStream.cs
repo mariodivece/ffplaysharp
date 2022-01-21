@@ -2,10 +2,10 @@
 
 public unsafe sealed class FFStream : NativeReference<AVStream>
 {
-    public FFStream(AVStream* target)
+    public FFStream(AVStream* target, FFFormatContext formatContext)
         : base(target)
     {
-        // placeholder
+        FormatContext = formatContext;
     }
 
     public AVDiscard DiscardFlags
@@ -14,13 +14,27 @@ public unsafe sealed class FFStream : NativeReference<AVStream>
         set => Target->discard = value;
     }
 
+    public FFFormatContext FormatContext { get; }
+
     public FFCodecParameters CodecParameters => new(Target->codecpar);
+
+    public int Index => Target->index;
 
     public AVRational TimeBase => Target->time_base;
 
     public long StartTime => Target->start_time;
 
     public int DispositionFlags => Target->disposition;
+
+    public IReadOnlyList<FFProgram> FindPrograms()
+    {
+        var result = new List<FFProgram>(16);
+        AVProgram* program = default;
+        while ((program = ffmpeg.av_find_program_from_stream(FormatContext.Target, program, Index)) is not null)
+            result.Add(new(program));
+
+        return result;
+    }
 
     public FFPacket CloneAttachedPicture()
     {

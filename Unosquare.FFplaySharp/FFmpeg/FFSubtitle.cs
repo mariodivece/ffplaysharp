@@ -2,7 +2,7 @@
 
 public unsafe sealed class FFSubtitle : CountedReference<AVSubtitle>
 {
-    public FFSubtitle([CallerFilePath] string filePath = default, [CallerLineNumber] int lineNumber = default)
+    public FFSubtitle([CallerFilePath] string? filePath = default, [CallerLineNumber] int? lineNumber = default)
         : base(filePath, lineNumber)
     {
         Update((AVSubtitle*)ffmpeg.av_mallocz((ulong)sizeof(AVSubtitle)));
@@ -19,7 +19,7 @@ public unsafe sealed class FFSubtitle : CountedReference<AVSubtitle>
 
     public int Format => Target->format;
 
-    public SubtitleRectCollection Rects => new(this);
+    public SubtitleRectSet Rects => new(this);
 
     protected override unsafe void ReleaseInternal(AVSubtitle* pointer) =>
         ffmpeg.avsubtitle_free(pointer);

@@ -1,8 +1,8 @@
 ﻿namespace FFmpeg;
 
-public unsafe sealed class StreamCollection : ChildCollection<FFFormatContext, FFStream>
+public unsafe sealed class StreamSet : NativeChildSet<FFFormatContext, FFStream>
 {
-    public StreamCollection(FFFormatContext parent)
+    public StreamSet(FFFormatContext parent)
         : base(parent)
     {
         // placeholder
@@ -10,7 +10,7 @@ public unsafe sealed class StreamCollection : ChildCollection<FFFormatContext, F
 
     public override FFStream this[int index]
     {
-        get => new(Parent.Target->streams[index]);
+        get => new(Parent.Target->streams[index], Parent);
         set => Parent.Target->streams[index] = value.Target;
     }
 

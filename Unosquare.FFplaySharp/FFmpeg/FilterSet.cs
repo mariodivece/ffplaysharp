@@ -1,8 +1,8 @@
 ﻿namespace FFmpeg;
 
-public unsafe sealed class FilterCollection : ChildCollection<FFFilterGraph, FFFilterContext>
+public unsafe sealed class FilterSet : NativeChildSet<FFFilterGraph, FFFilterContext>
 {
-    public FilterCollection(FFFilterGraph parent)
+    public FilterSet(FFFilterGraph parent)
         : base(parent)
     {
         // placeholder

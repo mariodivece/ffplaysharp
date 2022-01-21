@@ -1,8 +1,8 @@
 ﻿namespace FFmpeg;
 
-public unsafe sealed class SubtitleRectCollection : ChildCollection<FFSubtitle, FFSubtitleRect>
+public unsafe sealed class SubtitleRectSet : NativeChildSet<FFSubtitle, FFSubtitleRect>
 {
-    public SubtitleRectCollection(FFSubtitle parent)
+    public SubtitleRectSet(FFSubtitle parent)
         : base(parent)
     {
         // placeholder

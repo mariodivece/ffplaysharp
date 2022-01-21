@@ -2,7 +2,7 @@
 
 public unsafe sealed class RescalerContext : CountedReference<SwsContext>
 {
-    public RescalerContext([CallerFilePath] string filePath = default, [CallerLineNumber] int lineNumber = default)
+    public RescalerContext([CallerFilePath] string? filePath = default, [CallerLineNumber] int? lineNumber = default)
         : base(filePath, lineNumber)
     {
         Update(ffmpeg.sws_alloc_context());

@@ -270,7 +270,8 @@ public unsafe class MediaContainer
         FFProgram? program = default;
         if (component.IsVideo && component.StreamIndex != -1)
         {
-            program = Input.FindProgramByStream(component.StreamIndex);
+            var programs = component.Stream.FindPrograms();
+            program = programs.Any() ? programs[0] : default;
             if (program.IsNotNull())
             {
                 var streamIndices = program.StreamIndices;

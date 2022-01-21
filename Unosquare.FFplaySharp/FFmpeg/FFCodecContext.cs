@@ -2,7 +2,7 @@
 
 public unsafe sealed class FFCodecContext : CountedReference<AVCodecContext>
 {
-    public FFCodecContext([CallerFilePath] string filePath = default, [CallerLineNumber] int lineNumber = default)
+    public FFCodecContext([CallerFilePath] string? filePath = default, [CallerLineNumber] int? lineNumber = default)
         : base(filePath, lineNumber)
     {
         Update(ffmpeg.avcodec_alloc_context3(null));

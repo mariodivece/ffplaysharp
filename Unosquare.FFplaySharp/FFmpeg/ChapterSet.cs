@@ -1,8 +1,8 @@
 ﻿namespace FFmpeg;
 
-public unsafe sealed class ChapterCollection : ChildCollection<FFFormatContext, FFChapter>
+public unsafe sealed class ChapterSet : NativeChildSet<FFFormatContext, FFChapter>
 {
-    public ChapterCollection(FFFormatContext parent)
+    public ChapterSet(FFFormatContext parent)
         : base(parent)
     {
         // placeholder

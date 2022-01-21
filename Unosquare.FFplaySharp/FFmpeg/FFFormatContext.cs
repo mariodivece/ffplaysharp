@@ -9,7 +9,7 @@
 
     public unsafe sealed class FFFormatContext : CountedReference<AVFormatContext>
     {
-        public FFFormatContext([CallerFilePath] string filePath = default, [CallerLineNumber] int lineNumber = default)
+        public FFFormatContext([CallerFilePath] string? filePath = default, [CallerLineNumber] int? lineNumber = default)
             : base(filePath, lineNumber)
         {
             Update(ffmpeg.avformat_alloc_context());
@@ -23,9 +23,9 @@
             set => Target->interrupt_callback.callback = value;
         }
 
-        public StreamCollection Streams { get; }
+        public StreamSet Streams { get; }
 
-        public ChapterCollection Chapters { get; }
+        public ChapterSet Chapters { get; }
 
         public FFInputFormat? InputFormat => Target->iformat is not null
             ? new(Target->iformat)
@@ -104,12 +104,6 @@
         {
             packet = new FFPacket();
             return ffmpeg.av_read_frame(Target, packet.Target);
-        }
-
-        public FFProgram? FindProgramByStream(int streamIndex)
-        {
-            var program = ffmpeg.av_find_program_from_stream(Target, null, streamIndex);
-            return program is not null ? new(program) : default;
         }
 
         public AVRational GuessFrameRate(FFStream stream) => ffmpeg.av_guess_frame_rate(Target, stream.Target, null);

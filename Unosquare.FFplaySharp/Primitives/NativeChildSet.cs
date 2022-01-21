@@ -1,10 +1,10 @@
-﻿namespace FFmpeg;
+﻿namespace Unosquare.FFplaySharp.Primitives;
 
-public abstract unsafe class ChildCollection<TParent, TChild> : IReadOnlyList<TChild>
+public abstract unsafe class NativeChildSet<TParent, TChild> : IReadOnlyList<TChild>
     where TParent : INativeReference
     where TChild : INativeReference
 {
-    protected ChildCollection(TParent parent)
+    protected NativeChildSet(TParent parent)
     {
         Parent = parent;
     }

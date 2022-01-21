@@ -2,13 +2,13 @@
 
 public unsafe sealed class FFFilterGraph : CountedReference<AVFilterGraph>
 {
-    public FFFilterGraph([CallerFilePath] string filePath = default, [CallerLineNumber] int lineNumber = default)
+    public FFFilterGraph([CallerFilePath] string? filePath = default, [CallerLineNumber] int? lineNumber = default)
         : base(filePath, lineNumber)
     {
         Update(ffmpeg.avfilter_graph_alloc());
     }
 
-    public FilterCollection Filters => new(this);
+    public FilterSet Filters => new(this);
 
     public int ThreadCount
     {

@@ -2,7 +2,7 @@
 
 public unsafe sealed class ByteBuffer : CountedReference<byte>
 {
-    public ByteBuffer(ulong length, [CallerFilePath] string filePath = default, [CallerLineNumber] int lineNumber = default)
+    public ByteBuffer(ulong length, [CallerFilePath] string? filePath = default, [CallerLineNumber] int? lineNumber = default)
         : base(filePath, lineNumber)
     {
         var pointer = (byte*)ffmpeg.av_mallocz(length);
