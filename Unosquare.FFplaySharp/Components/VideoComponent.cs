@@ -20,7 +20,7 @@ public sealed class VideoComponent : FilteringMediaComponent
 
     public override string? WantedCodecName => Container.Options.AudioForcedCodecName;
 
-    protected override FrameQueue CreateFrameQueue() => new(Packets, Constants.VideoFrameQueueCapacity, true);
+    protected override FrameStore CreateFrameQueue() => new(Packets, Constants.VideoFrameQueueCapacity, true);
 
     protected override void DecodingThreadMethod()
     {

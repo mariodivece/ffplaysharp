@@ -185,11 +185,11 @@ public unsafe class SdlVideoRenderer : IVideoRenderer
     private void ComposePicture()
     {
         FrameHolder? subtitle = default;
-        var video = Container.Video.Frames.PeekPrevious();
+        var video = Container.Video.Frames.PeekReadable();
 
         if (Container.HasSubtitles && Container.Subtitle.Frames.PendingCount > 0)
         {
-            subtitle = Container.Subtitle.Frames.PeekCurrent();
+            subtitle = Container.Subtitle.Frames.PeekShowable();
 
             if (video.Time >= subtitle.StartDisplayTime)
             {
@@ -459,8 +459,8 @@ public unsafe class SdlVideoRenderer : IVideoRenderer
             else
             {
                 /* dequeue the picture */
-                var previousPicture = Container.Video.Frames.PeekPrevious();
-                var currentPicture = Container.Video.Frames.PeekCurrent();
+                var previousPicture = Container.Video.Frames.PeekReadable();
+                var currentPicture = Container.Video.Frames.PeekShowable();
 
                 if (currentPicture.GroupIndex != Container.Video.Packets.GroupIndex)
                 {
@@ -494,7 +494,7 @@ public unsafe class SdlVideoRenderer : IVideoRenderer
 
                 if (Container.Video.Frames.PendingCount > 1)
                 {
-                    var nextPicture = Container.Video.Frames.PeekNext();
+                    var nextPicture = Container.Video.Frames.PeekShowablePlus();
                     var duration = ComputePictureDuration(Container, currentPicture, nextPicture);
                     if (Container.IsInStepMode == false &&
                         (Container.Options.IsFrameDropEnabled > 0 ||
@@ -511,9 +511,9 @@ public unsafe class SdlVideoRenderer : IVideoRenderer
                 {
                     while (Container.Subtitle.Frames.PendingCount > 0)
                     {
-                        var sp = Container.Subtitle.Frames.PeekCurrent();
+                        var sp = Container.Subtitle.Frames.PeekShowable();
                         var sp2 = Container.Subtitle.Frames.PendingCount > 1
-                            ? Container.Subtitle.Frames.PeekNext()
+                            ? Container.Subtitle.Frames.PeekShowablePlus()
                             : null;
 
                         if (sp.GroupIndex != Container.Subtitle.Packets.GroupIndex

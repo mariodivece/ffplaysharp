@@ -1,10 +1,10 @@
-﻿#pragma warning disable CA1711 // Identifiers should not have incorrect suffix
-namespace Unosquare.FFplaySharp.Primitives;
+﻿namespace Unosquare.FFplaySharp.Primitives;
 
 /// <summary>
-/// Represents a queue of packets that belong to a specific component.
+/// Represents a queue-style data structure that stores
+/// stream packets that belong to a specific component.
 /// </summary>
-public sealed class PacketQueue : ISerialGroupable, IDisposable
+public sealed class PacketStore : ISerialGroupable, IDisposable
 {
     private readonly ConcurrentQueue<FFPacket> queue = new();
     private readonly AutoResetEvent IsAvailableEvent = new(false);
@@ -15,10 +15,10 @@ public sealed class PacketQueue : ISerialGroupable, IDisposable
     private long m_GroupIndex;
 
     /// <summary>
-    /// Creates a new instance of the <see cref="PacketQueue"/> class.
+    /// Creates a new instance of the <see cref="PacketStore"/> class.
     /// </summary>
     /// <param name="component">The associated component.</param>
-    public PacketQueue(MediaComponent component)
+    public PacketStore(MediaComponent component)
     {
         Component = component;
     }
@@ -77,7 +77,7 @@ public sealed class PacketQueue : ISerialGroupable, IDisposable
     public void Open()
     {
         if (isDisposed)
-            throw new ObjectDisposedException(nameof(PacketQueue));
+            throw new ObjectDisposedException(nameof(PacketStore));
 
         IsClosed = false;
         EnqueueFlush();
@@ -190,4 +190,3 @@ public sealed class PacketQueue : ISerialGroupable, IDisposable
         IsAvailableEvent.Dispose();
     }
 }
-#pragma warning restore CA1711 // Identifiers should not have incorrect suffix

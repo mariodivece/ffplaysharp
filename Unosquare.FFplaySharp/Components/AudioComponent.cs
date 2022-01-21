@@ -115,7 +115,7 @@ public unsafe sealed class AudioComponent : FilteringMediaComponent, ISerialGrou
                 ffmpeg.av_usleep(1000);
             }
 
-            if ((audio = Frames.PeekWaitCurrent()) is null)
+            if ((audio = Frames.WaitPeekShowable()) is null)
                 return result;
 
             Frames.Dequeue();
@@ -303,7 +303,7 @@ public unsafe sealed class AudioComponent : FilteringMediaComponent, ISerialGrou
         StreamIndex = -1;
     }
 
-    protected override FrameQueue CreateFrameQueue() => new(Packets, Constants.AudioFrameQueueCapacity, true);
+    protected override FrameStore CreateFrameQueue() => new(Packets, Constants.AudioFrameQueueCapacity, true);
 
     public override void InitializeDecoder(FFCodecContext codecContext, int streamIndex)
     {

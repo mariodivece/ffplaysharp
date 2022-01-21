@@ -14,7 +14,7 @@ public sealed class SubtitleComponent : MediaComponent
 
     public override string? WantedCodecName => Container.Options.AudioForcedCodecName;
 
-    protected override FrameQueue CreateFrameQueue() => new(Packets, Constants.SubtitleFrameQueueCapacity, false);
+    protected override FrameStore CreateFrameQueue() => new(Packets, Constants.SubtitleFrameQueueCapacity, false);
 
     private int DecodeSubtitleInto(FFSubtitle frame) => DecodeFrame(null, frame);
 

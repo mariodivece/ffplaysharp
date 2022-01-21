@@ -17,9 +17,9 @@ public abstract class MediaComponent
 
     public MediaContainer Container { get; }
 
-    public PacketQueue Packets { get; }
+    public PacketStore Packets { get; }
 
-    public FrameQueue Frames { get; }
+    public FrameStore Frames { get; }
 
     public FFCodecContext CodecContext { get; private set; }
 
@@ -240,7 +240,7 @@ public abstract class MediaComponent
 
     public virtual void Start() => Start(DecodingThreadMethod, $"{GetType().Name}Worker");
 
-    protected abstract FrameQueue CreateFrameQueue();
+    protected abstract FrameStore CreateFrameQueue();
 
     protected abstract void DecodingThreadMethod();
 }
