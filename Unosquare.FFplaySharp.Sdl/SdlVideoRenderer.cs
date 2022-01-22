@@ -695,7 +695,7 @@ public unsafe class SdlVideoRenderer : IVideoRenderer
             }
         }
 
-        ($"video: delay={pictureDuration,-8:0.####} A-V={-clockDifference,-8:0.####}.").LogTrace();
+        ($"video: delay={pictureDuration,-8:n4} A-V={-clockDifference,-8:n4}.").LogTrace();
 
         return pictureDuration;
     }

@@ -222,8 +222,8 @@ public unsafe sealed class AudioComponent : FilteringMediaComponent, ISerialGrou
         if (false && Debugger.IsAttached)
         {
             Console.WriteLine(
-                $"audio: delay={(FrameTime - LastFrameTime),-8:0.####} clock={FrameTime,-8:0.####} " +
-                $"clock0={currentAudioTime,-8:0.####}");
+                $"audio: delay={(FrameTime - LastFrameTime),-8:n4} clock={FrameTime,-8:n4} " +
+                $"clock0={currentAudioTime,-8:n4}");
         }
 
         LastFrameTime = FrameTime;
