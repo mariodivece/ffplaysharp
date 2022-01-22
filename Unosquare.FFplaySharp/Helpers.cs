@@ -10,6 +10,34 @@ public static class Helpers
 
     public static int AV_CEIL_RSHIFT(int a, int b) => ((a) + (1 << (b)) - 1) >> (b);
 
+    public static void Enqueue<T>(this IList<T> list, T item)
+    {
+        list?.Add(item);
+    }
+
+    public static bool TryDequeue<T>(this IList<T> list, [MaybeNullWhen(false)] out T item)
+    {
+        item = default;
+        if (list is null || list.Count <= 0)
+            return false;
+
+        item = list[0];
+        list.RemoveAt(0);
+        return true;
+    }
+
+    public static bool TryPeek<T>(this IList<T> list, [MaybeNullWhen(false)] out T item)
+    {
+        item = default;
+        if (list is null || list.Count <= 0)
+            return false;
+
+        item = list[0];
+        return true;
+    }
+
+    public static bool IsEmpty<T>(this IList<T> list) => !list?.Any() ?? true;
+
     /// <summary>
     /// Parses a hexagesimal (HOURS:MM:SS.MILLISECONDS) or simple second
     /// and decimal string representing time and returns total microseconds.
