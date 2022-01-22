@@ -296,7 +296,7 @@ public unsafe class MediaContainer
                 {
                     nextStreamIndex = -1;
                     Subtitle.LastStreamIndex = -1;
-                    goto the_end;
+                    break;
                 }
                 if (startStreamIndex == -1)
                     return;
@@ -315,23 +315,19 @@ public unsafe class MediaContainer
 
             if (st.CodecParameters.CodecType == component.MediaType)
             {
-                // check that parameters are OK
-                switch (component.MediaType)
-                {
-                    case AVMediaType.AVMEDIA_TYPE_AUDIO:
-                        if (st.CodecParameters.SampleRate != 0 &&
-                            st.CodecParameters.Channels != 0)
-                            goto the_end;
-                        break;
-                    case AVMediaType.AVMEDIA_TYPE_VIDEO:
-                    case AVMediaType.AVMEDIA_TYPE_SUBTITLE:
-                        goto the_end;
-                    default:
-                        break;
-                }
+                // Check media types and parameters are ok.
+                if (component.MediaType is AVMediaType.AVMEDIA_TYPE_AUDIO &&
+                    st.CodecParameters.SampleRate != 0 &&
+                    st.CodecParameters.Channels != 0)
+                    break;
+
+                if (component.MediaType is AVMediaType.AVMEDIA_TYPE_VIDEO or
+                    AVMediaType.AVMEDIA_TYPE_SUBTITLE)
+                    break;
             }
         }
-    the_end:
+
+        // Finally, close the existing component and open the new one.
         if (program.IsNotNull() && nextStreamIndex != -1)
             nextStreamIndex = program!.StreamIndices[nextStreamIndex];
 
