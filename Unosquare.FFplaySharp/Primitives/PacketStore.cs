@@ -6,13 +6,15 @@
 /// </summary>
 public sealed class PacketStore : ISerialGroupable, IDisposable
 {
-    private readonly ConcurrentQueue<FFPacket> queue = new();
+    private readonly object SyncLock = new();
+    private readonly Queue<FFPacket> Packets = new();
     private readonly AutoResetEvent IsAvailableEvent = new(false);
     private bool isDisposed;
     private long m_IsClosed = 1; // starts in a blocked state
-    private long m_ByteSize;
+
+    private int m_ByteSize;
     private long m_DurationUnits;
-    private long m_GroupIndex;
+    private int m_GroupIndex;
 
     /// <summary>
     /// Creates a new instance of the <see cref="PacketStore"/> class.
@@ -29,39 +31,6 @@ public sealed class PacketStore : ISerialGroupable, IDisposable
     public MediaComponent Component { get; }
 
     /// <summary>
-    /// Gets the numer of packets in the queue.
-    /// </summary>
-    public int Count => queue.Count;
-
-    /// <summary>
-    /// Gets the total size in bytes of the packets
-    /// and their content buffers.
-    /// </summary>
-    public int ByteSize
-    {
-        get => (int)Interlocked.Read(ref m_ByteSize);
-        private set => Interlocked.Exchange(ref m_ByteSize, value);
-    }
-
-    /// <summary>
-    /// Gets the packet queue duration in stream time base units.
-    /// </summary>
-    public long DurationUnits
-    {
-        get => Interlocked.Read(ref m_DurationUnits);
-        private set => Interlocked.Exchange(ref m_DurationUnits, value);
-    }
-
-    /// <summary>
-    /// Gets the group (serial) the packet queue is currently on.
-    /// </summary>
-    public int GroupIndex
-    {
-        get => (int)Interlocked.Read(ref m_GroupIndex);
-        private set => Interlocked.Exchange(ref m_GroupIndex, value);
-    }
-
-    /// <summary>
     /// Gets whether the packet queue is closed.
     /// When closed, packets cannot be queued or dequeued.
     /// </summary>
@@ -69,6 +38,39 @@ public sealed class PacketStore : ISerialGroupable, IDisposable
     {
         get => Interlocked.Read(ref m_IsClosed) != 0;
         private set => Interlocked.Exchange(ref m_IsClosed, value ? 1 : 0);
+    }
+
+    /// <summary>
+    /// Gets the numer of packets in the queue.
+    /// </summary>
+    public int Count
+    {
+        get { lock (SyncLock) return Packets.Count; }
+    }
+
+    /// <summary>
+    /// Gets the total size in bytes of the packets
+    /// and their content buffers.
+    /// </summary>
+    public int ByteSize
+    {
+        get { lock (SyncLock) return m_ByteSize; }
+    }
+
+    /// <summary>
+    /// Gets the packet queue duration in stream time base units.
+    /// </summary>
+    public long DurationUnits
+    {
+        get { lock (SyncLock) return m_DurationUnits; }
+    }
+
+    /// <summary>
+    /// Gets the group (serial) the packet queue is currently on.
+    /// </summary>
+    public int GroupIndex
+    {
+        get { lock (SyncLock) return m_GroupIndex; }
     }
 
     /// <summary>
@@ -97,16 +99,20 @@ public sealed class PacketStore : ISerialGroupable, IDisposable
             return false;
         }
 
-        if (packet.IsNull())
+        if (packet is null)
             throw new ArgumentNullException(nameof(packet));
 
-        packet.GroupIndex = packet.IsFlushPacket
-            ? ++GroupIndex
-            : GroupIndex;
+        lock (SyncLock)
+        {
+            packet.GroupIndex = packet.IsFlushPacket
+                ? ++m_GroupIndex
+                : m_GroupIndex;
 
-        ByteSize += packet.Size + FFPacket.StructureSize;
-        DurationUnits += packet.DurationUnits;
-        queue.Enqueue(packet);
+            m_ByteSize += packet.Size + FFPacket.StructureSize;
+            m_DurationUnits += packet.DurationUnits;
+            Packets.Enqueue(packet);
+        }
+
         IsAvailableEvent.Set();
         return true;
     }
@@ -139,11 +145,14 @@ public sealed class PacketStore : ISerialGroupable, IDisposable
             if (IsClosed)
                 return default;
 
-            if (queue.TryDequeue(out packet) && packet.IsNotNull())
+            lock (SyncLock)
             {
-                ByteSize -= packet.Size + FFPacket.StructureSize;
-                DurationUnits -= packet.DurationUnits;
-                return true;
+                if (Packets.TryDequeue(out packet) && packet is not null)
+                {
+                    m_ByteSize -= packet.Size + FFPacket.StructureSize;
+                    m_DurationUnits -= packet.DurationUnits;
+                    return true;
+                }
             }
 
             if (!blockWait)
@@ -158,14 +167,17 @@ public sealed class PacketStore : ISerialGroupable, IDisposable
     /// </summary>
     public void Clear()
     {
-        while (!queue.IsEmpty)
+        lock (SyncLock)
         {
-            if (queue.TryDequeue(out var packet) && packet.IsNotNull())
-                packet.Release();
-        }
+            while (Packets.Count != 0)
+            {
+                if (Packets.TryDequeue(out var packet) && packet.IsNotNull())
+                    packet.Release();
+            }
 
-        ByteSize = 0;
-        DurationUnits = 0;
+            m_ByteSize = 0;
+            m_DurationUnits = 0;
+        }
     }
 
     /// <summary>

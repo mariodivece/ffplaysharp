@@ -64,7 +64,8 @@ public unsafe sealed class FFPacket : CountedReference<AVPacket>, ISerialGroupab
     {
         Data = default,
         Size = 0,
-        StreamIndex = streamIndex
+        StreamIndex = streamIndex,
+        DurationUnits = 0
     };
 
     public static FFPacket Clone(AVPacket* packet, [CallerFilePath] string? filePath = default, [CallerLineNumber] int? lineNumber = default)
