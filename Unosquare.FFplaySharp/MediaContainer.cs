@@ -466,9 +466,6 @@ public unsafe class MediaContainer
             if (lowResFactor != 0)
                 codecOptions["lowres"] = $"{lowResFactor}";
 
-            if (targetMediaType.IsVideo() || targetMediaType.IsAudio())
-                codecOptions["refcounted_frames"] = "1";
-
             try
             {
                 codecContext.Open(codec, codecOptions);
