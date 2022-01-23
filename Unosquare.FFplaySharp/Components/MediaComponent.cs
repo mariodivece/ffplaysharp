@@ -234,7 +234,13 @@ public abstract class MediaComponent
     private void Start(ThreadStart workerMethod, string threadName)
     {
         Packets.Open();
-        Worker = new Thread(workerMethod) { Name = threadName, IsBackground = true };
+        Worker = new Thread(workerMethod)
+        {
+            Name = threadName,
+            IsBackground = true,
+            Priority = Constants.DecodingPriority
+        };
+
         Worker.Start();
     }
 

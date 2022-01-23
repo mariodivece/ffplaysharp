@@ -2,6 +2,12 @@
 
 public static class Constants
 {
+    internal const int WaitTimeout = 10;
+
+    internal const ThreadPriority ReadingPriority = ThreadPriority.BelowNormal;
+
+    internal const ThreadPriority DecodingPriority = ThreadPriority.BelowNormal;
+
     /// <summary>
     /// Port of MAX_QUEUE_SIZE.
     /// </summary>

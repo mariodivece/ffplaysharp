@@ -93,7 +93,7 @@ public sealed class FrameStore : IDisposable, ISerialGroupable
         // that is, our readable count is less than
         // the capacity of the queue.
         while (!IsClosed && WritableFrames.IsEmpty)
-            ChangedEvent.WaitOne(10, true);
+            ChangedEvent.WaitOne(Constants.WaitTimeout, true);
 
         frame = default;
         return !IsClosed && WritableFrames.TryPeek(out frame);
@@ -136,7 +136,7 @@ public sealed class FrameStore : IDisposable, ISerialGroupable
     {
         // wait until we have a readable a new frame
         while (!IsClosed && PendingCount <= 0)
-            ChangedEvent.WaitOne(10, true);
+            ChangedEvent.WaitOne(Constants.WaitTimeout, true);
 
         return !IsClosed
             ? PeekShowable()
@@ -163,7 +163,7 @@ public sealed class FrameStore : IDisposable, ISerialGroupable
     public FrameHolder PeekReadable()
     {
         while (!IsClosed && ReadableFrames.IsEmpty)
-            ChangedEvent.WaitOne(10, true);
+            ChangedEvent.WaitOne(Constants.WaitTimeout, true);
 
         return ReadableFrames.TryPeek(out var frame)
             ? frame

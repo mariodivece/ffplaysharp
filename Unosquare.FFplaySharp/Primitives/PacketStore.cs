@@ -158,7 +158,7 @@ public sealed class PacketStore : ISerialGroupable, IDisposable
             if (!blockWait)
                 return default;
 
-            IsAvailableEvent.WaitOne(10, true);
+            IsAvailableEvent.WaitOne(Constants.WaitTimeout, true);
         }
     }
 

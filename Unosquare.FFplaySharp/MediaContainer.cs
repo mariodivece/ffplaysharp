@@ -538,7 +538,13 @@ public unsafe class MediaContainer
 
     private void StartReadThread()
     {
-        ReadingThread = new Thread(ReadingThreadMethod) { IsBackground = true, Name = nameof(ReadingThreadMethod) };
+        ReadingThread = new Thread(ReadingThreadMethod)
+        {
+            IsBackground = true,
+            Name = nameof(ReadingThreadMethod),
+            Priority = Constants.ReadingPriority
+        };
+
         ReadingThread.Start();
     }
 
@@ -793,7 +799,7 @@ public unsafe class MediaContainer
                 if (Options.IsInfiniteBufferEnabled is not ThreeState.On && (HasEnoughPacketBuffer || HasEnoughPacketCount))
                 {
                     // wait 10 ms
-                    NeedsMorePacketsEvent.WaitOne(10, true);
+                    NeedsMorePacketsEvent.WaitOne(Constants.WaitTimeout, true);
                     continue;
                 }
 
@@ -880,7 +886,7 @@ public unsafe class MediaContainer
             if (Input.IO.IsNotNull() && Input.IO!.Error != 0)
                 return false;
 
-            NeedsMorePacketsEvent.WaitOne(10, true);
+            NeedsMorePacketsEvent.WaitOne(Constants.WaitTimeout, true);
             return true;
         }
         else
