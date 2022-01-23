@@ -511,20 +511,20 @@ public unsafe class SdlVideoRenderer : IVideoRenderer
                 {
                     while (Container.Subtitle.Frames.PendingCount > 0)
                     {
-                        var sp = Container.Subtitle.Frames.PeekShowable();
-                        var sp2 = Container.Subtitle.Frames.PendingCount > 1
+                        var spCurrent = Container.Subtitle.Frames.PeekShowable();
+                        var spNext = Container.Subtitle.Frames.PendingCount > 1
                             ? Container.Subtitle.Frames.PeekShowablePlus()
                             : null;
 
-                        if (sp.GroupIndex != Container.Subtitle.Packets.GroupIndex
-                            || (Container.VideoClock.BaseTime > sp.EndDisplayTime)
-                            || (sp2 is not null && Container.VideoClock.BaseTime > sp2.StartDisplayTime))
+                        if (spCurrent.GroupIndex != Container.Subtitle.Packets.GroupIndex ||
+                           (Container.VideoClock.BaseTime > spCurrent.EndDisplayTime) ||
+                           (spNext is not null && Container.VideoClock.BaseTime > spNext.StartDisplayTime))
                         {
-                            if (sp.IsUploaded)
+                            if (spCurrent.IsUploaded)
                             {
-                                for (var i = 0; i < sp.Subtitle.Rects.Count; i++)
+                                for (var i = 0; i < spCurrent.Subtitle.Rects.Count; i++)
                                 {
-                                    var sdlRect = CreateRect(sp.Subtitle.Rects[i]);
+                                    var sdlRect = CreateRect(spCurrent.Subtitle.Rects[i]);
 
                                     if (SDL.SDL_LockTexture(SubtitleTexture, ref sdlRect, out var pixels, out var pitch) == 0)
                                     {

@@ -128,16 +128,14 @@ public sealed class VideoComponent : FilteringMediaComponent
 
     private int EnqueueFrame(FFFrame sourceFrame, double frameTime, double duration, int groupIndex)
     {
-        var queuedFrame = Frames.WaitPeekWriteable();
-
-        if (queuedFrame is null)
+        if (!Frames.LeaseFrameForWriting(out var targetFrame))
             return -1;
 
-        queuedFrame.Update(sourceFrame, groupIndex, frameTime, duration);
-        Frames.Enqueue();
+        targetFrame.Update(sourceFrame, groupIndex, frameTime, duration);
+        Frames.EnqueueFrameForReading();
 
         Container.Presenter.Video.SetDefaultWindowSize(
-            queuedFrame.Width, queuedFrame.Height, queuedFrame.Frame.SampleAspectRatio);
+            targetFrame.Width, targetFrame.Height, targetFrame.Frame.SampleAspectRatio);
 
         return 0;
     }

@@ -35,19 +35,17 @@ public sealed class SubtitleComponent : MediaComponent
                 continue;
             }
 
-            var queuedFrame = Frames.WaitPeekWriteable();
-            if (queuedFrame is null)
+            if (!Frames.LeaseFrameForWriting(out var targetFrame))
             {
                 frame.Release();
                 break;
             }
 
-            var frameTime = frame.Pts.IsValidPts()
-                ? frame.Pts / Clock.TimeBaseMicros : 0;
+            var frameTime = frame.Pts.IsValidPts() ? frame.Pts / Clock.TimeBaseMicros : 0;
 
             // now we can update the picture count
-            queuedFrame.Update(frame, CodecContext, PacketGroupIndex, frameTime);
-            Frames.Enqueue();
+            targetFrame.Update(frame, CodecContext, PacketGroupIndex, frameTime);
+            Frames.EnqueueFrameForReading();
         }
     }
 }

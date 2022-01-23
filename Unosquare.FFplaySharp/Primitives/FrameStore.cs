@@ -7,7 +7,7 @@ public sealed class FrameStore : IDisposable, ISerialGroupable
 {
     private readonly AutoResetEvent ChangedEvent = new(false);
     private readonly ConcurrentQueue<FrameHolder> WritableFrames = new();
-    private readonly ReadQueue ReadableFrames;
+    private readonly FrameHolderQueue ReadableFrames;
     private readonly PacketStore Packets;
 
     private long m_IsReadIndexShown;
@@ -89,7 +89,7 @@ public sealed class FrameStore : IDisposable, ISerialGroupable
     /// Port of frame_queue_peek_writable.
     /// </summary>
     /// <returns>The frame.</returns>
-    public FrameHolder? WaitPeekWriteable()
+    public bool LeaseFrameForWriting([MaybeNullWhen(false)] out FrameHolder frame)
     {
         // wait until we have space to put a new frame
         // that is, our readable count is less than
@@ -97,18 +97,17 @@ public sealed class FrameStore : IDisposable, ISerialGroupable
         while (!IsClosed && WritableFrames.IsEmpty)
             ChangedEvent.WaitOne(10, true);
 
-        return !IsClosed && WritableFrames.TryPeek(out var frame)
-            ? frame
-            : default;
+        frame = default;
+        return !IsClosed && WritableFrames.TryPeek(out frame);
     }
 
     /// <summary>
     /// After obtaining a writable frame by calling
-    /// <see cref="WaitPeekWriteable"/> and writing to it,
-    /// call this method to commit it and make suck frame readable.
+    /// <see cref="LeaseFrameForWriting"/> and writing to it,
+    /// call this method to commit it and make such frame readable.
     /// Port of frame_queue_push.
     /// </summary>
-    public void Enqueue()
+    public void EnqueueFrameForReading()
     {
         if (WritableFrames.TryDequeue(out var frame))
             ReadableFrames.Enqueue(frame);
@@ -122,11 +121,11 @@ public sealed class FrameStore : IDisposable, ISerialGroupable
     /// </summary>
     public FrameHolder PeekShowable()
     {
-        return IsReadIndexShown && ReadableFrames.Count > 1
-            ? ReadableFrames.ElementAt(1)
-            : ReadableFrames.TryPeek(out var frame)
+        return IsReadIndexShown && ReadableFrames.TryPeek(1, out var frame)
             ? frame
-            : default;
+            : ReadableFrames.TryPeek(out frame)
+            ? frame
+            : throw new InvalidOperationException("Readable frame queue is empty.");
     }
 
     /// <summary>
@@ -150,7 +149,13 @@ public sealed class FrameStore : IDisposable, ISerialGroupable
     /// Gets the next+1 available readable frame for showing.
     /// Port of frame_queue_peek_next.
     /// </summary>
-    public FrameHolder PeekShowablePlus() => ReadableFrames.ElementAt(Convert.ToInt32(IsReadIndexShown) + 1);
+    public FrameHolder PeekShowablePlus()
+    {
+        var index = Convert.ToInt32(IsReadIndexShown) + 1;
+        return !ReadableFrames.TryPeek(index, out var frame)
+            ? throw new InvalidOperationException("Readable frame queue is empty.")
+            : frame;
+    }
 
     /// <summary>
     /// Returns the frame at the current read index
@@ -164,7 +169,7 @@ public sealed class FrameStore : IDisposable, ISerialGroupable
 
         return ReadableFrames.TryPeek(out var frame)
             ? frame
-            : default;
+            : throw new InvalidOperationException("Readable frame queue is empty.");
     }
 
     /// <summary>
@@ -212,56 +217,81 @@ public sealed class FrameStore : IDisposable, ISerialGroupable
     }
 
     /// <summary>
-    /// Implements a thread-safe queue for readable frames.
+    /// Implements a thread-safe queue for frames.
     /// </summary>
-    private sealed class ReadQueue
+    private sealed class FrameHolderQueue
     {
         private readonly object SyncLock = new();
-        private readonly Dictionary<ulong, FrameHolder> Frames;
+        private readonly FrameHolder?[] Frames;
+        private readonly int Capacity;
 
-        private ulong m_HeadSlot;
+        private int m_HeadSlot;
+        private int m_Count;
 
-        public ReadQueue(int capacity)
+        public FrameHolderQueue(int capacity)
         {
-            Frames = new(capacity);
+            Frames = new FrameHolder?[capacity];
+            for (var i = 0; i < capacity; i++)
+                Frames[i] = null;
+
+            Capacity = capacity;
         }
 
-        public int Count { get { lock (SyncLock) return Frames.Count; } }
+        public int Count { get { lock (SyncLock) return m_Count; } }
 
-        public bool IsEmpty => Frames.Count == 0;
+        public bool IsEmpty => Count is 0;
 
         public void Enqueue(FrameHolder item)
         {
             lock (SyncLock)
             {
-                var tail = m_HeadSlot + unchecked((ulong)Frames.Count);
-                Frames.TryAdd(tail, item);
+                if (item is null)
+                    throw new ArgumentNullException(nameof(item));
+
+                if (m_Count == Capacity)
+                    throw new InvalidOperationException($"Read frame queue is full. Capacity: {Capacity}");
+
+                var tailSlot = (m_HeadSlot + m_Count) % Capacity;
+                Frames[tailSlot] = item;
+                m_Count++;
             }
 
         }
 
-        public bool TryDequeue(out FrameHolder item)
+        public bool TryDequeue([MaybeNullWhen(false)] out FrameHolder item)
         {
             lock (SyncLock)
             {
-                if (!Frames.Remove(m_HeadSlot, out item))
-                    return false;
+                item = Frames[m_HeadSlot];
+                if (item is not null)
+                {
+                    Frames[m_HeadSlot] = null;
+                    m_HeadSlot = (m_HeadSlot + 1) % Capacity;
+                    m_Count--;
+                    return true;
+                }
 
-                m_HeadSlot++;
-                return true;
+                return false;
             }
         }
 
-        public bool TryPeek(out FrameHolder item)
+        public bool TryPeek([MaybeNullWhen(false)] out FrameHolder item)
         {
             lock (SyncLock)
-                return Frames.TryGetValue(m_HeadSlot, out item);
+            {
+                item = Frames[m_HeadSlot];
+                return item is not null;
+            }
         }
 
-        public FrameHolder ElementAt(int index)
+        public bool TryPeek(int index, [MaybeNullWhen(false)] out FrameHolder item)
         {
             lock (SyncLock)
-                return Frames[m_HeadSlot + unchecked((ulong)index)];
+            {
+                var slot = (m_HeadSlot + index) % Capacity;
+                item = Frames[slot];
+                return item is not null;
+            }
         }
     }
 }

@@ -438,9 +438,7 @@ public unsafe sealed class AudioComponent : FilteringMediaComponent, ISerialGrou
             var isFrameQueueAvailable = true;
             while ((resultCode = DequeueFilteringFrame(decodedFrame)) >= 0)
             {
-                var queuedFrame = Frames.WaitPeekWriteable();
-
-                if (queuedFrame is null)
+                if (!Frames.LeaseFrameForWriting(out var targetFrame))
                 {
                     isFrameQueueAvailable = false;
                     break;
@@ -448,8 +446,8 @@ public unsafe sealed class AudioComponent : FilteringMediaComponent, ISerialGrou
 
                 var frameTime = decodedFrame.Pts.IsValidPts() ? decodedFrame.Pts * OutputFilterTimeBase.ToFactor() : double.NaN;
                 var frameDuration = ffmpeg.av_make_q(decodedFrame.SampleCount, decodedFrame.SampleRate).ToFactor();
-                queuedFrame.Update(decodedFrame, PacketGroupIndex, frameTime, frameDuration);
-                Frames.Enqueue();
+                targetFrame.Update(decodedFrame, PacketGroupIndex, frameTime, frameDuration);
+                Frames.EnqueueFrameForReading();
 
                 if (Packets.GroupIndex != PacketGroupIndex)
                     break;
