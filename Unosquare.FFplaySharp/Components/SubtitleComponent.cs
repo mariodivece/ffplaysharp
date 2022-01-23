@@ -45,7 +45,7 @@ public sealed class SubtitleComponent : MediaComponent
 
             // now we can update the picture count
             targetFrame.Update(frame, CodecContext, PacketGroupIndex, frameTime);
-            Frames.EnqueueFrameForReading();
+            Frames.EnqueueLeasedFrame();
         }
     }
 }

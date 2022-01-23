@@ -132,7 +132,7 @@ public sealed class VideoComponent : FilteringMediaComponent
             return -1;
 
         targetFrame.Update(sourceFrame, groupIndex, frameTime, duration);
-        Frames.EnqueueFrameForReading();
+        Frames.EnqueueLeasedFrame();
 
         Container.Presenter.Video.SetDefaultWindowSize(
             targetFrame.Width, targetFrame.Height, targetFrame.Frame.SampleAspectRatio);

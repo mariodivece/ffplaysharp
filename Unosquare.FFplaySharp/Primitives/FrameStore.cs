@@ -6,7 +6,7 @@
 public sealed class FrameStore : IDisposable, ISerialGroupable
 {
     private readonly AutoResetEvent ChangedEvent = new(false);
-    private readonly ConcurrentQueue<FrameHolder> WritableFrames = new();
+    private readonly FrameHolderQueue WritableFrames;
     private readonly FrameHolderQueue ReadableFrames;
     private readonly PacketStore Packets;
 
@@ -27,10 +27,8 @@ public sealed class FrameStore : IDisposable, ISerialGroupable
         Packets = packets;
         Capacity = Math.Min(capacity, capacityLimit);
         KeepLast = keepLast;
-        ReadableFrames = new(Capacity);
-
-        for (var i = 0; i < Capacity; i++)
-            WritableFrames.Enqueue(new());
+        ReadableFrames = new(Capacity, false);
+        WritableFrames = new(Capacity, true);
     }
 
     /// <summary>
@@ -107,7 +105,7 @@ public sealed class FrameStore : IDisposable, ISerialGroupable
     /// call this method to commit it and make such frame readable.
     /// Port of frame_queue_push.
     /// </summary>
-    public void EnqueueFrameForReading()
+    public void EnqueueLeasedFrame()
     {
         if (WritableFrames.TryDequeue(out var frame))
             ReadableFrames.Enqueue(frame);
@@ -198,28 +196,15 @@ public sealed class FrameStore : IDisposable, ISerialGroupable
     /// <inheritdoc />
     public void Dispose()
     {
-        while (!ReadableFrames.IsEmpty)
-        {
-            if (ReadableFrames.TryDequeue(out var frame))
-                WritableFrames.Enqueue(frame);
-        }
-
-        if (WritableFrames.Count != Capacity)
-            throw new InvalidOperationException("Memory leak in frame queue");
-
-        while (!WritableFrames.IsEmpty)
-        {
-            if (WritableFrames.TryDequeue(out var frame))
-                frame?.Dispose();
-        }
-
+        ReadableFrames.Dispose();
+        WritableFrames.Dispose();
         ChangedEvent.Dispose();
     }
 
     /// <summary>
     /// Implements a thread-safe queue for frames.
     /// </summary>
-    private sealed class FrameHolderQueue
+    private sealed class FrameHolderQueue : IDisposable
     {
         private readonly object SyncLock = new();
         private readonly FrameHolder?[] Frames;
@@ -228,13 +213,19 @@ public sealed class FrameStore : IDisposable, ISerialGroupable
         private int m_HeadSlot;
         private int m_Count;
 
-        public FrameHolderQueue(int capacity)
+        public FrameHolderQueue(int capacity, bool fill)
         {
             Frames = new FrameHolder?[capacity];
+            Capacity = capacity;
+
             for (var i = 0; i < capacity; i++)
                 Frames[i] = null;
 
-            Capacity = capacity;
+            if (!fill)
+                return;
+
+            for (var i = 0; i < Capacity; i++)
+                Enqueue(new());
         }
 
         public int Count { get { lock (SyncLock) return m_Count; } }
@@ -291,6 +282,18 @@ public sealed class FrameStore : IDisposable, ISerialGroupable
                 var slot = (m_HeadSlot + index) % Capacity;
                 item = Frames[slot];
                 return item is not null;
+            }
+        }
+
+        public void Dispose()
+        {
+            lock (SyncLock)
+            {
+                while (!IsEmpty)
+                {
+                    if (TryDequeue(out var item))
+                        item.Dispose();
+                }
             }
         }
     }

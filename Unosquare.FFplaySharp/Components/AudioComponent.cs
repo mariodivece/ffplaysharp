@@ -447,7 +447,7 @@ public unsafe sealed class AudioComponent : FilteringMediaComponent, ISerialGrou
                 var frameTime = decodedFrame.Pts.IsValidPts() ? decodedFrame.Pts * OutputFilterTimeBase.ToFactor() : double.NaN;
                 var frameDuration = ffmpeg.av_make_q(decodedFrame.SampleCount, decodedFrame.SampleRate).ToFactor();
                 targetFrame.Update(decodedFrame, PacketGroupIndex, frameTime, frameDuration);
-                Frames.EnqueueFrameForReading();
+                Frames.EnqueueLeasedFrame();
 
                 if (Packets.GroupIndex != PacketGroupIndex)
                     break;
