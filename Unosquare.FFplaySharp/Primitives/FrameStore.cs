@@ -7,7 +7,7 @@ public sealed class FrameStore : IDisposable, ISerialGroupable
 {
     private readonly AutoResetEvent ChangedEvent = new(false);
     private readonly ConcurrentQueue<FrameHolder> WritableFrames = new();
-    private readonly ConcurrentQueue<FrameHolder> ReadableFrames = new();
+    private readonly ReadQueue ReadableFrames;
     private readonly PacketStore Packets;
 
     private long m_IsReadIndexShown;
@@ -27,6 +27,7 @@ public sealed class FrameStore : IDisposable, ISerialGroupable
         Packets = packets;
         Capacity = Math.Min(capacity, capacityLimit);
         KeepLast = keepLast;
+        ReadableFrames = new(Capacity);
 
         for (var i = 0; i < Capacity; i++)
             WritableFrames.Enqueue(new());
@@ -71,15 +72,9 @@ public sealed class FrameStore : IDisposable, ISerialGroupable
     /// Gets the last shown byte position within the stream.
     /// Port of frame_queue_last_pos.
     /// </summary>
-    public long ShownBytePosition
-    {
-        get
-        {
-            return IsReadIndexShown && ReadableFrames.TryPeek(out var item) && item.GroupIndex == GroupIndex
-                ? item.Frame.PacketPosition
-                : -1;
-        }
-    }
+    public long ShownBytePosition => IsReadIndexShown && ReadableFrames.TryPeek(out var item) && item.GroupIndex == GroupIndex
+        ? item.Frame.PacketPosition
+        : -1;
 
     /// <summary>
     /// Forces change event to be signalled.
@@ -155,7 +150,7 @@ public sealed class FrameStore : IDisposable, ISerialGroupable
     /// Gets the next+1 available readable frame for showing.
     /// Port of frame_queue_peek_next.
     /// </summary>
-    public FrameHolder PeekShowablePlus() => ReadableFrames.ElementAtOrDefault(Convert.ToInt32(IsReadIndexShown) + 1);
+    public FrameHolder PeekShowablePlus() => ReadableFrames.ElementAt(Convert.ToInt32(IsReadIndexShown) + 1);
 
     /// <summary>
     /// Returns the frame at the current read index
@@ -214,5 +209,59 @@ public sealed class FrameStore : IDisposable, ISerialGroupable
         }
 
         ChangedEvent.Dispose();
+    }
+
+    /// <summary>
+    /// Implements a thread-safe queue for readable frames.
+    /// </summary>
+    private sealed class ReadQueue
+    {
+        private readonly object SyncLock = new();
+        private readonly Dictionary<ulong, FrameHolder> Frames;
+
+        private ulong m_HeadSlot;
+
+        public ReadQueue(int capacity)
+        {
+            Frames = new(capacity);
+        }
+
+        public int Count { get { lock (SyncLock) return Frames.Count; } }
+
+        public bool IsEmpty => Frames.Count == 0;
+
+        public void Enqueue(FrameHolder item)
+        {
+            lock (SyncLock)
+            {
+                var tail = m_HeadSlot + unchecked((ulong)Frames.Count);
+                Frames.TryAdd(tail, item);
+            }
+
+        }
+
+        public bool TryDequeue(out FrameHolder item)
+        {
+            lock (SyncLock)
+            {
+                if (!Frames.Remove(m_HeadSlot, out item))
+                    return false;
+
+                m_HeadSlot++;
+                return true;
+            }
+        }
+
+        public bool TryPeek(out FrameHolder item)
+        {
+            lock (SyncLock)
+                return Frames.TryGetValue(m_HeadSlot, out item);
+        }
+
+        public FrameHolder ElementAt(int index)
+        {
+            lock (SyncLock)
+                return Frames[m_HeadSlot + unchecked((ulong)index)];
+        }
     }
 }
