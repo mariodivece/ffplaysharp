@@ -71,7 +71,10 @@ public sealed class FrameStore : IDisposable, ISerialGroupable
     /// </summary>
     public int PendingCount => Math.Max(0, ReadableFrames.Count - Convert.ToInt32(IsReadIndexShown));
 
-    public bool CanRead => !isDisposed && PendingCount > 0;
+    /// <summary>
+    /// Gets a value indicating if <see cref="PendingCount"/> is greater than 0.
+    /// </summary>
+    public bool HasPending => PendingCount > 0;
 
     /// <summary>
     /// Gets the last shown byte position within the stream.

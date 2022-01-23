@@ -14,7 +14,7 @@ public unsafe sealed class FFIOContext : NativeReference<AVIOContext>
 
     public long Size => ffmpeg.avio_size(Target);
 
-    public int TestEndOfStream() => ffmpeg.avio_feof(Target);
+    public bool TestEndOfStream() => ffmpeg.avio_feof(Target) != 0;
 
     public bool EndOfStream
     {

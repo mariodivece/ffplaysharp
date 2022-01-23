@@ -772,8 +772,8 @@ public unsafe class MediaContainer
                 {
                     // wait 10 ms to avoid trying to get another packet
                     // XXX: horrible
-                    // SDL.SDL_Delay(10)
-                    ffmpeg.av_usleep(10000);
+                    // SDL.SDL_Delay(10); // or use ffmpeg.av_usleep(10000);
+                    Helpers.YieldSleep(TimeSpan.FromMilliseconds(10), true);
                     continue;
                 }
 
@@ -869,7 +869,7 @@ public unsafe class MediaContainer
         {
             readPacket.Release();
 
-            if ((resultCode == ffmpeg.AVERROR_EOF || Input.IO.TestEndOfStream() != 0) && !IsAtEndOfStream)
+            if (!IsAtEndOfStream && (resultCode == ffmpeg.AVERROR_EOF || Input.IO.TestEndOfStream()))
             {
                 foreach (var c in Components)
                 {

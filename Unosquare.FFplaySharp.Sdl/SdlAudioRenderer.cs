@@ -23,8 +23,7 @@ public unsafe class SdlAudioRenderer : IAudioRenderer
     {
         Presenter = presenter;
 
-        var parent = Presenter as SdlPresenter;
-        if (Presenter.Container.Options.IsAudioDisabled)
+        if (Container.Options.IsAudioDisabled && Presenter is SdlPresenter parent)
         {
             parent.SdlInitFlags &= ~SDL.SDL_INIT_AUDIO;
             return;

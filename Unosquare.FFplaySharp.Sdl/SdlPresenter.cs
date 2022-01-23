@@ -334,7 +334,7 @@ public unsafe class SdlPresenter : IPresenter
         } while (next != (int)Container.ShowMode &&
             (next == (int)ShowMode.Video && Container.Video.Stream.IsNull() ||
             next != (int)ShowMode.Video && Container.Audio.Stream.IsNull()));
-        
+
         if ((int)Container.ShowMode != next)
         {
             Video.ForceRefresh = true;

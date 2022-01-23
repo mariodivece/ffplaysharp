@@ -37,6 +37,7 @@ internal static class Constants
 
     /// <summary>
     /// Polls for possible required screen refresh at least this often, should be less than 1/fps.
+    /// This measure is expressed in seconds.
     /// Port of REFRESH_RATE.
     /// </summary>
     public const double RefreshRate = 0.01;
