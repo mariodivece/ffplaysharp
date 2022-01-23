@@ -187,7 +187,7 @@ public unsafe class SdlVideoRenderer : IVideoRenderer
         FrameHolder? subtitle = default;
         var video = Container.Video.Frames.PeekReadable();
 
-        if (Container.HasSubtitles && Container.Subtitle.Frames.PendingCount > 0)
+        if (Container.HasSubtitles && Container.Subtitle.Frames.CanRead)
         {
             subtitle = Container.Subtitle.Frames.PeekShowable();
 
@@ -452,7 +452,7 @@ public unsafe class SdlVideoRenderer : IVideoRenderer
         if (Container.HasVideo)
         {
         retry:
-            if (Container.Video.Frames.PendingCount == 0)
+            if (!Container.Video.Frames.CanRead)
             {
                 // nothing to do, no picture to display in the queue
             }
@@ -509,7 +509,7 @@ public unsafe class SdlVideoRenderer : IVideoRenderer
 
                 if (Container.HasSubtitles)
                 {
-                    while (Container.Subtitle.Frames.PendingCount > 0)
+                    while (Container.Subtitle.Frames.CanRead)
                     {
                         var spCurrent = Container.Subtitle.Frames.PeekShowable();
                         var spNext = Container.Subtitle.Frames.PendingCount > 1

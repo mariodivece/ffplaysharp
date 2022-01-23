@@ -66,7 +66,7 @@ public abstract class MediaComponent
 
     public int FinalPacketGroupIndex { get; protected set; }
 
-    public bool HasFinishedDecoding => Stream.IsNull() || (FinalPacketGroupIndex == Packets.GroupIndex && Frames.PendingCount == 0);
+    public bool HasFinishedDecoding => Stream.IsNull() || (FinalPacketGroupIndex == Packets.GroupIndex && !Frames.CanRead);
 
     public virtual void Close()
     {

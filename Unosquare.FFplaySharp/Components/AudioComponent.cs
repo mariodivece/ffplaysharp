@@ -106,7 +106,7 @@ public unsafe sealed class AudioComponent : FilteringMediaComponent, ISerialGrou
         {
             var callbackTimeout = (double)HardwareSpec.BufferSize / HardwareSpec.BytesPerSecond / 2.0;
 
-            while (Frames.PendingCount == 0)
+            while (!Frames.CanRead)
             {
                 var elapsedCallback = Clock.SystemTime - Container.Presenter.Audio.LastCallbackTime;
                 if (elapsedCallback > callbackTimeout)

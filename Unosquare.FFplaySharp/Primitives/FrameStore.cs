@@ -2,6 +2,10 @@
 
 /// <summary>
 /// Represents a queue-style data structure used to read and write media frames.
+/// Internally, it is implemented with 2 queues. One with readable frames and
+/// one with writable frames. Writable frames are leased, and then equeued on to
+/// the readable frame queue. Readable frames are peeeked and then dequeued and back
+/// on to the writable frames queue.
 /// </summary>
 public sealed class FrameStore : IDisposable, ISerialGroupable
 {
@@ -10,6 +14,7 @@ public sealed class FrameStore : IDisposable, ISerialGroupable
     private readonly FrameHolderQueue ReadableFrames;
     private readonly PacketStore Packets;
 
+    private bool isDisposed;
     private long m_IsReadIndexShown;
 
     /// <summary>
@@ -49,7 +54,7 @@ public sealed class FrameStore : IDisposable, ISerialGroupable
     /// Gets a value indicating if the underlying
     /// packet queue is closed.
     /// </summary>
-    public bool IsClosed => Packets.IsClosed;
+    public bool IsClosed => isDisposed || Packets.IsClosed;
 
     /// <summary>
     /// Gets a value indicating if the current radable frame is marked as shown.
@@ -64,7 +69,9 @@ public sealed class FrameStore : IDisposable, ISerialGroupable
     /// Gets the number the number of undisplayed frames in the queue.
     /// Port of frame_queue_nb_remaining.
     /// </summary>
-    public int PendingCount => ReadableFrames.Count - Convert.ToInt32(IsReadIndexShown);
+    public int PendingCount => Math.Max(0, ReadableFrames.Count - Convert.ToInt32(IsReadIndexShown));
+
+    public bool CanRead => !isDisposed && PendingCount > 0;
 
     /// <summary>
     /// Gets the last shown byte position within the stream.
@@ -196,6 +203,10 @@ public sealed class FrameStore : IDisposable, ISerialGroupable
     /// <inheritdoc />
     public void Dispose()
     {
+        if (isDisposed)
+            return;
+
+        isDisposed = true;
         ReadableFrames.Dispose();
         WritableFrames.Dispose();
         ChangedEvent.Dispose();
