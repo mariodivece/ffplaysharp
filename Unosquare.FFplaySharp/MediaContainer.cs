@@ -737,7 +737,7 @@ public unsafe class MediaContainer
             throw new InvalidOperationException($"Failed to open file '{FileName}' or configure filtergraph");
         }
 
-        if (Options.IsInfiniteBufferEnabled < 0 && IsRealTime)
+        if (Options.IsInfiniteBufferEnabled.IsAuto() && IsRealTime)
             Options.IsInfiniteBufferEnabled = ThreeState.On;
     }
 
