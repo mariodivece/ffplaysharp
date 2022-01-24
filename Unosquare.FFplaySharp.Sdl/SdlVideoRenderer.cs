@@ -3,7 +3,7 @@
 using SDL2;
 
 
-public unsafe class SdlVideoRenderer : IVideoRenderer
+public unsafe class SdlVideoRenderer
 {
     private static readonly Dictionary<AVPixelFormat, uint> SdlTextureMap = new()
     {
@@ -59,9 +59,9 @@ public unsafe class SdlVideoRenderer : IVideoRenderer
 
     public MediaContainer Container => Presenter.Container;
 
-    public IPresenter Presenter { get; private set; }
+    public SdlPresenter Presenter { get; private set; }
 
-    public void Initialize(IPresenter presenter)
+    public void Initialize(SdlPresenter presenter)
     {
         Presenter = presenter;
 
@@ -116,7 +116,7 @@ public unsafe class SdlVideoRenderer : IVideoRenderer
         }
     }
 
-    public IEnumerable<AVPixelFormat> RetrieveSupportedPixelFormats()
+    public IReadOnlyList<AVPixelFormat> RetrieveSupportedPixelFormats()
     {
         var outputPixelFormats = new List<AVPixelFormat>(SdlTextureMap.Count);
         for (var i = 0; i < SdlRendererInfo.num_texture_formats; i++)
@@ -426,10 +426,9 @@ public unsafe class SdlVideoRenderer : IVideoRenderer
         var w = ScreenWidth != 0 ? ScreenWidth : DefaultWidth;
         var h = ScreenHeight != 0 ? ScreenHeight : DefaultHeight;
 
-        if (string.IsNullOrWhiteSpace(WindowTitle))
-            WindowTitle = Container.Options.InputFileName;
-        SDL.SDL_SetWindowTitle(RenderingWindow, WindowTitle);
+        WindowTitle ??= Presenter.Container.Title ?? Container.Options.InputFileName ?? "Media Player";
 
+        SDL.SDL_SetWindowTitle(RenderingWindow, WindowTitle);
         SDL.SDL_SetWindowSize(RenderingWindow, w, h);
         SDL.SDL_SetWindowPosition(RenderingWindow, screen_left, screen_top);
         if (is_full_screen)
@@ -490,7 +489,7 @@ public unsafe class SdlVideoRenderer : IVideoRenderer
                     Container.PictureDisplayTimer = currentTime;
 
                 if (currentPicture.HasValidTime)
-                    UpdateVideoPts(Container, currentPicture.Time, currentPicture.GroupIndex);
+                    Container.UpdateVideoPts(currentPicture.Time, currentPicture.GroupIndex);
 
                 if (Container.Video.Frames.PendingCount > 1)
                 {
@@ -712,16 +711,4 @@ public unsafe class SdlVideoRenderer : IVideoRenderer
             return pictureDuration;
     }
 
-    /// <summary>
-    /// Port of update_video_pts
-    /// </summary>
-    /// <param name="container"></param>
-    /// <param name="pts"></param>
-    /// <param name="groupIndex"></param>
-    static void UpdateVideoPts(MediaContainer container, double pts, int groupIndex)
-    {
-        /* update current video pts */
-        container.VideoClock.Set(pts, groupIndex);
-        container.ExternalClock.SyncToSlave(container.VideoClock);
-    }
 }

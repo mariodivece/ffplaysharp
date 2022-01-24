@@ -6,15 +6,20 @@ public unsafe class SdlPresenter : IPresenter
     private double LastCursorShownTime;
     private bool IsCursorHidden;
 
-    public IVideoRenderer Video { get; private set; }
+    public SdlVideoRenderer Video { get; private set; }
 
-    public IAudioRenderer Audio { get; private set; }
+    public SdlAudioRenderer Audio { get; private set; }
 
     public MediaContainer Container { get; private set; }
+
+    public double LastAudioCallbackTime { get; internal set; }
 
     public uint SdlInitFlags { get; set; }
 
     private ProgramOptions Options => Container.Options;
+
+    public IReadOnlyList<AVPixelFormat> PixelFormats =>
+        Video?.RetrieveSupportedPixelFormats() ?? Array.Empty<AVPixelFormat>();
 
     public bool Initialize(MediaContainer container)
     {
@@ -341,4 +346,12 @@ public unsafe class SdlPresenter : IPresenter
             Container.ShowMode = (ShowMode)next;
         }
     }
+
+    public void CloseAudioDevice() => Audio?.Close();
+
+    public AudioParams? OpenAudioDevice(AudioParams audioParams) => Audio?.Open(audioParams);
+
+    public void UpdatePictureSize(int width, int height, AVRational sar) => Video?.SetDefaultWindowSize(width, height, sar);
+
+    public void PauseAudioDevice() => Audio?.Pause();
 }

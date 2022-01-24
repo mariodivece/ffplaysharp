@@ -1,9 +1,8 @@
-﻿global using SDL2;
-global using FFmpeg;
+﻿global using FFmpeg;
 global using FFmpeg.AutoGen;
-global using Unosquare.FFplaySharp.Sdl;
-global using Unosquare.FFplaySharp;
-global using Unosquare.FFplaySharp.Rendering;
-global using Unosquare.FFplaySharp.Primitives;
-global using System.Text;
+global using SDL2;
 global using System.Globalization;
+global using System.Text;
+global using Unosquare.FFplaySharp;
+global using Unosquare.FFplaySharp.Primitives;
+global using Unosquare.FFplaySharp.Sdl;

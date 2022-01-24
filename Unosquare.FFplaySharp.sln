@@ -10,7 +10,9 @@ Project("{2150E333-8FDC-42A3-9474-1A3956D46DE8}") = "Solution Items", "Solution 
 		Support\README-SDL.txt = Support\README-SDL.txt
 	EndProjectSection
 EndProject
-Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "Unosquare.FFplaySharp.Sdl", "Unosquare.FFplaySharp.Sdl\Unosquare.FFplaySharp.Sdl.csproj", "{50CA1257-A86C-43BA-94E0-DE1DE761D3A8}"
+Project("{9A19103F-16F7-4668-BE54-9A1E7A4F7556}") = "Unosquare.FFplaySharp.Sdl", "Unosquare.FFplaySharp.Sdl\Unosquare.FFplaySharp.Sdl.csproj", "{50CA1257-A86C-43BA-94E0-DE1DE761D3A8}"
+EndProject
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "Unosquare.FFplaySharp.Wpf", "Unosquare.FFplaySharp.Wpf\Unosquare.FFplaySharp.Wpf.csproj", "{37D83522-070E-4D35-9A0B-1461C351E9CB}"
 EndProject
 Global
 	GlobalSection(SolutionConfigurationPlatforms) = preSolution
@@ -26,6 +28,10 @@ Global
 		{50CA1257-A86C-43BA-94E0-DE1DE761D3A8}.Debug|Any CPU.Build.0 = Debug|Any CPU
 		{50CA1257-A86C-43BA-94E0-DE1DE761D3A8}.Release|Any CPU.ActiveCfg = Release|Any CPU
 		{50CA1257-A86C-43BA-94E0-DE1DE761D3A8}.Release|Any CPU.Build.0 = Release|Any CPU
+		{37D83522-070E-4D35-9A0B-1461C351E9CB}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+		{37D83522-070E-4D35-9A0B-1461C351E9CB}.Debug|Any CPU.Build.0 = Debug|Any CPU
+		{37D83522-070E-4D35-9A0B-1461C351E9CB}.Release|Any CPU.ActiveCfg = Release|Any CPU
+		{37D83522-070E-4D35-9A0B-1461C351E9CB}.Release|Any CPU.Build.0 = Release|Any CPU
 	EndGlobalSection
 	GlobalSection(SolutionProperties) = preSolution
 		HideSolutionNode = FALSE

@@ -1,6 +1,6 @@
 ﻿namespace Unosquare.FFplaySharp.Sdl;
 
-public unsafe class SdlAudioRenderer : IAudioRenderer
+public unsafe class SdlAudioRenderer
 {
     private readonly SDL.SDL_AudioCallback AudioCallback;
     private uint AudioDeviceId;
@@ -8,18 +8,16 @@ public unsafe class SdlAudioRenderer : IAudioRenderer
     private int ReadBufferIndex;
     private BufferReference ReadBuffer;
 
-    public double LastCallbackTime { get; private set; }
-
     public MediaContainer Container => Presenter.Container;
 
-    public IPresenter Presenter { get; private set; }
+    public SdlPresenter Presenter { get; private set; }
 
     public SdlAudioRenderer()
     {
         AudioCallback = new(OnAudioDeviceCallback);
     }
 
-    public void Initialize(IPresenter presenter)
+    public void Initialize(SdlPresenter presenter)
     {
         Presenter = presenter;
 
@@ -164,7 +162,7 @@ public unsafe class SdlAudioRenderer : IAudioRenderer
     private void OnAudioDeviceCallback(IntPtr opaque, IntPtr audioStream, int pendingByteCount)
     {
         // prepare a new audio buffer
-        LastCallbackTime = Clock.SystemTime;
+        Presenter.LastAudioCallbackTime = Clock.SystemTime;
 
         while (pendingByteCount > 0)
         {
@@ -222,7 +220,7 @@ public unsafe class SdlAudioRenderer : IAudioRenderer
         {
             var readBufferAvailable = ReadBufferSize - ReadBufferIndex;
             var bufferDuration = (2d * Container.Audio.HardwareSpec.BufferSize + readBufferAvailable) / Container.Audio.HardwareSpec.BytesPerSecond;
-            Container.AudioClock.Set(Container.Audio.FrameTime - bufferDuration, Container.Audio.GroupIndex, LastCallbackTime);
+            Container.AudioClock.Set(Container.Audio.FrameTime - bufferDuration, Container.Audio.GroupIndex, Presenter.LastAudioCallbackTime);
             Container.ExternalClock.SyncToSlave(Container.AudioClock);
         }
     }

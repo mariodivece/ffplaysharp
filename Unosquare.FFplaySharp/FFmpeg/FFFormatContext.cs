@@ -108,7 +108,7 @@
 
         public AVRational GuessFrameRate(FFStream stream) => ffmpeg.av_guess_frame_rate(Target, stream.Target, null);
 
-        public AVRational GuessAspectRatio(FFStream stream, FFFrame frame) =>
+        public AVRational GuessAspectRatio(FFStream stream, FFFrame? frame = default) =>
             ffmpeg.av_guess_sample_aspect_ratio(Target, stream.Target, frame.IsNotNull() ? frame!.Target : default);
 
         public void OpenInput(string filePath, FFInputFormat format, FFDictionary formatOptions)

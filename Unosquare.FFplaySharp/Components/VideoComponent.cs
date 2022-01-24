@@ -134,7 +134,7 @@ public sealed class VideoComponent : FilteringMediaComponent
         targetFrame.Update(sourceFrame, groupIndex, frameTime, duration);
         Frames.EnqueueLeasedFrame();
 
-        Container.Presenter.Video.SetDefaultWindowSize(
+        Container.Presenter.UpdatePictureSize(
             targetFrame.Width, targetFrame.Height, targetFrame.Frame.SampleAspectRatio);
 
         return 0;
@@ -202,7 +202,7 @@ public sealed class VideoComponent : FilteringMediaComponent
     {
         var codecParameters = Stream.CodecParameters;
         var frameRate = Container.Input.GuessFrameRate(Stream);
-        var outputPixelFormats = Container.Presenter.Video.RetrieveSupportedPixelFormats().Cast<int>();
+        var outputPixelFormats = Container.Presenter.PixelFormats.Cast<int>();
         var softwareScalerFlags = string.Empty;
 
         foreach (var kvp in Container.Options.ScalerOptions)

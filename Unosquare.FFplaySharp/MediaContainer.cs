@@ -141,6 +141,8 @@ public unsafe class MediaContainer
         }
     }
 
+    public string? Title { get; private set; }
+
     public ClockSource ClockSyncMode { get; private set; }
 
     public Clock AudioClock { get; private set; }
@@ -205,6 +207,17 @@ public unsafe class MediaContainer
             return null;
             throw;
         }
+    }
+
+
+    /// <summary>
+    /// Port of update_video_pts
+    /// </summary>
+    public void UpdateVideoPts(double pts, int groupIndex)
+    {
+        /* update current video pts */
+        VideoClock.Set(pts, groupIndex);
+        ExternalClock.SyncToSlave(VideoClock);
     }
 
     /// <summary>
@@ -495,7 +508,7 @@ public unsafe class MediaContainer
                 IsPictureAttachmentPending = true;
 
             if (targetComponent.IsAudio)
-                Presenter.Audio.Pause();
+                Presenter.PauseAudioDevice();
         }
         catch
         {
@@ -628,8 +641,8 @@ public unsafe class MediaContainer
             MaxPictureDuration = Input.InputFormat.Flags.HasFlag(ffmpeg.AVFMT_TS_DISCONT) ? 10.0 : 3600.0;
 
             var metadata = Input.Metadata;
-            if (string.IsNullOrWhiteSpace(Presenter.Video.WindowTitle) && metadata.ContainsKey("title"))
-                Presenter.Video.WindowTitle = $"{metadata["title"]} - {Options.InputFileName}";
+            if (metadata.ContainsKey("title"))
+                Title = $"{metadata["title"]} - {Options.InputFileName}";
 
             // if seeking requested, we execute it
             if (Options.StartOffset.IsValidPts())
@@ -708,9 +721,9 @@ public unsafe class MediaContainer
         {
             var st = Input.Streams[streamIndexes.Video];
             var codecpar = st.CodecParameters;
-            var sar = Input.GuessAspectRatio(st, null);
+            var sar = Input.GuessAspectRatio(st);
             if (codecpar.Width != 0)
-                Presenter.Video.SetDefaultWindowSize(codecpar.Width, codecpar.Height, sar);
+                Presenter.UpdatePictureSize(codecpar.Width, codecpar.Height, sar);
         }
 
         // open the streams
