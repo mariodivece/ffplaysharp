@@ -38,7 +38,7 @@ namespace Unosquare.FFplaySharp.Wpf
 
             var o = new ProgramOptions
             {
-                InputFileName = @"C:\Users\UnoSp\OneDrive\ffme-testsuite\video-subtitles-03.mkv",
+                InputFileName = @"C:\Users\UnoSp\OneDrive\ffme-testsuite\cpcdemo.wmv", //video-subtitles-03.mkv",
                 IsAudioDisabled = true,
                 IsSubtitleDisabled = true,
             };

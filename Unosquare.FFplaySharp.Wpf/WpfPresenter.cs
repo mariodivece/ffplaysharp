@@ -4,6 +4,8 @@ namespace Unosquare.FFplaySharp.Wpf;
 
 internal class WpfPresenter : IPresenter
 {
+    private PictureParams? WantedPictureSize = default;
+
     private WriteableBitmap _bitmap;
 
     public MainWindow Window { get; init; }
@@ -40,68 +42,95 @@ internal class WpfPresenter : IPresenter
         throw new NotImplementedException();
     }
 
-    public void Start()
+    private unsafe bool RenderPicture(FrameHolder frame)
     {
-        var thread = new Thread((s) =>
+        var uiDispatcher = Application.Current.Dispatcher;
+        var convert = Container.Video.ConvertContext;
+        var hasLockedBuffer = false;
+
+        PictureParams? bitmapSize = default;
+        uiDispatcher.Invoke(() =>
         {
-            while (Container.Video.Frames.IsClosed)
-                Thread.Sleep(1);
-
-            var convert = Container.Video.ConvertContext;
-
-            while (!Container.IsAtEndOfStream || Container.Video.Frames.HasPending)
+            bitmapSize = _bitmap is not null ? PictureParams.FromBitmap(_bitmap) : null;
+            if (bitmapSize is null || !bitmapSize.MatchesDimensions(WantedPictureSize))
             {
-                var frame = Container.Video.Frames.WaitPeekShowable();
-                if (frame is null)
-                    break;
-
-                if (frame.HasValidTime)
-                    Container.UpdateVideoPts(frame.Time, frame.GroupIndex);
-
-                var duration = frame.Duration;
-                Debug.WriteLine($"Frame Received: {Container.VideoClock.Value}");
-
-                if (_bitmap is not null)
-                {
-                    IntPtr buffer = IntPtr.Zero;
-                    int stride = default;
-                    var pixelWidth = 0;
-                    var pixelHeight = 0;
-                    App.Current.Dispatcher.Invoke(() =>
-                    {
-                        pixelWidth = _bitmap.PixelWidth;
-                        pixelHeight = _bitmap.PixelHeight;
-                        _bitmap.Lock();
-                        buffer = _bitmap.BackBuffer;
-                        stride = _bitmap.BackBufferStride;
-                    });
-
-                    convert.Reallocate(frame.Width, frame.Height, frame.Frame.PixelFormat,
-                        pixelWidth, pixelHeight, PixelFormats[0]);
-
-                    unsafe
-                    {
-                        convert.Convert(frame.Frame.Data, frame.Frame.LineSize, pixelHeight, buffer, stride);
-                    }
-
-                    App.Current.Dispatcher.Invoke(() =>
-                    {
-                        _bitmap.AddDirtyRect(new(0, 0, _bitmap.PixelWidth, _bitmap.PixelHeight));
-                        _bitmap.Unlock();
-                    });
-                }
-
-
-                Container.Video.Frames.Dequeue();
-                Thread.Sleep(TimeSpan.FromSeconds(duration));
+                _bitmap = WantedPictureSize.CreateBitmap();
+                Window.targetImage.Source = _bitmap;
             }
 
-            Debug.WriteLine("Doine reading frames");
-        })
-        {
-            IsBackground = true
-        };
+            hasLockedBuffer = _bitmap!.TryLock(new Duration(TimeSpan.FromMilliseconds(5)));
+            bitmapSize = PictureParams.FromBitmap(_bitmap);
+        });
 
+        if (!hasLockedBuffer)
+            return false;
+
+        convert.Reallocate(frame.Width, frame.Height, frame.Frame.PixelFormat,
+            bitmapSize!.Width, bitmapSize.Height, bitmapSize.PixelFormat);
+
+        convert.Convert(frame.Frame.Data, frame.Frame.LineSize, frame.Frame.Height,
+            bitmapSize.Buffer, bitmapSize.Stride);
+
+        var updateRect = bitmapSize.ToRect();
+        uiDispatcher.InvokeAsync(() =>
+        {
+            _bitmap.AddDirtyRect(updateRect);
+            _bitmap.Unlock();
+        });
+
+        return true;
+    }
+
+    private unsafe void PictureWorker()
+    {
+        while (Container.Video.Frames.IsClosed || WantedPictureSize is null)
+            Thread.Sleep(1);
+
+        double? videoStartTime = default;
+        var frameStartTime = Clock.SystemTime;
+        var refreshPicture = true;
+
+        while (!Container.IsAtEndOfStream || Container.Video.Frames.HasPending)
+        {
+            var frame = Container.Video.Frames.WaitPeekShowable();
+            if (frame is null) break;
+
+            var duration = frame.Duration;
+            var hasRendered = true;
+            if (refreshPicture)
+                hasRendered = RenderPicture(frame);
+
+            var elapsed = Clock.SystemTime - frameStartTime;
+            if (elapsed < duration)
+            {
+                refreshPicture = !hasRendered;
+                Thread.Sleep(1);
+                continue;
+            }
+
+            Debug.WriteLine(
+                $"Frame Received: RT: {(Clock.SystemTime - videoStartTime):n3} VCLK: {Container.VideoClock.Value:n3} FT: {frame.Time:n3}");
+
+            if (frame.HasValidTime)
+            {
+                if (!videoStartTime.HasValue)
+                    videoStartTime = Clock.SystemTime - frame.Time + frame.Duration;
+
+                Container.UpdateVideoPts(frame.Time, frame.GroupIndex);
+            }
+
+            Container.Video.Frames.Dequeue();
+            refreshPicture = true;
+            frameStartTime = Clock.SystemTime;
+        }
+
+        Debug.WriteLine(
+            $"Done reading and displaying frames. RT: {(Clock.SystemTime - videoStartTime):n3} VCLK: {Container.VideoClock.Value:n3}");
+    }
+
+    public void Start()
+    {
+        var thread = new Thread(PictureWorker) { IsBackground = true };
         thread.Start();
     }
 
@@ -112,16 +141,52 @@ internal class WpfPresenter : IPresenter
 
     public void UpdatePictureSize(int width, int height, AVRational sar)
     {
+        if (WantedPictureSize is null)
+            WantedPictureSize = new();
 
-        if (_bitmap is not null)
-            return;
+        var isValidSar = Math.Abs(sar.den) > 0 && Math.Abs(sar.num) > 0;
 
-        App.Current.Dispatcher.Invoke(() =>
+        WantedPictureSize.Width = width;
+        WantedPictureSize.Height = height;
+        WantedPictureSize.DpiX = isValidSar ? sar.den : 96;
+        WantedPictureSize.DpiY = isValidSar ? sar.num : 96;
+        WantedPictureSize.PixelFormat = AVPixelFormat.AV_PIX_FMT_BGRA;
+    }
+
+    private record PictureParams()
+    {
+        public int Width { get; set; } = default;
+
+        public int Height { get; set; } = default;
+
+        public int DpiX { get; set; } = default;
+
+        public int DpiY { get; set; } = default;
+
+        public IntPtr Buffer { get; set; } = default;
+
+        public int Stride { get; set; } = default;
+
+        public AVPixelFormat PixelFormat { get; set; } = AVPixelFormat.AV_PIX_FMT_NONE;
+
+        public WriteableBitmap CreateBitmap() =>
+            new(Width, Height, DpiX, DpiY, System.Windows.Media.PixelFormats.Bgra32, null);
+
+        public Int32Rect ToRect() => new(0, 0, Width, Height);
+
+        public bool MatchesDimensions(PictureParams other) =>
+            Width == other.Width && Height == other.Height && DpiX == other.DpiX && DpiY == other.DpiY;
+
+        public static PictureParams FromBitmap(WriteableBitmap bitmap) => new()
         {
-            _bitmap = new WriteableBitmap(width, height, 96, 96, System.Windows.Media.PixelFormats.Bgra32, null);
-            Window.targetImage.Source = _bitmap;
-        });
-
+            Buffer = bitmap.BackBuffer,
+            Width = bitmap.PixelWidth,
+            Height = bitmap.PixelHeight,
+            DpiX = Convert.ToInt32(bitmap.DpiX),
+            DpiY = Convert.ToInt32(bitmap.DpiY),
+            PixelFormat = AVPixelFormat.AV_PIX_FMT_BGRA,
+            Stride = bitmap.BackBufferStride
+        };
     }
 }
 
