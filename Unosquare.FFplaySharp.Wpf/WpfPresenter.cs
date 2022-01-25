@@ -42,10 +42,10 @@ internal class WpfPresenter : IPresenter
         throw new NotImplementedException();
     }
 
-    private unsafe bool RenderPicture(FrameHolder frame)
+    private unsafe void RenderPicture(FrameHolder frame)
     {
         var uiDispatcher = Application.Current.Dispatcher;
-        var convert = Container.Video.ConvertContext;
+        
         var hasLockedBuffer = false;
 
         PictureParams? bitmapSize = default;
@@ -58,27 +58,45 @@ internal class WpfPresenter : IPresenter
                 Window.targetImage.Source = _bitmap;
             }
 
-            hasLockedBuffer = _bitmap!.TryLock(new Duration(TimeSpan.FromMilliseconds(5)));
+            var timeout = new Duration(TimeSpan.FromMilliseconds(0));
+            hasLockedBuffer = _bitmap!.TryLock(timeout);
             bitmapSize = PictureParams.FromBitmap(_bitmap);
         });
 
         if (!hasLockedBuffer)
-            return false;
+            return;
 
-        convert.Reallocate(frame.Width, frame.Height, frame.Frame.PixelFormat,
-            bitmapSize!.Width, bitmapSize.Height, bitmapSize.PixelFormat);
+        if (frame.Frame.PixelFormat != bitmapSize.PixelFormat)
+        {
+            var convert = Container.Video.ConvertContext;
 
-        convert.Convert(frame.Frame.Data, frame.Frame.LineSize, frame.Frame.Height,
-            bitmapSize.Buffer, bitmapSize.Stride);
+            convert.Reallocate(frame.Width, frame.Height, frame.Frame.PixelFormat,
+                bitmapSize!.Width, bitmapSize.Height, bitmapSize.PixelFormat);
 
+            convert.Convert(frame.Frame.Data, frame.Frame.LineSize, frame.Frame.Height,
+                bitmapSize.Buffer, bitmapSize.Stride);
+        }
+        else
+        {
+            var sourceLineSize = frame.Frame.LineSize[0];
+            var targetLineSize = bitmapSize.Stride;
+            var sz = Math.Min(sourceLineSize, targetLineSize);
+
+            for (var lineIndex = 0; lineIndex < bitmapSize.Height; lineIndex++)
+                Buffer.MemoryCopy(
+                    frame.Frame.Data[0] + (lineIndex * sourceLineSize),
+                    (void*)(bitmapSize.Buffer + (lineIndex * targetLineSize)),
+                    sz,
+                    sz);
+        }
+
+        frame.MarkUploaded();
         var updateRect = bitmapSize.ToRect();
         uiDispatcher.InvokeAsync(() =>
         {
             _bitmap.AddDirtyRect(updateRect);
             _bitmap.Unlock();
         });
-
-        return true;
     }
 
     private unsafe void PictureWorker()
@@ -88,22 +106,20 @@ internal class WpfPresenter : IPresenter
 
         double? videoStartTime = default;
         var frameStartTime = Clock.SystemTime;
-        var refreshPicture = true;
 
         while (!Container.IsAtEndOfStream || Container.Video.Frames.HasPending)
         {
             var frame = Container.Video.Frames.WaitPeekShowable();
             if (frame is null) break;
 
-            var duration = frame.Duration;
-            var hasRendered = true;
-            if (refreshPicture)
-                hasRendered = RenderPicture(frame);
+            if (!frame.IsUploaded)
+                RenderPicture(frame);
 
+            var duration = frame.Duration;
             var elapsed = Clock.SystemTime - frameStartTime;
+            
             if (elapsed < duration)
             {
-                refreshPicture = !hasRendered;
                 Thread.Sleep(1);
                 continue;
             }
@@ -120,7 +136,6 @@ internal class WpfPresenter : IPresenter
             }
 
             Container.Video.Frames.Dequeue();
-            refreshPicture = true;
             frameStartTime = Clock.SystemTime;
         }
 

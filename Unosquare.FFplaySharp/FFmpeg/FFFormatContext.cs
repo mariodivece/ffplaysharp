@@ -135,8 +135,9 @@
             var formatOptionsPtr = formatOptions.Target;
             var resultCode = ffmpeg.avformat_open_input(&context, filePath, format.Target, &formatOptionsPtr);
             Update(context);
-            format.Update(context->iformat);
             formatOptions.Update(formatOptionsPtr);
+            if (context is not null)
+                format.Update(context->iformat);
 
             if (isScanAllPmtsSet)
                 formatOptions.Remove(ScanAllPmtsKey);
