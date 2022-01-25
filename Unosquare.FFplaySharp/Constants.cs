@@ -74,8 +74,9 @@ public static class Constants
     /// <summary>
     /// Port of sws_flags. Represents the rescaler interpolation flags.
     /// Bilinear is fine and is faster. Bicubic is higher quality.
+    /// Point uses no interpolation.
     /// </summary>
-    public const int RescalerInterpolation = ffmpeg.SWS_BICUBIC;
+    public const int RescalerInterpolation = ffmpeg.SWS_POINT;
 
     public const int VideoFrameQueueCapacity = 3;
     public const int SubtitleFrameQueueCapacity = 16;

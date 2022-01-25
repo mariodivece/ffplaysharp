@@ -368,7 +368,8 @@ public unsafe class SdlVideoRenderer
         {
             // This should only happen if we are not using avfilter...
             convertContext.Reallocate(
-                video.Width, video.Height, frame.PixelFormat, video.Width, video.Height, AVPixelFormat.AV_PIX_FMT_BGRA);
+                video.Width, video.Height, frame.PixelFormat,
+                video.Width, video.Height, AVPixelFormat.AV_PIX_FMT_BGRA);
 
             if (convertContext.IsNotNull())
             {

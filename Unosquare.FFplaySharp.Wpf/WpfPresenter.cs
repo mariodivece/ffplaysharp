@@ -42,13 +42,24 @@ internal class WpfPresenter : IPresenter
         throw new NotImplementedException();
     }
 
+    private bool TryGetUiDispatcher([MaybeNullWhen(false)] out Dispatcher dispatcher)
+    {
+        dispatcher = default;
+        if (Application.Current is null || Application.Current.Dispatcher is null || Application.Current.Dispatcher.HasShutdownStarted)
+            return false;
+
+        dispatcher = Application.Current.Dispatcher;
+        return true;
+    }
+
     private unsafe void RenderPicture(FrameHolder frame)
     {
-        var uiDispatcher = Application.Current.Dispatcher;
+        if (!TryGetUiDispatcher(out var uiDispatcher))
+            return;
 
         var hasLockedBuffer = false;
-
         PictureParams? bitmapSize = default;
+
         uiDispatcher.Invoke(() =>
         {
             bitmapSize = _bitmap is not null ? PictureParams.FromBitmap(_bitmap) : null;
@@ -65,7 +76,6 @@ internal class WpfPresenter : IPresenter
 
         if (!hasLockedBuffer)
             return;
-
 
 
         if (frame.Frame.PixelFormat != bitmapSize.PixelFormat)
@@ -179,42 +189,6 @@ internal class WpfPresenter : IPresenter
         WantedPictureSize.DpiX = isValidSar ? sar.den : 96;
         WantedPictureSize.DpiY = isValidSar ? sar.num : 96;
         WantedPictureSize.PixelFormat = AVPixelFormat.AV_PIX_FMT_BGRA;
-    }
-
-    private record PictureParams()
-    {
-        public int Width { get; set; } = default;
-
-        public int Height { get; set; } = default;
-
-        public int DpiX { get; set; } = default;
-
-        public int DpiY { get; set; } = default;
-
-        public IntPtr Buffer { get; set; } = default;
-
-        public int Stride { get; set; } = default;
-
-        public AVPixelFormat PixelFormat { get; set; } = AVPixelFormat.AV_PIX_FMT_NONE;
-
-        public WriteableBitmap CreateBitmap() =>
-            new(Width, Height, DpiX, DpiY, System.Windows.Media.PixelFormats.Bgra32, null);
-
-        public Int32Rect ToRect() => new(0, 0, Width, Height);
-
-        public bool MatchesDimensions(PictureParams other) =>
-            Width == other.Width && Height == other.Height && DpiX == other.DpiX && DpiY == other.DpiY;
-
-        public static PictureParams FromBitmap(WriteableBitmap bitmap) => new()
-        {
-            Buffer = bitmap.BackBuffer,
-            Width = bitmap.PixelWidth,
-            Height = bitmap.PixelHeight,
-            DpiX = Convert.ToInt32(bitmap.DpiX),
-            DpiY = Convert.ToInt32(bitmap.DpiY),
-            PixelFormat = AVPixelFormat.AV_PIX_FMT_BGRA,
-            Stride = bitmap.BackBufferStride
-        };
     }
 }
 
