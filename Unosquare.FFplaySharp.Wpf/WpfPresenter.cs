@@ -45,7 +45,7 @@ internal class WpfPresenter : IPresenter
     private unsafe void RenderPicture(FrameHolder frame)
     {
         var uiDispatcher = Application.Current.Dispatcher;
-        
+
         var hasLockedBuffer = false;
 
         PictureParams? bitmapSize = default;
@@ -66,6 +66,8 @@ internal class WpfPresenter : IPresenter
         if (!hasLockedBuffer)
             return;
 
+
+
         if (frame.Frame.PixelFormat != bitmapSize.PixelFormat)
         {
             var convert = Container.Video.ConvertContext;
@@ -78,16 +80,27 @@ internal class WpfPresenter : IPresenter
         }
         else
         {
+            var sourceAddress = frame.Frame.Data[0];
             var sourceLineSize = frame.Frame.LineSize[0];
+            var targetAddress = (byte*)bitmapSize.Buffer;
             var targetLineSize = bitmapSize.Stride;
-            var sz = Math.Min(sourceLineSize, targetLineSize);
+            var maxLineSize = Math.Min(sourceLineSize, targetLineSize);
 
-            for (var lineIndex = 0; lineIndex < bitmapSize.Height; lineIndex++)
-                Buffer.MemoryCopy(
-                    frame.Frame.Data[0] + (lineIndex * sourceLineSize),
-                    (void*)(bitmapSize.Buffer + (lineIndex * targetLineSize)),
-                    sz,
-                    sz);
+            if (sourceLineSize == targetLineSize)
+            {
+                var byteLength = (ulong)maxLineSize * (ulong)bitmapSize.Height;
+                Buffer.MemoryCopy(sourceAddress, targetAddress, byteLength, byteLength);
+            }
+            else
+            {
+                for (var lineIndex = 0; lineIndex < bitmapSize.Height; lineIndex++)
+                {
+                    Buffer.MemoryCopy(
+                        sourceAddress + (lineIndex * sourceLineSize),
+                        targetAddress + (lineIndex * targetLineSize),
+                        maxLineSize, maxLineSize);
+                }
+            }
         }
 
         frame.MarkUploaded();
@@ -117,7 +130,7 @@ internal class WpfPresenter : IPresenter
 
             var duration = frame.Duration;
             var elapsed = Clock.SystemTime - frameStartTime;
-            
+
             if (elapsed < duration)
             {
                 Thread.Sleep(1);

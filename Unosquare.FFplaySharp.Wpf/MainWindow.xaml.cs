@@ -1,19 +1,4 @@
-﻿using System;
-using System.Collections.Generic;
-using System.Linq;
-using System.Text;
-using System.Threading.Tasks;
-using System.Windows;
-using System.Windows.Controls;
-using System.Windows.Data;
-using System.Windows.Documents;
-using System.Windows.Input;
-using System.Windows.Media;
-using System.Windows.Media.Imaging;
-using System.Windows.Navigation;
-using System.Windows.Shapes;
-
-namespace Unosquare.FFplaySharp.Wpf
+﻿namespace Unosquare.FFplaySharp.Wpf
 {
     /// <summary>
     /// Interaction logic for MainWindow.xaml
@@ -38,7 +23,7 @@ namespace Unosquare.FFplaySharp.Wpf
 
             var o = new ProgramOptions
             {
-                InputFileName = @"C:\Users\UnoSp\OneDrive\ffme-testsuite\video-issue-251.mpg", //video-subtitles-03.mkv",
+                InputFileName = @"C:\Users\UnoSp\OneDrive\ffme-testsuite\video-hevc-stress-01.mkv", //video-subtitles-03.mkv",
                 IsAudioDisabled = true,
                 IsSubtitleDisabled = true,
             };
