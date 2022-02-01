@@ -23,7 +23,7 @@
 
             var o = new ProgramOptions
             {
-                InputFileName = @"C:\Users\UnoSp\OneDrive\ffme-testsuite\video-transport-03.ts", //video-subtitles-03.mkv",
+                InputFileName = @"C:\Users\UnoSp\OneDrive\ffme-testsuite\video-framerate-01.mp4", //video-subtitles-03.mkv",
                 IsAudioDisabled = true,
                 IsSubtitleDisabled = true,
             };

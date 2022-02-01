@@ -52,6 +52,53 @@ internal class WpfPresenter : IPresenter
         return true;
     }
 
+    const bool UseNativeMethod = false;
+    private readonly Stopwatch sw = new();
+    private readonly List<double> samples = new(4096 * 2);
+
+    private unsafe void CopyPicture(FrameHolder source, PictureParams target, bool useNativeMethod)
+    {
+        var sourceData = new byte_ptrArray4() { [0] = source.Frame.Data[0] };
+        var targetData = new byte_ptrArray4() { [0] = (byte*)target.Buffer };
+        var sourceStride = new long_array4() { [0] = source.Frame.LineSize[0] };
+        var targetStride = new long_array4() { [0] = target.Stride };
+
+        // This is FFmpeg's way of copying pictures.
+        // The av_image_copy_uc_from is slightly faster than
+        // av_image_copy_to_buffer or av_image_copy alternatives.
+        if (useNativeMethod)
+        {
+            ffmpeg.av_image_copy_uc_from(
+                ref targetData, targetStride,
+                ref sourceData, sourceStride,
+                target.PixelFormat, target.Width, target.Height);
+
+            return;
+        }
+
+        // There might be alignment differences. Make sure the minimum
+        // stride is chosen.
+        var maxLineSize = Math.Min(sourceStride[0], targetStride[0]);
+
+        // If source and target have the same strides, simply copy the bytes directly.
+        if (sourceStride[0] == targetStride[0])
+        {
+            var byteLength = maxLineSize * target.Height;
+            Buffer.MemoryCopy(sourceData[0], targetData[0], byteLength, byteLength);
+            return;
+        }
+
+        // If the source and target differ in strides (byte alignment)
+        // we'll need to copy line by line.
+        for (var lineIndex = 0; lineIndex < target.Height; lineIndex++)
+        {
+            Buffer.MemoryCopy(
+                sourceData[0] + (lineIndex * sourceStride[0]),
+                targetData[0] + (lineIndex * targetStride[0]),
+                maxLineSize, maxLineSize);
+        }
+    }
+
     private unsafe void RenderPicture(FrameHolder frame)
     {
         if (!TryGetUiDispatcher(out var uiDispatcher))
@@ -63,9 +110,9 @@ internal class WpfPresenter : IPresenter
         uiDispatcher.Invoke(() =>
         {
             bitmapSize = _bitmap is not null ? PictureParams.FromBitmap(_bitmap) : null;
-            if (bitmapSize is null || !bitmapSize.MatchesDimensions(WantedPictureSize))
+            if (bitmapSize is null || !bitmapSize.MatchesDimensions(WantedPictureSize!))
             {
-                _bitmap = WantedPictureSize.CreateBitmap();
+                _bitmap = WantedPictureSize!.CreateBitmap();
                 Window.targetImage.Source = _bitmap;
             }
 
@@ -78,7 +125,7 @@ internal class WpfPresenter : IPresenter
             return;
 
 
-        if (frame.Frame.PixelFormat != bitmapSize.PixelFormat)
+        if (frame.Frame.PixelFormat != bitmapSize!.PixelFormat)
         {
             var convert = Container.Video.ConvertContext;
 
@@ -90,27 +137,9 @@ internal class WpfPresenter : IPresenter
         }
         else
         {
-            var sourceAddress = frame.Frame.Data[0];
-            var sourceLineSize = frame.Frame.LineSize[0];
-            var targetAddress = (byte*)bitmapSize.Buffer;
-            var targetLineSize = bitmapSize.Stride;
-            var maxLineSize = Math.Min(sourceLineSize, targetLineSize);
-
-            if (sourceLineSize == targetLineSize)
-            {
-                var byteLength = (ulong)maxLineSize * (ulong)bitmapSize.Height;
-                Buffer.MemoryCopy(sourceAddress, targetAddress, byteLength, byteLength);
-            }
-            else
-            {
-                for (var lineIndex = 0; lineIndex < bitmapSize.Height; lineIndex++)
-                {
-                    Buffer.MemoryCopy(
-                        sourceAddress + (lineIndex * sourceLineSize),
-                        targetAddress + (lineIndex * targetLineSize),
-                        maxLineSize, maxLineSize);
-                }
-            }
+            sw.Restart();
+            CopyPicture(frame, bitmapSize, UseNativeMethod);
+            samples.Add(sw.ElapsedTicks);
         }
 
         frame.MarkUploaded();
@@ -143,6 +172,8 @@ internal class WpfPresenter : IPresenter
 
             if (elapsed < duration)
             {
+                // Removing this thread sleep call
+                // makes rendering really smooth but increases CPU usage greatly.
                 Thread.Sleep(1);
                 continue;
             }
