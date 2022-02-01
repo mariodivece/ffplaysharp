@@ -128,7 +128,6 @@ internal class WpfPresenter : IPresenter
         if (!hasLockedBuffer)
             return;
 
-
         if (frame.Frame.PixelFormat != bitmapSize!.PixelFormat)
         {
             var convert = Container.Video.ConvertContext;
@@ -148,33 +147,37 @@ internal class WpfPresenter : IPresenter
 
         frame.MarkUploaded();
         var updateRect = bitmapSize.ToRect();
-        uiDispatcher.Invoke(() =>
+        uiDispatcher.InvokeAsync(() =>
         {
             _bitmap.AddDirtyRect(updateRect);
             _bitmap.Unlock();
         });
     }
 
-    private MultimediaTimer RenderTimer;
+    private MultimediaTimer RenderTimer = new(1);
 
     public void Start()
     {
         double? videoStartTime = default;
         var frameStartTime = Clock.SystemTime;
 
-        RenderTimer = new(1, 1);
         RenderTimer.Elapsed += (s, e) =>
         {
-            if (Container.Video.Frames.IsClosed || WantedPictureSize is null)
+            if (WantedPictureSize is null || Container.Video.Frames.IsClosed)
                 return;
 
             if (Container.IsAtEndOfStream && !Container.Video.Frames.HasPending)
-                Debug.WriteLine(
-                    $"Done reading and displaying frames. RT: {(Clock.SystemTime - videoStartTime):n3} VCLK: {Container.VideoClock.Value:n3}");
+            {
+                Debug.WriteLine($"Done reading and displaying frames. "
+                    + $"RT: {(Clock.SystemTime - videoStartTime):n3} VCLK: {Container.VideoClock.Value:n3}");
 
-            //Debug.WriteLine($"Timer Thread: {Environment.CurrentManagedThreadId}");
+                RenderTimer.Dispose();
+            }
 
-            var frame = Container.Video.Frames.WaitPeekShowable();
+            if (!Container.Video.Frames.HasPending)
+                return;
+
+            var frame = Container.Video.Frames.PeekShowable();
             if (frame is null) return;
 
             if (!frame.IsUploaded)

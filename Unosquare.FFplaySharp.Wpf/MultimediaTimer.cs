@@ -19,10 +19,19 @@ public sealed class MultimediaTimer : IDisposable
 
     public MultimediaTimer(int intervalMillis = 10, int resolutionMillis = 5)
     {
+        var caps = default(TimerCaps);
+        _ = NativeMethods.TimeGetDevCaps(ref caps, Marshal.SizeOf(typeof(TimerCaps)));
+
         timerCallback = TimerCallbackMethod;
         interval = intervalMillis < 1
             ? 1
             : Convert.ToUInt32(intervalMillis);
+
+        if (caps.periodMin != default && interval < caps.periodMin)
+            interval = Convert.ToUInt32(caps.periodMin);
+
+        if (caps.periodMax != default && interval > caps.periodMax)
+            interval = Convert.ToUInt32(caps.periodMax);
 
         resolution = resolutionMillis > interval
             ? interval
@@ -43,7 +52,7 @@ public sealed class MultimediaTimer : IDisposable
     {
         // Event type = 0, one off event
         // Event type = 1, periodic event
-        const int PeriodicMode = 1;
+        const int PeriodicSyncMode = 0x1 | 0x0100;
 
         CheckDisposed();
 
@@ -52,7 +61,7 @@ public sealed class MultimediaTimer : IDisposable
 
         uint userCtx = 0;
         timerId = NativeMethods.TimeSetEvent(
-            interval, resolution, timerCallback, ref userCtx, PeriodicMode);
+            interval, resolution, timerCallback, ref userCtx, PeriodicSyncMode);
 
         if (timerId is 0)
             throw new Win32Exception(Marshal.GetLastWin32Error());
@@ -104,6 +113,23 @@ public sealed class MultimediaTimer : IDisposable
         Elapsed?.Invoke(this, EventArgs.Empty);
     }
 
+    /// <summary>
+    /// Represents information about the multimedia Timer's capabilities.
+    /// </summary>
+    [StructLayout(LayoutKind.Sequential)]
+    private struct TimerCaps
+    {
+        /// <summary>
+        /// Minimum supported period in milliseconds.
+        /// </summary>
+        public int periodMin;
+
+        /// <summary>
+        /// Maximum supported period in milliseconds.
+        /// </summary>
+        public int periodMax;
+    }
+
     private static class NativeMethods
     {
         private const string MultimediaDll = "Winmm.dll";
@@ -114,5 +140,8 @@ public sealed class MultimediaTimer : IDisposable
 
         [DllImport(MultimediaDll, SetLastError = true, EntryPoint = "timeKillEvent")]
         public static extern void TimeKillEvent(uint timerId);
+
+        [DllImport(MultimediaDll, SetLastError = true, EntryPoint = "timeGetDevCaps")]
+        public static extern int TimeGetDevCaps(ref TimerCaps caps, int sizeOfTimerCaps);
     }
 }
