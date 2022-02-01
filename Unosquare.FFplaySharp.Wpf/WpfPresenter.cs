@@ -112,13 +112,14 @@ internal class WpfPresenter : IPresenter
 
         uiDispatcher.Invoke(() =>
         {
+            //Debug.WriteLine($"UI Thread: {Environment.CurrentManagedThreadId}");
             bitmapSize = _bitmap is not null ? PictureParams.FromBitmap(_bitmap) : null;
             if (bitmapSize is null || !bitmapSize.MatchesDimensions(WantedPictureSize!))
             {
                 _bitmap = WantedPictureSize!.CreateBitmap();
                 Window.targetImage.Source = _bitmap;
             }
-
+            
             var timeout = new Duration(TimeSpan.FromMilliseconds(0));
             hasLockedBuffer = _bitmap!.TryLock(timeout);
             bitmapSize = PictureParams.FromBitmap(_bitmap);
@@ -147,7 +148,7 @@ internal class WpfPresenter : IPresenter
 
         frame.MarkUploaded();
         var updateRect = bitmapSize.ToRect();
-        uiDispatcher.InvokeAsync(() =>
+        uiDispatcher.Invoke(() =>
         {
             _bitmap.AddDirtyRect(updateRect);
             _bitmap.Unlock();
@@ -171,6 +172,8 @@ internal class WpfPresenter : IPresenter
                 Debug.WriteLine(
                     $"Done reading and displaying frames. RT: {(Clock.SystemTime - videoStartTime):n3} VCLK: {Container.VideoClock.Value:n3}");
 
+            //Debug.WriteLine($"Timer Thread: {Environment.CurrentManagedThreadId}");
+
             var frame = Container.Video.Frames.WaitPeekShowable();
             if (frame is null) return;
 
@@ -183,8 +186,8 @@ internal class WpfPresenter : IPresenter
             if (elapsed < duration)
                 return;
 
-            Debug.WriteLine(
-                $"Frame Received: RT: {(Clock.SystemTime - videoStartTime):n3} VCLK: {Container.VideoClock.Value:n3} FT: {frame.Time:n3}");
+            //Debug.WriteLine(
+            //    $"Frame Received: RT: {(Clock.SystemTime - videoStartTime):n3} VCLK: {Container.VideoClock.Value:n3} FT: {frame.Time:n3}");
 
             if (frame.HasValidTime)
             {
@@ -198,6 +201,8 @@ internal class WpfPresenter : IPresenter
             frameStartTime = Clock.SystemTime;
         };
         RenderTimer.Start();
+        //ThreadPool.QueueUserWorkItem((s) => RenderTimer.Start());
+        //RenderTimer.Start();
     }
 
     public void Stop()

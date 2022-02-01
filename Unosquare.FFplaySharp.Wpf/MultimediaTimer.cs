@@ -103,7 +103,6 @@ public sealed class MultimediaTimer : IDisposable
     {
         Elapsed?.Invoke(this, EventArgs.Empty);
     }
-        
 
     private static class NativeMethods
     {
