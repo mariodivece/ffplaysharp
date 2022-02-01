@@ -3,88 +3,59 @@ using System.Runtime.InteropServices;
 
 namespace Unosquare.FFplaySharp.Wpf;
 
-public class MultimediaTimer : IDisposable
+public sealed class MultimediaTimer : IDisposable
 {
-    private bool disposed = false;
-    private int interval, resolution;
-    private UInt32 timerId;
+    private delegate void MultimediaTimerCallback(uint timerId, uint message, ref uint userContext, uint reservedA, uint reservedB);
 
     // Hold the timer callback to prevent garbage collection.
-    private readonly MultimediaTimerCallback Callback;
+    private readonly MultimediaTimerCallback timerCallback;
+    private readonly uint interval;
+    private readonly uint resolution;
 
-    public MultimediaTimer()
+    private bool disposed;
+    private uint timerId;
+
+    public event EventHandler? Elapsed;
+
+    public MultimediaTimer(int intervalMillis = 10, int resolutionMillis = 5)
     {
-        
-        Callback = new MultimediaTimerCallback(TimerCallbackMethod);
-        
-        // CallbackHandle = GCHandle.Alloc(Callback, GCHandleType.Pinned);
-        Resolution = 5;
-        Interval = 10;
+        timerCallback = TimerCallbackMethod;
+        interval = intervalMillis < 1
+            ? 1
+            : Convert.ToUInt32(intervalMillis);
+
+        resolution = resolutionMillis > interval
+            ? interval
+            : resolutionMillis < 0
+            ? 0
+            : Convert.ToUInt32(resolutionMillis);
     }
 
-    ~MultimediaTimer()
-    {
-        Dispose(false);
-    }
+    ~MultimediaTimer() => Dispose(false);
 
-    public int Interval
-    {
-        get
-        {
-            return interval;
-        }
-        set
-        {
-            CheckDisposed();
+    public int Interval => Convert.ToInt32(interval);
 
-            if (value < 0)
-                throw new ArgumentOutOfRangeException("value");
+    public int Resolution => Convert.ToInt32(resolution);
 
-            interval = value;
-            if (Resolution > Interval)
-                Resolution = value;
-        }
-    }
-
-    // Note minimum resolution is 0, meaning highest possible resolution.
-    public int Resolution
-    {
-        get
-        {
-            return resolution;
-        }
-        set
-        {
-            CheckDisposed();
-
-            if (value < 0)
-                throw new ArgumentOutOfRangeException("value");
-
-            resolution = value;
-        }
-    }
-
-    public bool IsRunning
-    {
-        get { return timerId != 0; }
-    }
+    public bool IsRunning => timerId != 0;
 
     public void Start()
     {
+        // Event type = 0, one off event
+        // Event type = 1, periodic event
+        const int PeriodicMode = 1;
+
         CheckDisposed();
 
         if (IsRunning)
-            throw new InvalidOperationException("Timer is already running");
+            throw new InvalidOperationException("Timer is already running.");
 
-        // Event type = 0, one off event
-        // Event type = 1, periodic event
-        UInt32 userCtx = 0;
-        timerId = NativeMethods.TimeSetEvent((uint)Interval, (uint)Resolution, Callback, ref userCtx, 1);
-        if (timerId == 0)
-        {
-            int error = Marshal.GetLastWin32Error();
-            throw new Win32Exception(error);
-        }
+        uint userCtx = 0;
+        timerId = NativeMethods.TimeSetEvent(
+            interval, resolution, timerCallback, ref userCtx, PeriodicMode);
+
+        if (timerId is 0)
+            throw new Win32Exception(Marshal.GetLastWin32Error());
     }
 
     public void Stop()
@@ -97,28 +68,10 @@ public class MultimediaTimer : IDisposable
         StopInternal();
     }
 
-    private void StopInternal()
-    {
-        NativeMethods.TimeKillEvent(timerId);
-        timerId = 0;
-    }
-
-    public event EventHandler Elapsed;
-
     public void Dispose()
     {
         Dispose(true);
-    }
-
-    private void TimerCallbackMethod(uint id, uint msg, ref uint userCtx, uint rsv1, uint rsv2)
-    {
-        Elapsed?.Invoke(this, EventArgs.Empty);
-    }
-
-    private void CheckDisposed()
-    {
-        if (disposed)
-            throw new ObjectDisposedException("MultimediaTimer");
+        GC.SuppressFinalize(this);
     }
 
     private void Dispose(bool disposing)
@@ -128,25 +81,39 @@ public class MultimediaTimer : IDisposable
 
         disposed = true;
         if (IsRunning)
-        {
             StopInternal();
-        }
 
         if (disposing)
-        {
             Elapsed = null;
-            GC.SuppressFinalize(this);
-        }
     }
-}
 
-internal delegate void MultimediaTimerCallback(UInt32 id, UInt32 msg, ref UInt32 userCtx, UInt32 rsv1, UInt32 rsv2);
+    private void CheckDisposed()
+    {
+        if (disposed)
+            throw new ObjectDisposedException(nameof(MultimediaTimer));
+    }
 
-internal static class NativeMethods
-{
-    [DllImport("winmm.dll", SetLastError = true, EntryPoint = "timeSetEvent")]
-    internal static extern UInt32 TimeSetEvent(UInt32 msDelay, UInt32 msResolution, MultimediaTimerCallback callback, ref UInt32 userCtx, UInt32 eventType);
+    private void StopInternal()
+    {
+        NativeMethods.TimeKillEvent(timerId);
+        timerId = 0;
+    }
 
-    [DllImport("winmm.dll", SetLastError = true, EntryPoint = "timeKillEvent")]
-    internal static extern void TimeKillEvent(UInt32 uTimerId);
+    private void TimerCallbackMethod(uint timerId, uint message, ref uint userContext, uint reservedA, uint reservedB)
+    {
+        Elapsed?.Invoke(this, EventArgs.Empty);
+    }
+        
+
+    private static class NativeMethods
+    {
+        private const string MultimediaDll = "Winmm.dll";
+
+        [DllImport(MultimediaDll, SetLastError = true, EntryPoint = "timeSetEvent")]
+        public static extern uint TimeSetEvent(
+            uint delayMillis, uint resolutionMillis, MultimediaTimerCallback callback, ref uint userContext, uint eventType);
+
+        [DllImport(MultimediaDll, SetLastError = true, EntryPoint = "timeKillEvent")]
+        public static extern void TimeKillEvent(uint timerId);
+    }
 }

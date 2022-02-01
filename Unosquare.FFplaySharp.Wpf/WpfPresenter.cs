@@ -45,10 +45,13 @@ internal class WpfPresenter : IPresenter
     private bool TryGetUiDispatcher([MaybeNullWhen(false)] out Dispatcher dispatcher)
     {
         dispatcher = default;
-        if (Application.Current is null || Application.Current.Dispatcher is null || Application.Current.Dispatcher.HasShutdownStarted)
+        if (Window is null)
             return false;
 
-        dispatcher = Application.Current.Dispatcher;
+        if (Window.Dispatcher is null || Window.Dispatcher.HasShutdownStarted)
+            return false;
+
+        dispatcher = Window.Dispatcher;
         return true;
     }
 
@@ -151,62 +154,16 @@ internal class WpfPresenter : IPresenter
         });
     }
 
-    private unsafe void PictureWorker()
-    {
-        while (Container.Video.Frames.IsClosed || WantedPictureSize is null)
-            Thread.Sleep(1);
-
-        double? videoStartTime = default;
-        var frameStartTime = Clock.SystemTime;
-
-        while (!Container.IsAtEndOfStream || Container.Video.Frames.HasPending)
-        {
-            var frame = Container.Video.Frames.WaitPeekShowable();
-            if (frame is null) break;
-
-            if (!frame.IsUploaded)
-                RenderPicture(frame);
-
-            var duration = frame.Duration;
-            var elapsed = Clock.SystemTime - frameStartTime;
-
-            if (elapsed < duration)
-            {
-                // Removing this thread sleep call
-                // makes rendering really smooth but increases CPU usage greatly.
-                Thread.Sleep(1);
-                continue;
-            }
-
-            Debug.WriteLine(
-                $"Frame Received: RT: {(Clock.SystemTime - videoStartTime):n3} VCLK: {Container.VideoClock.Value:n3} FT: {frame.Time:n3}");
-
-            if (frame.HasValidTime)
-            {
-                if (!videoStartTime.HasValue)
-                    videoStartTime = Clock.SystemTime - frame.Time + frame.Duration;
-
-                Container.UpdateVideoPts(frame.Time, frame.GroupIndex);
-            }
-
-            Container.Video.Frames.Dequeue();
-            frameStartTime = Clock.SystemTime;
-        }
-
-        Debug.WriteLine(
-            $"Done reading and displaying frames. RT: {(Clock.SystemTime - videoStartTime):n3} VCLK: {Container.VideoClock.Value:n3}");
-    }
-
-    private MultimediaTimer RenderTimer = new();
+    private MultimediaTimer RenderTimer;
 
     public void Start()
     {
         double? videoStartTime = default;
         var frameStartTime = Clock.SystemTime;
 
+        RenderTimer = new(1, 1);
         RenderTimer.Elapsed += (s, e) =>
         {
-
             if (Container.Video.Frames.IsClosed || WantedPictureSize is null)
                 return;
 
@@ -240,12 +197,7 @@ internal class WpfPresenter : IPresenter
             Container.Video.Frames.Dequeue();
             frameStartTime = Clock.SystemTime;
         };
-
         RenderTimer.Start();
-        /*
-        var thread = new Thread(PictureWorker) { IsBackground = true };
-        thread.Start();
-        */
     }
 
     public void Stop()
