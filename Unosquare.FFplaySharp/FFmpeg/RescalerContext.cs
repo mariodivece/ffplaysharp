@@ -36,6 +36,6 @@ public unsafe sealed class RescalerContext : CountedReference<SwsContext>
         return ffmpeg.sws_scale(Target, inPlanes, inStrides, 0, inH, targetScan, targetStride);
     }
 
-    protected override unsafe void ReleaseInternal(SwsContext* pointer) =>
-        ffmpeg.sws_freeContext(pointer);
+    protected override unsafe void ReleaseInternal(SwsContext* target) =>
+        ffmpeg.sws_freeContext(target);
 }
