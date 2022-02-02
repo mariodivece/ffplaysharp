@@ -136,7 +136,7 @@ internal class WpfPresenter : IPresenter
             bitmapSize = PictureParams.FromBitmap(_bitmap);
             var updateRect = bitmapSize.ToRect();
             _bitmap.AddDirtyRect(updateRect);
-        }, DispatcherPriority.Send);
+        }, DispatcherPriority.Render);
 
         if (!HasLockedBuffer)
             return;
@@ -158,7 +158,7 @@ internal class WpfPresenter : IPresenter
 
         frame.MarkUploaded();
 
-        uiDispatcher.InvokeAsync(() =>
+        uiDispatcher.Invoke(() =>
         {
             if (!HasLockedBuffer)
                 return;
@@ -200,7 +200,7 @@ internal class WpfPresenter : IPresenter
             var duration = frame.Duration;
             var elapsed = Clock.SystemTime - frameStartTime;
 
-            if (elapsed < duration)
+            if (elapsed <= duration - 0.001f)
                 return;
 
             //Debug.WriteLine(
@@ -215,7 +215,9 @@ internal class WpfPresenter : IPresenter
             }
 
             Container.Video.Frames.Dequeue();
-            frameStartTime = Clock.SystemTime;
+            var currentTime = Clock.SystemTime;
+            var compensation = (currentTime - frameStartTime) - frame.Duration;
+            frameStartTime = currentTime - compensation;
         };
         RenderTimer.Start();
         //ThreadPool.QueueUserWorkItem((s) => RenderTimer.Start());
