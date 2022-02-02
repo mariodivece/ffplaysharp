@@ -8,11 +8,12 @@ EndProject
 Project("{2150E333-8FDC-42A3-9474-1A3956D46DE8}") = "Solution Items", "Solution Items", "{375ECC63-A1E1-419F-9CBE-81169B96EE73}"
 	ProjectSection(SolutionItems) = preProject
 		Support\README-SDL.txt = Support\README-SDL.txt
+		README.md = README.md
 	EndProjectSection
 EndProject
 Project("{9A19103F-16F7-4668-BE54-9A1E7A4F7556}") = "Unosquare.FFplaySharp.Sdl", "Unosquare.FFplaySharp.Sdl\Unosquare.FFplaySharp.Sdl.csproj", "{50CA1257-A86C-43BA-94E0-DE1DE761D3A8}"
 EndProject
-Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "Unosquare.FFplaySharp.Wpf", "Unosquare.FFplaySharp.Wpf\Unosquare.FFplaySharp.Wpf.csproj", "{37D83522-070E-4D35-9A0B-1461C351E9CB}"
+Project("{9A19103F-16F7-4668-BE54-9A1E7A4F7556}") = "Unosquare.FFplaySharp.Wpf", "Unosquare.FFplaySharp.Wpf\Unosquare.FFplaySharp.Wpf.csproj", "{37D83522-070E-4D35-9A0B-1461C351E9CB}"
 EndProject
 Global
 	GlobalSection(SolutionConfigurationPlatforms) = preSolution
