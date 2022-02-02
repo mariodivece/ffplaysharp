@@ -1,4 +1,5 @@
-﻿using System.Windows.Media.Imaging;
+﻿using System.Windows.Media;
+using System.Windows.Media.Imaging;
 
 namespace Unosquare.FFplaySharp.Wpf;
 
@@ -56,8 +57,14 @@ internal class WpfPresenter : IPresenter
     }
 
     const bool UseNativeMethod = false;
-    private readonly Stopwatch sw = new();
-    private readonly List<double> samples = new(4096 * 2);
+    private long m_HasLockedBuffer = 0;
+    private static readonly Duration LockTimeout = new(TimeSpan.FromMilliseconds(0));
+
+    private bool HasLockedBuffer
+    {
+        get => Interlocked.Read(ref m_HasLockedBuffer) != 0;
+        set => Interlocked.Exchange(ref m_HasLockedBuffer, value ? 1 : 0);
+    }
 
     private unsafe void CopyPicture(FrameHolder source, PictureParams target, bool useNativeMethod)
     {
@@ -107,7 +114,9 @@ internal class WpfPresenter : IPresenter
         if (!TryGetUiDispatcher(out var uiDispatcher))
             return;
 
-        var hasLockedBuffer = false;
+        if (HasLockedBuffer)
+            return;
+
         PictureParams? bitmapSize = default;
 
         uiDispatcher.Invoke(() =>
@@ -119,13 +128,17 @@ internal class WpfPresenter : IPresenter
                 _bitmap = WantedPictureSize!.CreateBitmap();
                 Window.targetImage.Source = _bitmap;
             }
-            
-            var timeout = new Duration(TimeSpan.FromMilliseconds(0));
-            hasLockedBuffer = _bitmap!.TryLock(timeout);
-            bitmapSize = PictureParams.FromBitmap(_bitmap);
-        });
 
-        if (!hasLockedBuffer)
+            if (!_bitmap!.TryLock(LockTimeout))
+                return;
+
+            HasLockedBuffer = true;
+            bitmapSize = PictureParams.FromBitmap(_bitmap);
+            var updateRect = bitmapSize.ToRect();
+            _bitmap.AddDirtyRect(updateRect);
+        }, DispatcherPriority.Send);
+
+        if (!HasLockedBuffer)
             return;
 
         if (frame.Frame.PixelFormat != bitmapSize!.PixelFormat)
@@ -140,18 +153,19 @@ internal class WpfPresenter : IPresenter
         }
         else
         {
-            sw.Restart();
             CopyPicture(frame, bitmapSize, UseNativeMethod);
-            samples.Add(sw.ElapsedTicks);
         }
 
         frame.MarkUploaded();
-        var updateRect = bitmapSize.ToRect();
+
         uiDispatcher.InvokeAsync(() =>
         {
-            _bitmap.AddDirtyRect(updateRect);
+            if (!HasLockedBuffer)
+                return;
+
             _bitmap.Unlock();
-        });
+            HasLockedBuffer = false;
+        }, DispatcherPriority.Render);
     }
 
     private MultimediaTimer RenderTimer = new(1);
