@@ -170,7 +170,7 @@ internal class WpfPresenter : IPresenter
         return true;
     }
 
-    private MultimediaTimer RenderTimer = new(1);
+    private MultimediaTimer RenderTimer = new(4, 2);
 
     public void Start()
     {
@@ -207,11 +207,10 @@ internal class WpfPresenter : IPresenter
             {
                 startNextFrame = false;
 
-                var compensation = frameDuration != 0
-                    ? Clock.SystemTime - frameStartTime - frameDuration
-                    : 0;
+                var compensation = frameDuration == default
+                    ? default : Clock.SystemTime - frameStartTime - frameDuration;
 
-                // TODO: PErform cumulative compensation.
+                // TODO: Perform cumulative compensation.
                 // i.e. What happens if compensation is greater
                 // than the new frame time or say, the following 2 frame times?
                 // We would certainly need to skip the frames to keep timing optimal.
