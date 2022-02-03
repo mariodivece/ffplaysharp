@@ -109,13 +109,13 @@ internal class WpfPresenter : IPresenter
         }
     }
 
-    private unsafe void RenderPicture(FrameHolder frame)
+    private unsafe bool RenderPicture(FrameHolder frame)
     {
         if (!TryGetUiDispatcher(out var uiDispatcher))
-            return;
+            return false;
 
         if (HasLockedBuffer)
-            return;
+            return false;
 
         PictureParams? bitmapSize = default;
 
@@ -136,10 +136,10 @@ internal class WpfPresenter : IPresenter
             bitmapSize = PictureParams.FromBitmap(_bitmap);
             var updateRect = bitmapSize.ToRect();
             _bitmap.AddDirtyRect(updateRect);
-        }, DispatcherPriority.Render);
+        }, DispatcherPriority.Send);
 
         if (!HasLockedBuffer)
-            return;
+            return false;
 
         if (frame.Frame.PixelFormat != bitmapSize!.PixelFormat)
         {
@@ -165,15 +165,20 @@ internal class WpfPresenter : IPresenter
 
             _bitmap.Unlock();
             HasLockedBuffer = false;
-        }, DispatcherPriority.Render);
+        }, DispatcherPriority.Send);
+
+        return true;
     }
 
     private MultimediaTimer RenderTimer = new(1);
 
     public void Start()
     {
-        double? videoStartTime = default;
+        // var samples = new List<double>(4096);
+        var startNextFrame = true;
+        var runtimeStopwatch = new Stopwatch();
         var frameStartTime = Clock.SystemTime;
+        var frameDuration = default(double);
 
         RenderTimer.Elapsed += (s, e) =>
         {
@@ -182,8 +187,9 @@ internal class WpfPresenter : IPresenter
 
             if (Container.IsAtEndOfStream && !Container.Video.Frames.HasPending)
             {
+                var totalRuntime = runtimeStopwatch.Elapsed.TotalSeconds + frameDuration;
                 Debug.WriteLine($"Done reading and displaying frames. "
-                    + $"RT: {(Clock.SystemTime - videoStartTime):n3} VCLK: {Container.VideoClock.Value:n3}");
+                    + $"RT: {totalRuntime:n3} VCLK: {Container.VideoClock.Value:n3}");
 
                 RenderTimer.Dispose();
             }
@@ -194,30 +200,39 @@ internal class WpfPresenter : IPresenter
             var frame = Container.Video.Frames.PeekShowable();
             if (frame is null) return;
 
-            if (!frame.IsUploaded)
-                RenderPicture(frame);
+            if (!runtimeStopwatch.IsRunning)
+                runtimeStopwatch.Start();
 
-            var duration = frame.Duration;
-            var elapsed = Clock.SystemTime - frameStartTime;
-
-            if (elapsed <= duration - 0.001f)
-                return;
-
-            //Debug.WriteLine(
-            //    $"Frame Received: RT: {(Clock.SystemTime - videoStartTime):n3} VCLK: {Container.VideoClock.Value:n3} FT: {frame.Time:n3}");
-
-            if (frame.HasValidTime)
+            if (startNextFrame)
             {
-                if (!videoStartTime.HasValue)
-                    videoStartTime = Clock.SystemTime - frame.Time + frame.Duration;
+                startNextFrame = false;
 
-                Container.UpdateVideoPts(frame.Time, frame.GroupIndex);
+                var compensation = frameDuration != 0
+                    ? Clock.SystemTime - frameStartTime - frameDuration
+                    : 0;
+
+                // TODO: PErform cumulative compensation.
+                // i.e. What happens if compensation is greater
+                // than the new frame time or say, the following 2 frame times?
+                // We would certainly need to skip the frames to keep timing optimal.
+                frameStartTime = Clock.SystemTime;
+                frameDuration = frame.Duration - compensation;
+
+                // samples.Add(compensation * 1000);
+                // Debug.WriteLine($"Compensation: {compensation * 1000:n4}");
             }
 
+            if (!frame.IsUploaded && !RenderPicture(frame))
+                return;
+
+            if (Clock.SystemTime - frameStartTime < frameDuration)
+                return;
+
+            if (frame.HasValidTime)
+                Container.UpdateVideoPts(frame.Time, frame.GroupIndex);
+
             Container.Video.Frames.Dequeue();
-            var currentTime = Clock.SystemTime;
-            var compensation = (currentTime - frameStartTime) - frame.Duration;
-            frameStartTime = currentTime - compensation;
+            startNextFrame = true;
         };
         RenderTimer.Start();
         //ThreadPool.QueueUserWorkItem((s) => RenderTimer.Start());
