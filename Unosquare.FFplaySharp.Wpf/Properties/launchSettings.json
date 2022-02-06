@@ -1,0 +1,8 @@
+{
+  "profiles": {
+    "Unosquare.FFplaySharp.Wpf": {
+      "commandName": "Project",
+      "commandLineArgs": "C:\\Users\\UnoSp\\OneDrive\\ffme-testsuite\\issue-466.mov"
+    }
+  }
+}

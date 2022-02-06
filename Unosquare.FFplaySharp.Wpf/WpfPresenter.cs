@@ -43,6 +43,14 @@ internal class WpfPresenter : IPresenter
         throw new NotImplementedException();
     }
 
+    private void UiInvoke(Action action)
+    {
+        if (!TryGetUiDispatcher(out var ui))
+            return;
+
+        ui?.Invoke(action);
+    }
+
     private bool TryGetUiDispatcher([MaybeNullWhen(false)] out Dispatcher dispatcher)
     {
         dispatcher = default;
@@ -66,7 +74,7 @@ internal class WpfPresenter : IPresenter
         set => Interlocked.Exchange(ref m_HasLockedBuffer, value ? 1 : 0);
     }
 
-    private unsafe void CopyPicture(FrameHolder source, PictureParams target, bool useNativeMethod)
+    private static unsafe void CopyPicture(FrameHolder source, PictureParams target, bool useNativeMethod)
     {
         var sourceData = new byte_ptrArray4() { [0] = source.Frame.Data[0] };
         var targetData = new byte_ptrArray4() { [0] = (byte*)target.Buffer };
@@ -111,15 +119,12 @@ internal class WpfPresenter : IPresenter
 
     private unsafe bool RenderPicture(FrameHolder frame)
     {
-        if (!TryGetUiDispatcher(out var uiDispatcher))
-            return false;
-
         if (HasLockedBuffer)
             return false;
 
         PictureParams? bitmapSize = default;
 
-        uiDispatcher.Invoke(() =>
+        UiInvoke(() =>
         {
             //Debug.WriteLine($"UI Thread: {Environment.CurrentManagedThreadId}");
             bitmapSize = _bitmap is not null ? PictureParams.FromBitmap(_bitmap) : null;
@@ -134,9 +139,7 @@ internal class WpfPresenter : IPresenter
 
             HasLockedBuffer = true;
             bitmapSize = PictureParams.FromBitmap(_bitmap);
-            var updateRect = bitmapSize.ToRect();
-            _bitmap.AddDirtyRect(updateRect);
-        }, DispatcherPriority.Send);
+        });
 
         if (!HasLockedBuffer)
             return false;
@@ -158,19 +161,20 @@ internal class WpfPresenter : IPresenter
 
         frame.MarkUploaded();
 
-        uiDispatcher.Invoke(() =>
+        UiInvoke(() =>
         {
             if (!HasLockedBuffer)
                 return;
 
+            _bitmap.AddDirtyRect(bitmapSize.ToRect());
             _bitmap.Unlock();
             HasLockedBuffer = false;
-        }, DispatcherPriority.Send);
+        });
 
         return true;
     }
 
-    private MultimediaTimer RenderTimer = new(4, 2);
+    private MultimediaTimer RenderTimer = new(2, 1);
 
     public void Start()
     {
@@ -179,6 +183,7 @@ internal class WpfPresenter : IPresenter
         var runtimeStopwatch = new Stopwatch();
         var frameStartTime = Clock.SystemTime;
         var frameDuration = default(double);
+        var compensation = default(double);
 
         RenderTimer.Elapsed += (s, e) =>
         {
@@ -206,8 +211,7 @@ internal class WpfPresenter : IPresenter
             if (startNextFrame)
             {
                 startNextFrame = false;
-
-                var compensation = frameDuration == default
+                compensation = frameDuration <= double.Epsilon
                     ? default : Clock.SystemTime - frameStartTime - frameDuration;
 
                 // TODO: Perform cumulative compensation.
@@ -216,6 +220,12 @@ internal class WpfPresenter : IPresenter
                 // We would certainly need to skip the frames to keep timing optimal.
                 frameStartTime = Clock.SystemTime;
                 frameDuration = frame.Duration - compensation;
+                if (frameDuration <= double.Epsilon)
+                {
+                    Container.Video.Frames.Dequeue();
+                    startNextFrame = true;
+                    return;
+                }
 
                 // samples.Add(compensation * 1000);
                 // Debug.WriteLine($"Compensation: {compensation * 1000:n4}");

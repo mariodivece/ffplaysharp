@@ -1,36 +1,34 @@
-﻿namespace Unosquare.FFplaySharp.Wpf
+﻿namespace Unosquare.FFplaySharp.Wpf;
+
+
+/// <summary>
+/// Interaction logic for MainWindow.xaml
+/// </summary>
+public partial class MainWindow : Window
 {
-    /// <summary>
-    /// Interaction logic for MainWindow.xaml
-    /// </summary>
-    public partial class MainWindow : Window
+    private long IsFirstRender = 1;
+    private MediaContainer? Container;
+    private IPresenter? Presenter;
+
+    public MainWindow()
     {
-        public MainWindow()
-        {
-            InitializeComponent();
-            Loaded += MainWindow_Initialized;
-        }
+        InitializeComponent();
+    }
 
-        private void MainWindow_Initialized(object? sender, EventArgs e)
-        {
-            Helpers.SetFFmpegRootPath(@"C:\ffmpeg\x64");
-            FFLog.Flags = ffmpeg.AV_LOG_SKIP_REPEATED;
-            FFLog.Level = ffmpeg.AV_LOG_VERBOSE;
+    protected override void OnContentRendered(EventArgs e)
+    {
+        base.OnContentRendered(e);
 
-            // register all codecs, demux and protocols
-            ffmpeg.avdevice_register_all();
-            ffmpeg.avformat_network_init();
+        if (Interlocked.CompareExchange(ref IsFirstRender, 0, 1) == 0)
+            return;
 
-            var o = new ProgramOptions
-            {
-                InputFileName = @"C:\Users\UnoSp\OneDrive\ffme-testsuite\issue-446-mkv60Hz.mkv", //video-subtitles-03.mkv",
-                IsAudioDisabled = true,
-                IsSubtitleDisabled = true,
-            };
+        if (string.IsNullOrWhiteSpace(App.Options.InputFileName))
+            return;
 
-            var presenter = new WpfPresenter() { Window = this };
-            var container = MediaContainer.Open(o, presenter);
-            presenter.Start();
-        }
+        App.Options.IsAudioDisabled = true;
+        App.Options.IsSubtitleDisabled = true;
+        Presenter = new WpfPresenter() { Window = this };
+        Container = MediaContainer.Open(App.Options, Presenter);
+        Presenter.Start();
     }
 }
