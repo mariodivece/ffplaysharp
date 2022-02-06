@@ -48,7 +48,7 @@ internal class WpfPresenter : IPresenter
         if (!TryGetUiDispatcher(out var ui))
             return;
 
-        ui?.Invoke(action);
+        ui?.Invoke(action, DispatcherPriority.Send);
     }
 
     private bool TryGetUiDispatcher([MaybeNullWhen(false)] out Dispatcher dispatcher)
