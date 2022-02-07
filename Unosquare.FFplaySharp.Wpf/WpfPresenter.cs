@@ -6,7 +6,7 @@ internal class WpfPresenter : IPresenter
     private static readonly Duration LockTimeout = new(TimeSpan.FromMilliseconds(0));
     private readonly MultimediaTimer RenderTimer = new(1);
 
-    private PictureParams? CurrentPicture = default;
+    private PictureParams CurrentPicture = new();
     private WriteableBitmap? TargetBitmap;
     private long m_HasLockedBuffer = 0;
 
@@ -92,7 +92,7 @@ internal class WpfPresenter : IPresenter
                 // Debug.WriteLine($"Compensation: {compensation * 1000:n4}");
             }
 
-            if (!frame.IsUploaded && !RenderPicture(frame))
+            if (!frame.IsUploaded && !RenderBackBuffer(frame))
                 return;
 
             if (Clock.SystemTime - frameStartTime < frameDuration)
@@ -111,73 +111,72 @@ internal class WpfPresenter : IPresenter
 
     public void UpdatePictureSize(int width, int height, AVRational sar)
     {
-        if (CurrentPicture is null)
-            CurrentPicture = new();
+        var requestedPicture = PictureParams.FromDimensions(width, height, sar);
 
-        var isValidSar = Math.Abs(sar.den) > 0 && Math.Abs(sar.num) > 0;
-
-        CurrentPicture.Width = width;
-        CurrentPicture.Height = height;
-        CurrentPicture.DpiX = isValidSar ? sar.den : 96;
-        CurrentPicture.DpiY = isValidSar ? sar.num : 96;
-        CurrentPicture.PixelFormat = AVPixelFormat.AV_PIX_FMT_BGRA;
-    }
-
-    private unsafe bool RenderPicture(FrameHolder frame)
-    {
-        //if (HasLockedBuffer)
-        //    return false;
-
-        PictureParams? bitmapSize = default;
+        if (CurrentPicture.MatchesDimensions(requestedPicture))
+            return;
 
         UiInvoke(() =>
         {
-            bitmapSize = TargetBitmap is not null ? PictureParams.FromBitmap(TargetBitmap) : null;
-            if (bitmapSize is null || !bitmapSize.MatchesDimensions(CurrentPicture!))
-            {
-                TargetBitmap = CurrentPicture!.CreateBitmap();
-                Window.targetImage.Source = TargetBitmap;
-            }
+            CurrentPicture = requestedPicture;
+            TargetBitmap = CurrentPicture.CreateBitmap();
+            Window!.targetImage.Source = TargetBitmap;
+        });
+    }
 
-            UiInvokeAsync(() =>
-            {
-                if (!HasLockedBuffer)
-                    return;
+    private unsafe bool RenderBackBuffer(FrameHolder frame)
+    {
+        if (TargetBitmap is null || HasLockedBuffer)
+            return false;
 
-                TargetBitmap.AddDirtyRect(new Int32Rect(0, 0, TargetBitmap.PixelWidth, TargetBitmap.PixelHeight));
-                TargetBitmap.Unlock();
-                HasLockedBuffer = false;
-            }, DispatcherPriority.Render);
+        UiInvoke(() =>
+        {
+            if (!TargetBitmap.TryLock(LockTimeout))
+                return;
 
-            TargetBitmap!.Lock();
+            CurrentPicture.Buffer = TargetBitmap.BackBuffer;
+            CurrentPicture.Stride = TargetBitmap.BackBufferStride;
             HasLockedBuffer = true;
-            bitmapSize = PictureParams.FromBitmap(TargetBitmap);
         }, DispatcherPriority.Loaded);
 
         if (!HasLockedBuffer)
             return false;
 
-        if (frame.Frame.PixelFormat != bitmapSize!.PixelFormat)
-        {
-            var convert = Container.Video.ConvertContext;
-
-            convert.Reallocate(frame.Width, frame.Height, frame.Frame.PixelFormat,
-                bitmapSize!.Width, bitmapSize.Height, bitmapSize.PixelFormat);
-
-            convert.Convert(frame.Frame.Data, frame.Frame.LineSize, frame.Frame.Height,
-                bitmapSize.Buffer, bitmapSize.Stride);
-        }
-        else
-        {
-            CopyPicture(frame, bitmapSize, UseNativeMethod);
-        }
-
+        CopyPictureFrame(Container, frame, CurrentPicture, UseNativeMethod);
         frame.MarkUploaded();
+
+        UiInvokeAsync(() =>
+        {
+            if (!HasLockedBuffer)
+                return;
+
+            TargetBitmap.AddDirtyRect(CurrentPicture.ToRect());
+            TargetBitmap.Unlock();
+            HasLockedBuffer = false;
+        }, DispatcherPriority.Render);
+
         return true;
     }
 
-    private static unsafe void CopyPicture(FrameHolder source, PictureParams target, bool useNativeMethod)
+    private static unsafe void CopyPictureFrame(MediaContainer container, FrameHolder source, PictureParams target, bool useNativeMethod)
     {
+        // When not using filtering, the software scaler will kick in.
+        // I don't see when this would be true, but leaving in here just in case.
+        if (source.Frame.PixelFormat != target.PixelFormat)
+        {
+            var convert = container.Video.ConvertContext;
+
+            convert.Reallocate(
+                source.Width, source.Height, source.Frame.PixelFormat,
+                target.Width, target.Height, target.PixelFormat);
+
+            convert.Convert(
+                source.Frame.Data, source.Frame.LineSize, source.Frame.Height,
+                target.Buffer, target.Stride);
+
+            return;
+        }
+
         var sourceData = new byte_ptrArray4() { [0] = source.Frame.Data[0] };
         var targetData = new byte_ptrArray4() { [0] = (byte*)target.Buffer };
         var sourceStride = new long_array4() { [0] = source.Frame.LineSize[0] };
