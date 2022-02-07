@@ -5,3 +5,4 @@ global using System.Diagnostics.CodeAnalysis;
 global using System.Windows;
 global using System.Windows.Threading;
 global using Unosquare.FFplaySharp.Primitives;
+global using System.Windows.Media.Imaging;
