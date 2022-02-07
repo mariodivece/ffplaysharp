@@ -48,15 +48,6 @@ internal class WpfPresenter : IPresenter
                 Debug.WriteLine($"Done reading and displaying frames. "
                     + $"RT: {totalRuntime:n3} VCLK: {Container.VideoClock.Value:n3}");
 
-                UiInvoke(() =>
-                {
-                    if (!HasLockedBuffer)
-                        return;
-
-                    TargetBitmap?.AddDirtyRect(new(0, 0, TargetBitmap.PixelWidth, TargetBitmap.PixelHeight));
-                    TargetBitmap?.Unlock();
-                });
-
                 RenderTimer.Dispose();
             }
 
