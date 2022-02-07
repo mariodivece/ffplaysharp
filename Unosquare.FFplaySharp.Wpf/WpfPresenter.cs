@@ -5,10 +5,11 @@ internal class WpfPresenter : IPresenter
     private const bool UseNativeMethod = false;
     private static readonly Duration LockTimeout = new(TimeSpan.FromMilliseconds(0));
     private readonly MultimediaTimer RenderTimer = new(1);
+
     private PictureParams? CurrentPicture = default;
     private WriteableBitmap? TargetBitmap;
     private long m_HasLockedBuffer = 0;
-    
+
     public MainWindow? Window { get; init; }
 
     public MediaContainer Container { get; private set; }
@@ -46,6 +47,15 @@ internal class WpfPresenter : IPresenter
                 var totalRuntime = runtimeStopwatch.Elapsed.TotalSeconds + frameDuration;
                 Debug.WriteLine($"Done reading and displaying frames. "
                     + $"RT: {totalRuntime:n3} VCLK: {Container.VideoClock.Value:n3}");
+
+                UiInvoke(() =>
+                {
+                    if (!HasLockedBuffer)
+                        return;
+
+                    TargetBitmap?.AddDirtyRect(new(0, 0, TargetBitmap.PixelWidth, TargetBitmap.PixelHeight));
+                    TargetBitmap?.Unlock();
+                });
 
                 RenderTimer.Dispose();
             }
@@ -115,14 +125,13 @@ internal class WpfPresenter : IPresenter
 
     private unsafe bool RenderPicture(FrameHolder frame)
     {
-        if (HasLockedBuffer)
-            return false;
+        //if (HasLockedBuffer)
+        //    return false;
 
         PictureParams? bitmapSize = default;
 
         UiInvoke(() =>
         {
-            //Debug.WriteLine($"UI Thread: {Environment.CurrentManagedThreadId}");
             bitmapSize = TargetBitmap is not null ? PictureParams.FromBitmap(TargetBitmap) : null;
             if (bitmapSize is null || !bitmapSize.MatchesDimensions(CurrentPicture!))
             {
@@ -130,12 +139,20 @@ internal class WpfPresenter : IPresenter
                 Window.targetImage.Source = TargetBitmap;
             }
 
-            if (!TargetBitmap!.TryLock(LockTimeout))
-                return;
+            UiInvokeAsync(() =>
+            {
+                if (!HasLockedBuffer)
+                    return;
 
+                TargetBitmap.AddDirtyRect(new Int32Rect(0, 0, TargetBitmap.PixelWidth, TargetBitmap.PixelHeight));
+                TargetBitmap.Unlock();
+                HasLockedBuffer = false;
+            }, DispatcherPriority.Render);
+
+            TargetBitmap!.Lock();
             HasLockedBuffer = true;
             bitmapSize = PictureParams.FromBitmap(TargetBitmap);
-        });
+        }, DispatcherPriority.Loaded);
 
         if (!HasLockedBuffer)
             return false;
@@ -156,17 +173,6 @@ internal class WpfPresenter : IPresenter
         }
 
         frame.MarkUploaded();
-
-        UiInvoke(() =>
-        {
-            if (!HasLockedBuffer)
-                return;
-
-            TargetBitmap.AddDirtyRect(bitmapSize.ToRect());
-            TargetBitmap.Unlock();
-            HasLockedBuffer = false;
-        });
-
         return true;
     }
 
@@ -213,12 +219,20 @@ internal class WpfPresenter : IPresenter
         }
     }
 
-    private void UiInvoke(Action action)
+    private void UiInvoke(Action action, DispatcherPriority priority = DispatcherPriority.Normal)
     {
         if (!TryGetUiDispatcher(out var ui))
             return;
 
-        ui?.Invoke(action, DispatcherPriority.Send);
+        ui?.Invoke(action, priority);
+    }
+
+    private void UiInvokeAsync(Action action, DispatcherPriority priority = DispatcherPriority.Normal)
+    {
+        if (!TryGetUiDispatcher(out var ui))
+            return;
+
+        ui?.InvokeAsync(action, priority);
     }
 
     private bool TryGetUiDispatcher([MaybeNullWhen(false)] out Dispatcher dispatcher)

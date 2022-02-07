@@ -5,7 +5,7 @@
         xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
         xmlns:img="System.Windows.Media.Imaging"
         xmlns:local="clr-namespace:Unosquare.FFplaySharp.Wpf"
-        mc:Ignorable="d"
+        mc:Ignorable="d" WindowStartupLocation="CenterScreen"
         Title="MainWindow" Height="450" Width="800">
     <Grid>
         <Image x:Name="targetImage" Stretch="Uniform" />
