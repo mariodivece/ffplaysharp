@@ -5,6 +5,7 @@ internal class WpfPresenter : IPresenter
     private const bool UseNativeMethod = false;
     private static readonly Duration LockTimeout = new(TimeSpan.FromMilliseconds(0));
     private readonly MultimediaTimer RenderTimer = new(1);
+    private readonly MultimediaStopwatch RuntimeStopwatch = new();
 
     private PictureParams CurrentPicture = new();
     private WriteableBitmap? TargetBitmap;
@@ -30,9 +31,7 @@ internal class WpfPresenter : IPresenter
 
     public void Start()
     {
-        // var samples = new List<double>(4096);
         var startNextFrame = true;
-        var runtimeStopwatch = new Stopwatch();
         var frameStartTime = Clock.SystemTime;
         var frameDuration = default(double);
         var compensation = default(double);
@@ -44,9 +43,8 @@ internal class WpfPresenter : IPresenter
 
             if (Container.IsAtEndOfStream && !Container.Video.Frames.HasPending)
             {
-                var totalRuntime = runtimeStopwatch.Elapsed.TotalSeconds + frameDuration;
                 Debug.WriteLine($"Done reading and displaying frames. "
-                    + $"RT: {totalRuntime:n3} VCLK: {Container.VideoClock.Value:n3}");
+                    + $"RT: {RuntimeStopwatch.ElapsedSeconds + frameDuration:n3} VCLK: {Container.VideoClock.Value:n3}");
 
                 RenderTimer.Dispose();
             }
@@ -56,9 +54,6 @@ internal class WpfPresenter : IPresenter
 
             var frame = Container.Video.Frames.PeekShowable();
             if (frame is null) return;
-
-            if (!runtimeStopwatch.IsRunning)
-                runtimeStopwatch.Start();
 
             if (startNextFrame)
             {
@@ -78,9 +73,6 @@ internal class WpfPresenter : IPresenter
                     startNextFrame = true;
                     return;
                 }
-
-                // samples.Add(compensation * 1000);
-                // Debug.WriteLine($"Compensation: {compensation * 1000:n4}");
             }
 
             if (!frame.IsUploaded && !RenderBackBuffer(frame))
@@ -90,14 +82,18 @@ internal class WpfPresenter : IPresenter
                 return;
 
             if (frame.HasValidTime)
+            {
                 Container.UpdateVideoPts(frame.Time, frame.GroupIndex);
+                if (!RuntimeStopwatch.IsRunning)
+                    RuntimeStopwatch.Restart(frame.Time);
+            }
+
 
             Container.Video.Frames.Dequeue();
             startNextFrame = true;
         };
+
         RenderTimer.Start();
-        //ThreadPool.QueueUserWorkItem((s) => RenderTimer.Start());
-        //RenderTimer.Start();
     }
 
     public void UpdatePictureSize(int width, int height, AVRational sar)
