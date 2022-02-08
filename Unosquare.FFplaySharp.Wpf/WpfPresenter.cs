@@ -5,8 +5,6 @@ internal class WpfPresenter : IPresenter
     private const bool UseNativeMethod = false;
     private static readonly Duration LockTimeout = new(TimeSpan.FromMilliseconds(0));
     private readonly MultimediaTimer RenderTimer = new(1);
-    private readonly MultimediaStopwatch RuntimeStopwatch = new();
-
     private PictureParams CurrentPicture = new();
     private WriteableBitmap? TargetBitmap;
     private long m_HasLockedBuffer = 0;
@@ -31,10 +29,10 @@ internal class WpfPresenter : IPresenter
 
     public void Start()
     {
-        var startNextFrame = true;
-        var frameStartTime = Clock.SystemTime;
-        var frameDuration = default(double);
-        var compensation = default(double);
+        var startNextFrame = default(bool);
+        var runtimeStopwatch = new MultimediaStopwatch();
+        var frameStopwatch = new MultimediaStopwatch();
+        var frameDuration = default(double?);
 
         RenderTimer.Elapsed += (s, e) =>
         {
@@ -43,8 +41,11 @@ internal class WpfPresenter : IPresenter
 
             if (Container.IsAtEndOfStream && !Container.Video.Frames.HasPending)
             {
+                var runtimeClock = runtimeStopwatch.ElapsedSeconds;
+                var videoClock = Container.VideoClock.Value;
+                var drift = runtimeClock - videoClock;
                 Debug.WriteLine($"Done reading and displaying frames. "
-                    + $"RT: {RuntimeStopwatch.ElapsedSeconds + frameDuration:n3} VCLK: {Container.VideoClock.Value:n3}");
+                    + $"RT: {runtimeClock:n3} VCLK: {videoClock:n3} DRIFT: {drift:n3}");
 
                 RenderTimer.Dispose();
             }
@@ -55,39 +56,33 @@ internal class WpfPresenter : IPresenter
             var frame = Container.Video.Frames.PeekShowable();
             if (frame is null) return;
 
-            if (startNextFrame)
+            // Handle first incoming frame.
+            if (!frameDuration.HasValue)
             {
+                runtimeStopwatch.Restart();
+                frameStopwatch.Restart();
+                frameDuration = frame.Duration;
                 startNextFrame = false;
-                compensation = frameDuration <= double.Epsilon
-                    ? default : Clock.SystemTime - frameStartTime - frameDuration;
-
-                // TODO: Perform cumulative compensation.
-                // i.e. What happens if compensation is greater
-                // than the new frame time or say, the following 2 frame times?
-                // We would certainly need to skip the frames to keep timing optimal.
-                frameStartTime = Clock.SystemTime;
-                frameDuration = frame.Duration - compensation;
-                if (frameDuration <= double.Epsilon)
-                {
-                    Container.Video.Frames.Dequeue();
-                    startNextFrame = true;
-                    return;
-                }
             }
 
-            if (!frame.IsUploaded && !RenderBackBuffer(frame))
+            if (startNextFrame)
+            {
+                var previousElapsed = frameStopwatch.ElapsedSeconds;
+                frameStopwatch.Restart();
+
+                startNextFrame = false;
+                var compensation = previousElapsed - frameDuration.Value;
+                frameDuration = frame.Duration - compensation;
+            }
+
+            if (!frame.IsUploaded && !RenderBackBuffer(frame) && frameDuration > 0)
                 return;
 
-            if (Clock.SystemTime - frameStartTime < frameDuration)
+            if (frameStopwatch.ElapsedSeconds < frameDuration)
                 return;
 
             if (frame.HasValidTime)
-            {
                 Container.UpdateVideoPts(frame.Time, frame.GroupIndex);
-                if (!RuntimeStopwatch.IsRunning)
-                    RuntimeStopwatch.Restart(frame.Time);
-            }
-
 
             Container.Video.Frames.Dequeue();
             startNextFrame = true;

@@ -170,7 +170,7 @@ public sealed class FrameStore : IDisposable, ISerialGroupable
     /// regardless of its show state.
     /// Port of frame_queue_peek_last
     /// </summary>
-    public FrameHolder PeekReadable()
+    public FrameHolder WaitPeekReadable()
     {
         while (!IsClosed && ReadableFrames.IsEmpty)
             ChangedEvent.WaitOne(Constants.WaitTimeout, true);

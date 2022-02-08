@@ -185,7 +185,7 @@ public unsafe class SdlVideoRenderer
     private void ComposePicture()
     {
         FrameHolder? subtitle = default;
-        var video = Container.Video.Frames.PeekReadable();
+        var video = Container.Video.Frames.WaitPeekReadable();
 
         if (Container.HasSubtitles && Container.Subtitle.Frames.HasPending)
         {
@@ -459,7 +459,7 @@ public unsafe class SdlVideoRenderer
             else
             {
                 /* dequeue the picture */
-                var previousPicture = Container.Video.Frames.PeekReadable();
+                var previousPicture = Container.Video.Frames.WaitPeekReadable();
                 var currentPicture = Container.Video.Frames.PeekShowable();
 
                 if (currentPicture.GroupIndex != Container.Video.Packets.GroupIndex)
