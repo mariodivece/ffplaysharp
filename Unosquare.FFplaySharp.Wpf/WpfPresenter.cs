@@ -3,8 +3,10 @@
 internal class WpfPresenter : IPresenter
 {
     private const bool UseNativeMethod = false;
+    private const bool DropFrames = false;
+
     private static readonly Duration LockTimeout = new(TimeSpan.FromMilliseconds(0));
-    private readonly MultimediaTimer RenderTimer = new(1);
+    private readonly MultimediaTimer RenderTimer = new(2, 1);
     private PictureParams CurrentPicture = new();
     private WriteableBitmap? TargetBitmap;
     private long m_HasLockedBuffer = 0;
@@ -75,8 +77,15 @@ internal class WpfPresenter : IPresenter
                 frameDuration = frame.Duration - compensation;
             }
 
-            if (!frame.IsUploaded && !RenderBackBuffer(frame) && frameDuration > 0)
-                return;
+            if (!DropFrames || frameDuration > 0)
+            {
+                if (!frame.IsUploaded && !RenderBackBuffer(frame))
+                    return;
+            }
+            else
+            {
+                Debug.WriteLine($"Dropped Frame! {frameDuration}");
+            }
 
             if (frameStopwatch.ElapsedSeconds < frameDuration)
                 return;
