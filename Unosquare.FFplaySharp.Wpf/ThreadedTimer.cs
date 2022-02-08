@@ -1,21 +1,27 @@
-﻿namespace Unosquare.FFplaySharp.Wpf;
+﻿using System.Runtime.InteropServices;
+
+namespace Unosquare.FFplaySharp.Wpf;
 
 public sealed class ThreadedTimer : IDisposable
 {
     private readonly Thread Worker;
+    private readonly CancellationTokenSource Cts = new();
+
     private bool IsDisposed;
-    private CancellationTokenSource Cts = new();
     public event EventHandler? Elapsed;
 
-    public ThreadedTimer(int intervalMillis = 1)
+    public ThreadedTimer(int intervalMillis = 1, int resolution = 1)
     {
         Worker = new Thread(WorkerLoop) { IsBackground = true };
         Interval = TimeSpan.FromMilliseconds(intervalMillis);
+        Resolution = resolution;
     }
 
     public bool IsRunning { get; private set; }
 
     public TimeSpan Interval { get; }
+
+    public int Resolution { get; }
 
     public void Start()
     {
@@ -31,22 +37,30 @@ public sealed class ThreadedTimer : IDisposable
         var token = Cts.Token;
         var currentInterval = Interval.TotalSeconds;
         var cycleClock = new MultimediaStopwatch();
-        cycleClock.Restart(currentInterval);
-
-        while (!token.IsCancellationRequested)
+        cycleClock.Restart();
+        var sleepMillis = Math.Max(1, Resolution);
+        try
         {
-            if (cycleClock.ElapsedSeconds < currentInterval)
+            _ = NativeMethods.BeginTimerResolution((uint)Resolution);
+            while (!token.IsCancellationRequested)
             {
-                Thread.Sleep(1);
-                continue;
+                if (cycleClock.ElapsedSeconds < currentInterval)
+                {
+                    Thread.Sleep(1);
+                    continue;
+                }
+
+                cycleClock.Restart();
+
+                if (token.IsCancellationRequested)
+                    return;
+
+                Elapsed?.Invoke(this, EventArgs.Empty);
             }
-
-            cycleClock.Restart();
-
-            if (token.IsCancellationRequested)
-                return;
-
-            Elapsed?.Invoke(this, EventArgs.Empty);
+        }
+        finally
+        {
+            _ = NativeMethods.EndTimerResolution((uint)Resolution);
         }
     }
 
@@ -59,5 +73,16 @@ public sealed class ThreadedTimer : IDisposable
         Cts.Cancel();
         Worker.Join();
         Cts.Dispose();
+    }
+
+    private static class NativeMethods
+    {
+        private const string MultimediaDll = "Winmm.dll";
+
+        [DllImport(MultimediaDll, SetLastError = true, EntryPoint = "timeBeginPeriod")]
+        public static extern uint BeginTimerResolution(uint value);
+
+        [DllImport(MultimediaDll, SetLastError = true, EntryPoint = "timeEndPeriod")]
+        public static extern uint EndTimerResolution(uint value);
     }
 }

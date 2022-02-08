@@ -6,7 +6,7 @@ internal class WpfPresenter : IPresenter
     private const bool DropFrames = false;
 
     private static readonly Duration LockTimeout = new(TimeSpan.FromMilliseconds(0));
-    private readonly MultimediaTimer RenderTimer = new(2, 1);
+    private readonly ThreadedTimer RenderTimer = new(1);
     private PictureParams CurrentPicture = new();
     private WriteableBitmap? TargetBitmap;
     private long m_HasLockedBuffer = 0;
