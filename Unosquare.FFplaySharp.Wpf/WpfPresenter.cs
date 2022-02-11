@@ -214,7 +214,14 @@ internal class WpfPresenter : IPresenter
         if (!TryGetUiDispatcher(out var ui))
             return;
 
-        ui?.Invoke(action, priority);
+        try
+        {
+            ui?.Invoke(action, priority);
+        }
+        catch (TaskCanceledException)
+        {
+            // ignore
+        }
     }
 
     private void UiInvokeAsync(Action action, DispatcherPriority priority = DispatcherPriority.Normal)

@@ -60,7 +60,9 @@ public sealed class ThreadedTimer : IDisposable
         }
         finally
         {
+            IsRunning = false;
             _ = NativeMethods.EndTimerResolution((uint)Resolution);
+            Cts.Dispose();
         }
     }
 
@@ -71,8 +73,9 @@ public sealed class ThreadedTimer : IDisposable
 
         IsDisposed = true;
         Cts.Cancel();
-        Worker.Join();
-        Cts.Dispose();
+
+        if (!IsRunning)
+            Cts.Dispose();
     }
 
     private static class NativeMethods
