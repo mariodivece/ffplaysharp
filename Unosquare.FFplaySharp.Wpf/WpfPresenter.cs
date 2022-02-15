@@ -55,7 +55,7 @@ internal class WpfPresenter : IPresenter
             if (!Container.Video.Frames.HasPending)
                 return;
 
-            var frame = Container.Video.Frames.PeekShowable();
+            var frame = Container.Video.Frames.WaitPeekShowable();
             if (frame is null) return;
 
             // Handle first incoming frame.

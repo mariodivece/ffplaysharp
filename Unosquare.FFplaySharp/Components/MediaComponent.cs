@@ -225,7 +225,7 @@ public abstract class MediaComponent
     public void AbortDecoder()
     {
         Packets.Close();
-        Frames.SignalChanged();
+        Frames.SignalAll();
         Worker.Join();
         Worker = default;
         Packets.Clear();

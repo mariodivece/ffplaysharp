@@ -9,7 +9,8 @@
 /// </summary>
 public sealed class FrameStore : IDisposable, ISerialGroupable
 {
-    private readonly AutoResetEvent ChangedEvent = new(false);
+    
+    private readonly EventAwaiter ChangedEvent = new();
     private readonly FrameHolderQueue WritableFrames;
     private readonly FrameHolderQueue ReadableFrames;
     private readonly PacketStore Packets;
@@ -88,7 +89,8 @@ public sealed class FrameStore : IDisposable, ISerialGroupable
     /// Forces change event to be signalled.
     /// Port of frame_queue_signal.
     /// </summary>
-    public void SignalChanged() => ChangedEvent.Set();
+    [MethodImpl(MethodImplOptions.AggressiveInlining)]
+    public void SignalAll() => ChangedEvent.SignalAll();
 
     /// <summary>
     /// Gets the next available writable frame to be written into.
@@ -103,7 +105,7 @@ public sealed class FrameStore : IDisposable, ISerialGroupable
         // that is, our readable count is less than
         // the capacity of the queue.
         while (!IsClosed && WritableFrames.IsEmpty)
-            ChangedEvent.WaitOne(Constants.WaitTimeout, true);
+            ChangedEvent.Wait(Constants.WaitTimeout);
 
         frame = default;
         return !IsClosed && WritableFrames.TryPeek(out frame);
@@ -120,7 +122,7 @@ public sealed class FrameStore : IDisposable, ISerialGroupable
         if (WritableFrames.TryDequeue(out var frame))
             ReadableFrames.Enqueue(frame);
 
-        ChangedEvent.Set();
+        ChangedEvent.Signal();
     }
 
     /// <summary>
@@ -146,7 +148,7 @@ public sealed class FrameStore : IDisposable, ISerialGroupable
     {
         // wait until we have a readable a new frame
         while (!IsClosed && PendingCount <= 0)
-            ChangedEvent.WaitOne(Constants.WaitTimeout, true);
+            ChangedEvent.Wait(Constants.WaitTimeout);
 
         return !IsClosed
             ? PeekShowable()
@@ -173,7 +175,7 @@ public sealed class FrameStore : IDisposable, ISerialGroupable
     public FrameHolder WaitPeekReadable()
     {
         while (!IsClosed && ReadableFrames.IsEmpty)
-            ChangedEvent.WaitOne(Constants.WaitTimeout, true);
+            ChangedEvent.Wait(Constants.WaitTimeout);
 
         return ReadableFrames.TryPeek(out var frame)
             ? frame
@@ -200,7 +202,7 @@ public sealed class FrameStore : IDisposable, ISerialGroupable
             WritableFrames.Enqueue(frame);
         }
 
-        ChangedEvent.Set();
+        ChangedEvent.Signal();
     }
 
     /// <inheritdoc />
@@ -210,9 +212,9 @@ public sealed class FrameStore : IDisposable, ISerialGroupable
             return;
 
         isDisposed = true;
+        ChangedEvent.SignalAll();
         ReadableFrames.Dispose();
         WritableFrames.Dispose();
-        ChangedEvent.Dispose();
     }
 
     /// <summary>

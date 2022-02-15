@@ -38,10 +38,10 @@ public sealed class ThreadedTimer : IDisposable
         var currentInterval = Interval.TotalSeconds;
         var cycleClock = new MultimediaStopwatch();
         cycleClock.Restart();
-        var sleepMillis = Math.Max(1, Resolution);
+        var resolutionMillis = (uint)Math.Max(1, Resolution);
         try
         {
-            _ = NativeMethods.BeginTimerResolution((uint)Resolution);
+            _ = NativeMethods.BeginTimerResolution(resolutionMillis);
             while (!token.IsCancellationRequested)
             {
                 if (cycleClock.ElapsedSeconds < currentInterval)
