@@ -2,52 +2,89 @@
 
 internal class EventAwaiter
 {
-    private readonly object SyncLock = new();
-    private readonly List<int> WaitQueue = new(32);
+    private readonly ConcurrencyQueue WaitQueue = new();
 
-    public void Signal()
-    {
-        lock (SyncLock)
-        {
-            if (WaitQueue.Count > 0)
-                WaitQueue.RemoveAt(0);
-        }
-    }
+    public void Signal() => WaitQueue.Dequeue();
 
-    public void SignalAll()
-    {
-        lock (SyncLock)
-        {
-            WaitQueue.Clear();
-        }
-    }
+    public void SignalAll() => WaitQueue.Clear();
 
     public bool Wait(int millisecondsTimeout)
     {
-        var startTime = Clock.SystemTime;
-        var timeout = millisecondsTimeout / 1000d;
+        var startTimeUs = ffmpeg.av_gettime_relative();
+        var timeoutUs = millisecondsTimeout * 1000L;
+        var maxSleepUs = millisecondsTimeout * 500L;
+        long remainingUs;
 
-        var id = -1;
-        lock (SyncLock)
+        var id = WaitQueue.Enqueue();
+
+        do
         {
-            id = WaitQueue.Count;
-            WaitQueue.Add(id);
-        }
+            if (!WaitQueue.Contains(id))
+                return true;
 
-        while (true)
+            remainingUs = timeoutUs - (ffmpeg.av_gettime_relative() - startTimeUs);
+            if (remainingUs > 0)
+                ffmpeg.av_usleep(Convert.ToUInt32(remainingUs.Clamp(1, maxSleepUs)));
+
+        } while (remainingUs > 0);
+
+        WaitQueue.Remove(id);
+        return false;
+    }
+
+    private sealed class ConcurrencyQueue
+    {
+        private readonly object SyncLock = new();
+        private readonly SortedDictionary<int, int> WaitQueue = new();
+
+        public int Enqueue()
         {
             lock (SyncLock)
             {
-                if (!WaitQueue.Contains(id))
-                    return true;
+                var id = WaitQueue.Count;
+                WaitQueue.TryAdd(id, default);
+                return id;
             }
-
-            if (Clock.SystemTime - startTime > timeout)
-                break;
-
-            Thread.Sleep(1);
         }
 
-        return false;
+        public void Dequeue()
+        {
+            lock (SyncLock)
+            {
+                if (WaitQueue.Count <= 0)
+                    return;
+
+                if (WaitQueue.Count == 1)
+                {
+                    WaitQueue.Clear();
+                    return;
+                }
+
+                WaitQueue.Remove(WaitQueue.Keys.First());
+            }
+        }
+
+        public void Remove(int id)
+        {
+            lock (SyncLock)
+            {
+                if (!WaitQueue.ContainsKey(id))
+                    return;
+
+                WaitQueue.Remove(id);
+            }
+        }
+
+        public bool Contains(int id)
+        {
+            lock (SyncLock)
+                return WaitQueue.ContainsKey(id);
+        }
+
+        public void Clear()
+        {
+            lock (SyncLock)
+                WaitQueue.Clear();
+        }
     }
 }

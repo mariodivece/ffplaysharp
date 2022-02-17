@@ -37,7 +37,7 @@ public unsafe class MediaContainer
 
     public ProgramOptions Options { get; }
 
-    public AutoResetEvent NeedsMorePacketsEvent { get; } = new(true);
+    internal EventAwaiter NeedsMorePacketsEvent { get; } = new();
 
     public string FileName { get; private set; }
 
@@ -541,7 +541,7 @@ public unsafe class MediaContainer
             component.Frames?.Dispose();
         }
 
-        NeedsMorePacketsEvent.Dispose();
+        NeedsMorePacketsEvent.SignalAll();
         Video.ConvertContext?.Release();
         Subtitle.ConvertContext?.Release();
     }
@@ -578,7 +578,7 @@ public unsafe class MediaContainer
             SeekFlags |= ffmpeg.AVSEEK_FLAG_BYTE;
 
         IsSeekRequested = true;
-        NeedsMorePacketsEvent.Set();
+        NeedsMorePacketsEvent.Signal();
     }
 
     private MediaComponent? FindComponentByStreamIndex(int streamIndex)
@@ -786,7 +786,7 @@ public unsafe class MediaContainer
                     // wait 10 ms to avoid trying to get another packet
                     // XXX: horrible
                     // SDL.SDL_Delay(10); // or use ffmpeg.av_usleep(10000);
-                    Helpers.YieldSleep(TimeSpan.FromMilliseconds(10), true);
+                    ffmpeg.av_usleep(10000);
                     continue;
                 }
 
@@ -809,7 +809,7 @@ public unsafe class MediaContainer
                 if (Options.IsInfiniteBufferEnabled is not ThreeState.On && (HasEnoughPacketBuffer || HasEnoughPacketCount))
                 {
                     // wait 10 ms
-                    NeedsMorePacketsEvent.WaitOne(Constants.WaitTimeout, true);
+                    NeedsMorePacketsEvent.Wait(Constants.WaitTimeout);
                     continue;
                 }
 
@@ -896,7 +896,7 @@ public unsafe class MediaContainer
             if (Input.IO.IsNotNull() && Input.IO!.Error != 0)
                 return false;
 
-            NeedsMorePacketsEvent.WaitOne(Constants.WaitTimeout, true);
+            NeedsMorePacketsEvent.Wait(Constants.WaitTimeout);
             return true;
         }
         else

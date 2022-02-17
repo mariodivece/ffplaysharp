@@ -57,6 +57,9 @@ public static class Helpers
     public static int Clamp(this int number, int min, int max) => number < min ? min : number > max ? max : number;
 
     [MethodImpl(MethodImplOptions.AggressiveInlining)]
+    public static long Clamp(this long number, long min, long max) => number < min ? min : number > max ? max : number;
+
+    [MethodImpl(MethodImplOptions.AggressiveInlining)]
     public static double ToFactor(this AVRational r) => ffmpeg.av_q2d(r);
 
     [MethodImpl(MethodImplOptions.AggressiveInlining)]
@@ -127,21 +130,4 @@ public static class Helpers
 
     [MethodImpl(MethodImplOptions.AggressiveInlining)]
     public static bool IsNotNull(this INativeReference? obj) => obj is not null && obj.Address != IntPtr.Zero;
-
-    public static TimeSpan YieldSleep(TimeSpan timeout, bool exitContext)
-    {
-        var startTime = Clock.SystemTime;
-        var remainingMillis = timeout.TotalMilliseconds;
-
-        while (remainingMillis >= 1)
-        {
-            if (!exitContext || remainingMillis < 8 || !Thread.Yield())
-                Thread.Sleep(1);
-
-            remainingMillis = timeout.TotalMilliseconds
-                - (Clock.SystemTime - startTime) * 1000d;
-        }
-
-        return TimeSpan.FromMilliseconds((Clock.SystemTime - startTime) * 1000d);
-    }
 }

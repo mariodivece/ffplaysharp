@@ -127,8 +127,8 @@ public abstract class MediaComponent
             FFPacket? currentPacket;
             do
             {
-                if (Packets.Count == 0)
-                    Container.NeedsMorePacketsEvent.Set();
+                if (Packets.Count <= 0)
+                    Container.NeedsMorePacketsEvent.Signal();
 
                 if (IsPacketPending)
                 {

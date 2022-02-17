@@ -8,7 +8,7 @@ public sealed class PacketStore : ISerialGroupable, IDisposable
 {
     private readonly object SyncLock = new();
     private readonly Queue<FFPacket> Packets = new();
-    private readonly AutoResetEvent IsAvailableEvent = new(false);
+    private readonly EventAwaiter IsAvailableEvent = new();
     private bool isDisposed;
     private long m_IsClosed = 1; // starts in a blocked state
 
@@ -113,7 +113,7 @@ public sealed class PacketStore : ISerialGroupable, IDisposable
             Packets.Enqueue(packet);
         }
 
-        IsAvailableEvent.Set();
+        IsAvailableEvent.Signal();
         return true;
     }
 
@@ -158,7 +158,7 @@ public sealed class PacketStore : ISerialGroupable, IDisposable
             if (!blockWait)
                 return default;
 
-            IsAvailableEvent.WaitOne(Constants.WaitTimeout, true);
+            IsAvailableEvent.Wait(Constants.WaitTimeout);
         }
     }
 
@@ -186,7 +186,7 @@ public sealed class PacketStore : ISerialGroupable, IDisposable
     public void Close()
     {
         IsClosed = true;
-        IsAvailableEvent.Set();
+        IsAvailableEvent.SignalAll();
     }
 
     /// <inheritdoc />
@@ -198,7 +198,5 @@ public sealed class PacketStore : ISerialGroupable, IDisposable
         isDisposed = true;
         Close();
         Clear();
-        IsAvailableEvent.Set();
-        IsAvailableEvent.Dispose();
     }
 }
