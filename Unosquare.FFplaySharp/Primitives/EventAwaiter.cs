@@ -2,7 +2,7 @@
 
 internal class EventAwaiter
 {
-    private readonly ConcurrencyQueue WaitQueue = new();
+    private readonly EventQueue WaitQueue = new();
 
     public void Signal() => WaitQueue.Dequeue();
 
@@ -32,7 +32,7 @@ internal class EventAwaiter
         return false;
     }
 
-    private sealed class ConcurrencyQueue
+    private sealed class EventQueue
     {
         private readonly object SyncLock = new();
         private readonly SortedDictionary<int, int> WaitQueue = new();
@@ -42,7 +42,7 @@ internal class EventAwaiter
             lock (SyncLock)
             {
                 var id = WaitQueue.Count;
-                WaitQueue.TryAdd(id, default);
+                WaitQueue[id] = default;
                 return id;
             }
         }
@@ -59,8 +59,12 @@ internal class EventAwaiter
                     WaitQueue.Clear();
                     return;
                 }
-
-                WaitQueue.Remove(WaitQueue.Keys.First());
+                
+                foreach (var entry in WaitQueue)
+                {
+                    WaitQueue.Remove(entry.Key);
+                    break;
+                }
             }
         }
 
