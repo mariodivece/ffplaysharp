@@ -34,6 +34,7 @@ public sealed class ThreadedTimer : IDisposable
 
     private void WorkerLoop()
     {
+        const double Bias = 0.0005;
         var token = Cts.Token;
         var cycleClock = new MultimediaStopwatch();
         var resolutionMillis = (uint)Math.Max(1, Resolution);
@@ -47,7 +48,7 @@ public sealed class ThreadedTimer : IDisposable
                 Elapsed?.Invoke(this, EventArgs.Empty);
                 while (!token.IsCancellationRequested)
                 {
-                    if (cycleClock.ElapsedSeconds + 0.0005 >= Interval.TotalSeconds)
+                    if (cycleClock.ElapsedSeconds >= Interval.TotalSeconds - Bias)
                         break;
 
                     Thread.Sleep(1);
