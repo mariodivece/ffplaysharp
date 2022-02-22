@@ -35,27 +35,25 @@ public sealed class ThreadedTimer : IDisposable
     private void WorkerLoop()
     {
         var token = Cts.Token;
-        var currentInterval = Interval.TotalSeconds;
         var cycleClock = new MultimediaStopwatch();
-        cycleClock.Restart();
         var resolutionMillis = (uint)Math.Max(1, Resolution);
+
         try
         {
+            cycleClock.Restart();
             _ = NativeMethods.BeginTimerResolution(resolutionMillis);
             while (!token.IsCancellationRequested)
             {
-                if (cycleClock.ElapsedSeconds < currentInterval)
+                Elapsed?.Invoke(this, EventArgs.Empty);
+                while (!token.IsCancellationRequested)
                 {
+                    if (cycleClock.ElapsedSeconds + 0.0005 >= Interval.TotalSeconds)
+                        break;
+
                     Thread.Sleep(1);
-                    continue;
                 }
 
                 cycleClock.Restart();
-
-                if (token.IsCancellationRequested)
-                    return;
-
-                Elapsed?.Invoke(this, EventArgs.Empty);
             }
         }
         finally

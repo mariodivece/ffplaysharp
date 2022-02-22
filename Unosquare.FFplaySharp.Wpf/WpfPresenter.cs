@@ -3,10 +3,10 @@
 internal class WpfPresenter : IPresenter
 {
     private const bool UseNativeMethod = false;
-    private const bool DropFrames = false;
+    private const bool DropFrames = true;
 
     private static readonly Duration LockTimeout = new(TimeSpan.FromMilliseconds(0));
-    private readonly ThreadedTimer RenderTimer = new(1);
+    private readonly ThreadedTimer RenderTimer = new(2);
     private PictureParams CurrentPicture = new();
     private WriteableBitmap? TargetBitmap;
     private long m_HasLockedBuffer = 0;
@@ -31,17 +31,21 @@ internal class WpfPresenter : IPresenter
 
     public void Start()
     {
+        var frameNumber = 0;
         var startNextFrame = default(bool);
         var runtimeStopwatch = new MultimediaStopwatch();
         var frameStopwatch = new MultimediaStopwatch();
-        var frameDuration = default(double?);
+        var pictureDuration = default(double?);
+        var compensation = default(double);
+        var previousElapsed = default(double);
+        var elapsedSamples = new List<double>(2048);
 
         RenderTimer.Elapsed += (s, e) =>
         {
             if (CurrentPicture is null || Container.Video.Frames.IsClosed)
                 return;
 
-            if (Container.IsAtEndOfStream && !Container.Video.Frames.HasPending)
+            if (Container.IsAtEndOfStream && !Container.Video.Frames.HasPending && Container.Video.HasFinishedDecoding)
             {
                 var runtimeClock = runtimeStopwatch.ElapsedSeconds;
                 var videoClock = Container.VideoClock.Value;
@@ -49,52 +53,51 @@ internal class WpfPresenter : IPresenter
                 Debug.WriteLine($"Done reading and displaying frames. "
                     + $"RT: {runtimeClock:n3} VCLK: {videoClock:n3} DRIFT: {drift:n3}");
 
+                Debug.WriteLine($"Frame Average Elapsed: {elapsedSamples.Average():n2}.");
+
                 RenderTimer.Dispose();
             }
 
+            retry:
             if (!Container.Video.Frames.HasPending)
                 return;
 
             var frame = Container.Video.Frames.WaitPeekShowable();
-            if (frame is null) return;
+            if (frame is null)
+                return;
 
             // Handle first incoming frame.
-            if (!frameDuration.HasValue)
+            if (!pictureDuration.HasValue)
             {
                 runtimeStopwatch.Restart();
                 frameStopwatch.Restart();
-                frameDuration = frame.Duration;
+                pictureDuration = frame.Duration;
                 startNextFrame = false;
             }
 
             if (startNextFrame)
             {
-                var previousElapsed = frameStopwatch.ElapsedSeconds;
-                frameStopwatch.Restart();
-
                 startNextFrame = false;
-                var compensation = previousElapsed - frameDuration.Value;
-                frameDuration = frame.Duration - compensation;
+                compensation = pictureDuration.Value - previousElapsed;
+                pictureDuration = frame.Duration + compensation;
+                if (frame.HasValidTime)
+                    Container.UpdateVideoPts(frame.Time, frame.GroupIndex);
+
+                frameNumber++;
+                Debug.WriteLine($"NUM: {frameNumber,-6} PREV: {previousElapsed * 1000,6:n2} COMP: {compensation * 1000,6:n2} NEXT: {pictureDuration * 1000,6:n2}");
             }
 
-            if (!DropFrames || frameDuration > 0)
+            if (!frame.IsUploaded && (!DropFrames || pictureDuration > 0))
+                RenderBackBuffer(frame);
+
+            if (frameStopwatch.ElapsedSeconds >= pictureDuration)
             {
-                if (!frame.IsUploaded && !RenderBackBuffer(frame))
-                    return;
+                Container.Video.Frames.Dequeue();
+                startNextFrame = true;
+                previousElapsed = frameStopwatch.Restart();
+                elapsedSamples.Add(previousElapsed * 1000);
+                goto retry;
             }
-            else
-            {
-                Debug.WriteLine($"Dropped Frame! {frameDuration}");
-            }
-
-            if (frameStopwatch.ElapsedSeconds < frameDuration)
-                return;
-
-            if (frame.HasValidTime)
-                Container.UpdateVideoPts(frame.Time, frame.GroupIndex);
-
-            Container.Video.Frames.Dequeue();
-            startNextFrame = true;
         };
 
         RenderTimer.Start();
