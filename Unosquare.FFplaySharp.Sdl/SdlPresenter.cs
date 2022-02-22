@@ -313,7 +313,7 @@ public unsafe class SdlPresenter : IPresenter
                 IsCursorHidden = true;
             }
 
-            if (remainingTime >= double.Epsilon)
+            if (remainingTime > double.Epsilon)
                 ffmpeg.av_usleep(Convert.ToUInt32(remainingTime * ffmpeg.AV_TIME_BASE));
 
             remainingTime = Constants.RefreshRate;

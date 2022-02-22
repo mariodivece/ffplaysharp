@@ -35,7 +35,7 @@ internal class EventAwaiter
     private sealed class EventQueue
     {
         private readonly object SyncLock = new();
-        private readonly SortedDictionary<int, int> WaitQueue = new();
+        private readonly SortedList<int, int> WaitQueue = new();
 
         public int Enqueue()
         {
@@ -54,17 +54,7 @@ internal class EventAwaiter
                 if (WaitQueue.Count <= 0)
                     return;
 
-                if (WaitQueue.Count == 1)
-                {
-                    WaitQueue.Clear();
-                    return;
-                }
-                
-                foreach (var entry in WaitQueue)
-                {
-                    WaitQueue.Remove(entry.Key);
-                    break;
-                }
+                WaitQueue.RemoveAt(0);
             }
         }
 
