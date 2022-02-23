@@ -58,7 +58,7 @@ internal class WpfPresenter : IPresenter
                 RenderTimer.Dispose();
             }
 
-            retry:
+        retry:
             if (!Container.Video.Frames.HasPending)
                 return;
 
@@ -84,7 +84,9 @@ internal class WpfPresenter : IPresenter
                     Container.UpdateVideoPts(frame.Time, frame.GroupIndex);
 
                 frameNumber++;
+#if DEBUG
                 Debug.WriteLine($"NUM: {frameNumber,-6} PREV: {previousElapsed * 1000,6:n2} COMP: {compensation * 1000,6:n2} NEXT: {pictureDuration * 1000,6:n2}");
+#endif
             }
 
             if (!frame.IsUploaded && (!DropFrames || pictureDuration > 0))
