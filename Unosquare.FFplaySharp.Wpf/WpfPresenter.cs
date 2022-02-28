@@ -1,4 +1,6 @@
-﻿namespace Unosquare.FFplaySharp.Wpf;
+﻿using System.Windows.Media;
+
+namespace Unosquare.FFplaySharp.Wpf;
 
 internal class WpfPresenter : IPresenter
 {
@@ -116,6 +118,9 @@ internal class WpfPresenter : IPresenter
         {
             CurrentPicture = requestedPicture;
             TargetBitmap = CurrentPicture.CreateBitmap();
+            RenderOptions.SetBitmapScalingMode(Window!.targetImage, BitmapScalingMode.LowQuality);
+            RenderOptions.SetEdgeMode(Window!.targetImage, EdgeMode.Aliased);
+            Window.targetImage.SnapsToDevicePixels = true;
             Window!.targetImage.Source = TargetBitmap;
         });
     }

@@ -14,7 +14,8 @@ public sealed class ThreadedTimer : IDisposable
     {
         Worker = new Thread(WorkerLoop) { IsBackground = true };
         Interval = TimeSpan.FromMilliseconds(intervalMillis);
-        Resolution = resolution;
+        var (Minimum, Maximum) = NativeMethods.GetTimerPeriod();
+        Resolution = resolution.Clamp(Minimum.Clamp(1, Minimum), Maximum.Clamp(1, Maximum));
     }
 
     public bool IsRunning { get; private set; }
@@ -37,7 +38,7 @@ public sealed class ThreadedTimer : IDisposable
         const double Bias = 0.0005;
         var token = Cts.Token;
         var cycleClock = new MultimediaStopwatch();
-        var resolutionMillis = (uint)Math.Max(1, Resolution);
+        var resolutionMillis = (uint)Resolution;
 
         try
         {
@@ -51,7 +52,7 @@ public sealed class ThreadedTimer : IDisposable
                     if (cycleClock.ElapsedSeconds >= Interval.TotalSeconds - Bias)
                         break;
 
-                    Thread.Sleep(1);
+                    Thread.Sleep(Resolution);
                 }
 
                 cycleClock.Restart();
@@ -59,9 +60,8 @@ public sealed class ThreadedTimer : IDisposable
         }
         finally
         {
-            IsRunning = false;
             _ = NativeMethods.EndTimerResolution((uint)Resolution);
-            Cts.Dispose();
+            IsRunning = false;
         }
     }
 
@@ -73,18 +73,48 @@ public sealed class ThreadedTimer : IDisposable
         IsDisposed = true;
         Cts.Cancel();
 
-        if (!IsRunning)
-            Cts.Dispose();
+        if (IsRunning && Environment.CurrentManagedThreadId != Worker.ManagedThreadId)
+            Worker.Join();
+
+        Cts.Dispose();
     }
 
     private static class NativeMethods
     {
         private const string MultimediaDll = "Winmm.dll";
+        private static readonly int TimerCapsSize = Marshal.SizeOf(typeof(TimerCaps));
+
+        /// <summary>
+        /// Represents information about the multimedia Timer's capabilities.
+        /// </summary>
+        [StructLayout(LayoutKind.Sequential)]
+        private struct TimerCaps
+        {
+            /// <summary>
+            /// Minimum supported period in milliseconds.
+            /// </summary>
+            public int periodMin;
+
+            /// <summary>
+            /// Maximum supported period in milliseconds.
+            /// </summary>
+            public int periodMax;
+        }
+
+        [DllImport(MultimediaDll, SetLastError = true, EntryPoint = "timeGetDevCaps")]
+        private static extern int TimeGetDevCaps(ref TimerCaps caps, int sizeOfTimerCaps);
 
         [DllImport(MultimediaDll, SetLastError = true, EntryPoint = "timeBeginPeriod")]
         public static extern uint BeginTimerResolution(uint value);
 
         [DllImport(MultimediaDll, SetLastError = true, EntryPoint = "timeEndPeriod")]
         public static extern uint EndTimerResolution(uint value);
+
+        public static (int Minimum, int Maximum) GetTimerPeriod()
+        {
+            TimerCaps caps = default;
+            _ = TimeGetDevCaps(ref caps, TimerCapsSize);
+            return (caps.periodMin, caps.periodMax);
+        }
     }
 }
