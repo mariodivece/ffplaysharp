@@ -60,6 +60,9 @@ public static class Helpers
     public static long Clamp(this long number, long min, long max) => number < min ? min : number > max ? max : number;
 
     [MethodImpl(MethodImplOptions.AggressiveInlining)]
+    public static double Clamp(this double number, double min, double max) => number < min ? min : number > max ? max : number;
+
+    [MethodImpl(MethodImplOptions.AggressiveInlining)]
     public static double ToFactor(this AVRational r) => ffmpeg.av_q2d(r);
 
     [MethodImpl(MethodImplOptions.AggressiveInlining)]

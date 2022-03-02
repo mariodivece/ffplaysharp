@@ -30,5 +30,8 @@ public partial class MainWindow : Window
         Presenter = new WpfPresenter() { Window = this };
         Container = MediaContainer.Open(App.Options, Presenter);
         Presenter.Start();
+
+        var player = new WavePlayer();
+        player.Start();
     }
 }
