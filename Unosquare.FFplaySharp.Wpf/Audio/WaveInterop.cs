@@ -94,6 +94,7 @@ public class WaveInterop
     // http://msdn.microsoft.com/en-us/library/dd743866%28VS.85%29.aspx
     [DllImport("winmm.dll")]
     public static extern MmResult waveOutOpen(out IntPtr hWaveOut, IntPtr uDeviceID, WaveFormat lpFormat, WaveCallback dwCallback, IntPtr dwInstance, WaveInOutOpenFlags dwFlags);
+    
     [DllImport("winmm.dll", EntryPoint = "waveOutOpen")]
     public static extern MmResult waveOutOpenWindow(out IntPtr hWaveOut, IntPtr uDeviceID, WaveFormat lpFormat, IntPtr callbackWindowHandle, IntPtr dwInstance, WaveInOutOpenFlags dwFlags);
 

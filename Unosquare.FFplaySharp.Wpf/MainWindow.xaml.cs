@@ -33,5 +33,6 @@ public partial class MainWindow : Window
 
         var player = new WavePlayer();
         player.Start();
+        _ = new Timer((s) => player.Close()).Change(3000, Timeout.Infinite);
     }
 }

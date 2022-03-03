@@ -12,15 +12,23 @@ namespace Unosquare.FFplaySharp.Wpf
         private readonly object SyncLock = new();
         private readonly AutoResetEvent OnSamplesPlayed = new(true);
         private readonly Thread PlaybackThread;
+        private readonly WaveCallback WaveMessageCallback;
         private IntPtr DeviceHandle = IntPtr.Zero;
+        private readonly CancellationTokenSource Cts = new();
 
         public WavePlayer()
         {
             BufferSize = WaveFormat.ConvertLatencyToByteSize(DesiredLatency);
             PlaybackThread = new(PerformContinuousPlayback) { IsBackground = true };
+            WaveMessageCallback = OnDeviceMessage;
         }
 
         public WaveFormat WaveFormat { get; } = new();
+
+        public void Close()
+        {
+            Cts.Cancel();
+        }
 
         private void PerformContinuousPlayback(object? state)
         {
@@ -29,9 +37,12 @@ namespace Unosquare.FFplaySharp.Wpf
                 out DeviceHandle,
                 (IntPtr)deviceNumber,
                 WaveFormat,
-                OnDeviceMessage,
+                WaveMessageCallback,
                 IntPtr.Zero,
                 WaveInOutOpenFlags.CallbackFunction);
+
+            if (openResult != MmResult.NoError)
+                throw new MmException(openResult, nameof(PerformContinuousPlayback));
 
             // Create the buffers
             for (var n = 0; n < Buffers.Length; n++)
@@ -39,20 +50,36 @@ namespace Unosquare.FFplaySharp.Wpf
 
             var queued = 0;
 
-            while (true)
+            try
             {
-                if (!OnSamplesPlayed.WaitOne(DesiredLatency))
-                    continue;
+                while (!Cts.IsCancellationRequested)
+                {
+                    if (!OnSamplesPlayed.WaitOne(DesiredLatency))
+                        continue;
+
+                    foreach (var buffer in Buffers)
+                    {
+                        if (buffer.InQueue || buffer.OnDone())
+                            queued++;
+                    }
+
+                    // Detect an end of playback
+                    if (queued <= 0)
+                        break;
+                }
+            }
+            finally
+            {
+                if (DeviceHandle != IntPtr.Zero)
+                    waveOutClose(DeviceHandle);
 
                 foreach (var buffer in Buffers)
                 {
-                    if (buffer.InQueue || buffer.OnDone())
-                        queued++;
+                    if (buffer is not null)
+                        buffer.Dispose();
                 }
 
-                // Detect an end of playback
-                if (queued <= 0)
-                    break;
+                Cts.Dispose();
             }
         }
 
@@ -81,7 +108,7 @@ namespace Unosquare.FFplaySharp.Wpf
             return result;
         }
 
-        public int Read(byte[] buffer, int offset, int count)
+        int IWaveProvider.Read(byte[] buffer, int offset, int count)
         {
             var sampleByteSize = WaveFormat.BitsPerSample / 8;
             var writeBlockSize = WaveFormat.Channels * sampleByteSize;

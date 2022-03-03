@@ -132,12 +132,14 @@ public class WaveFormat
     /// <param name="channels">number of channels</param>
     public static WaveFormat CreateIeeeFloatWaveFormat(int sampleRate, int channels)
     {
-        var wf = new WaveFormat();
-        wf.waveFormatTag = WaveFormatEncoding.IeeeFloat;
-        wf.channels = (short)channels;
-        wf.bitsPerSample = 32;
-        wf.sampleRate = sampleRate;
-        wf.blockAlign = (short)(4 * channels);
+        var wf = new WaveFormat
+        {
+            waveFormatTag = WaveFormatEncoding.IeeeFloat,
+            channels = (short)channels,
+            bitsPerSample = 32,
+            sampleRate = sampleRate,
+            blockAlign = (short)(4 * channels)
+        };
         wf.averageBytesPerSecond = sampleRate * wf.blockAlign;
         wf.extraSize = 0;
         return wf;
@@ -226,34 +228,20 @@ public class WaveFormat
     /// </summary>
     /// <param name="obj">Object to compare to</param>
     /// <returns>True if the objects are the same</returns>
-    public override bool Equals(object obj)
-    {
-        var other = obj as WaveFormat;
-        if (other != null)
-        {
-            return waveFormatTag == other.waveFormatTag &&
-                channels == other.channels &&
-                sampleRate == other.sampleRate &&
-                averageBytesPerSecond == other.averageBytesPerSecond &&
-                blockAlign == other.blockAlign &&
-                bitsPerSample == other.bitsPerSample;
-        }
-        return false;
-    }
+    public override bool Equals(object? obj) => obj is WaveFormat other &&
+            waveFormatTag == other.waveFormatTag &&
+            channels == other.channels &&
+            sampleRate == other.sampleRate &&
+            averageBytesPerSecond == other.averageBytesPerSecond &&
+            blockAlign == other.blockAlign &&
+            bitsPerSample == other.bitsPerSample;
 
     /// <summary>
     /// Provides a Hashcode for this WaveFormat
     /// </summary>
     /// <returns>A hashcode</returns>
-    public override int GetHashCode()
-    {
-        return (int)waveFormatTag ^
-            (int)channels ^
-            sampleRate ^
-            averageBytesPerSecond ^
-            (int)blockAlign ^
-            (int)bitsPerSample;
-    }
+    public override int GetHashCode() => HashCode.Combine(
+        waveFormatTag, channels, sampleRate, averageBytesPerSecond, blockAlign, bitsPerSample);
 
     /// <summary>
     /// Returns the encoding type used
