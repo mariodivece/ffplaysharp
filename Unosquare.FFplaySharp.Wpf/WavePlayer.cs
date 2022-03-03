@@ -8,22 +8,41 @@ namespace Unosquare.FFplaySharp.Wpf
     {
         private const int DesiredLatency = 100;
         private readonly WaveOutBuffer[] Buffers = new WaveOutBuffer[2];
-        private readonly int BufferSize;
+
         private readonly object SyncLock = new();
         private readonly AutoResetEvent OnSamplesPlayed = new(true);
         private readonly Thread PlaybackThread;
         private readonly WaveCallback WaveMessageCallback;
         private IntPtr DeviceHandle = IntPtr.Zero;
         private readonly CancellationTokenSource Cts = new();
+        
+        private readonly WpfPresenter Presenter;
 
-        public WavePlayer()
+        internal WavePlayer(WpfPresenter presenter)
         {
             BufferSize = WaveFormat.ConvertLatencyToByteSize(DesiredLatency);
             PlaybackThread = new(PerformContinuousPlayback) { IsBackground = true };
             WaveMessageCallback = OnDeviceMessage;
+            Presenter = presenter;
+            AudioParams = new()
+            {
+                BufferSize = this.BufferSize,
+                Channels = WaveFormat.Channels,
+                SampleFormat = AVSampleFormat.AV_SAMPLE_FMT_S16,
+                SampleRate = WaveFormat.SampleRate,
+                ChannelLayout = AudioParams.DefaultChannelLayoutFor(WaveFormat.Channels),
+            };
         }
 
+        private MediaContainer Container => Presenter.Container;
+
+        public int BufferSize { get; }
+
         public WaveFormat WaveFormat { get; } = new();
+
+        public AudioParams AudioParams { get; }
+
+        public bool HasStarted { get; private set; }
 
         public void Close()
         {
@@ -83,9 +102,15 @@ namespace Unosquare.FFplaySharp.Wpf
             }
         }
 
-        public unsafe void Start()
+        public void Start()
         {
+            HasStarted = true;
             PlaybackThread.Start();
+        }
+
+        public void Pause()
+        {
+            // TODO: Implement pause
         }
 
         private void OnDeviceMessage(IntPtr deviceHandle, WaveMessage message, IntPtr instance, WaveHeader header, IntPtr reserved)
@@ -108,7 +133,7 @@ namespace Unosquare.FFplaySharp.Wpf
             return result;
         }
 
-        int IWaveProvider.Read(byte[] buffer, int offset, int count)
+        private int WriteSineWave(byte[] buffer, int offset, int count)
         {
             var sampleByteSize = WaveFormat.BitsPerSample / 8;
             var writeBlockSize = WaveFormat.Channels * sampleByteSize;
@@ -130,6 +155,76 @@ namespace Unosquare.FFplaySharp.Wpf
             }
 
             return writeCount;
+        }
+
+        private int ReadBufferIndex, ReadBufferSize;
+        private BufferReference ReadBuffer;
+
+        unsafe int IWaveProvider.Read(byte[] buffer, int offset, int count)
+        {
+            if (Container is null || !Container.HasAudio)
+                return WriteSineWave(buffer, offset, count);
+
+            fixed (byte* bufferPointer = &buffer[0])
+            {
+                var outputStreamPointer = bufferPointer + offset;
+
+                // prepare a new audio buffer
+                Presenter.LastAudioCallbackTime = Clock.SystemTime;
+                var pendingByteCount = count;
+                while (pendingByteCount > 0)
+                {
+                    if (ReadBufferIndex >= ReadBufferSize)
+                    {
+                        ReadBuffer = Container.Audio.RefillOutputBuffer();
+                        if (ReadBuffer.Length < 0)
+                        {
+                            // if error, just output silence.
+                            ReadBuffer.Update(null);
+                            ReadBufferSize = Convert.ToInt32(Container.Audio.HardwareSpec.FrameSize *
+                                (double)count / Container.Audio.HardwareSpec.FrameSize);
+                        }
+                        else
+                        {
+                            ReadBufferSize = Convert.ToInt32(ReadBuffer.Length);
+                        }
+
+                        ReadBufferIndex = 0;
+                    }
+
+                    var readByteCount = ReadBufferSize - ReadBufferIndex;
+                    if (readByteCount > pendingByteCount)
+                        readByteCount = pendingByteCount;
+
+                    var inputStreamPointer = ReadBuffer.Target + ReadBufferIndex;
+
+                    if (!Container.IsMuted && ReadBuffer.IsNotNull())
+                    {
+                        Buffer.MemoryCopy(inputStreamPointer, outputStreamPointer, readByteCount, readByteCount);
+                    }
+                    else
+                    {
+                        // Clear the output stream.
+                        for (var i = 0; i < readByteCount; i++)
+                            outputStreamPointer[i] = 0;
+                    }
+
+                    pendingByteCount -= readByteCount;
+                    outputStreamPointer += readByteCount;
+                    ReadBufferIndex += readByteCount;
+                }
+
+                // Let's assume the audio driver that is used by SDL has two periods.
+                if (!Container.Audio.FrameTime.IsNaN())
+                {
+                    var readBufferAvailable = ReadBufferSize - ReadBufferIndex;
+                    var bufferDuration = (2d * Container.Audio.HardwareSpec.BufferSize + readBufferAvailable) / Container.Audio.HardwareSpec.BytesPerSecond;
+                    Container.AudioClock.Set(Container.Audio.FrameTime - bufferDuration, Container.Audio.GroupIndex, Presenter.LastAudioCallbackTime);
+                    Container.ExternalClock.SyncToSlave(Container.AudioClock);
+                }
+
+                return count;
+            }
         }
     }
 }

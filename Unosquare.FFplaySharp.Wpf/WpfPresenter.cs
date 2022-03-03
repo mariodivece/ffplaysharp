@@ -11,6 +11,7 @@ internal class WpfPresenter : IPresenter
     private readonly ThreadedTimer RenderTimer = new(2);
     private PictureParams CurrentPicture = new();
     private WriteableBitmap? TargetBitmap;
+    private WavePlayer WavePlayer;
     private long m_HasLockedBuffer = 0;
 
     public MainWindow? Window { get; init; }
@@ -46,6 +47,9 @@ internal class WpfPresenter : IPresenter
         {
             if (CurrentPicture is null || Container.Video.Frames.IsClosed)
                 return;
+
+            if (WavePlayer is not null && !WavePlayer.HasStarted)
+                WavePlayer.Start();
 
             if (Container.IsAtEndOfStream && !Container.Video.Frames.HasPending && Container.Video.HasFinishedDecoding)
             {
@@ -257,11 +261,11 @@ internal class WpfPresenter : IPresenter
 
     #region Pending Relevance/Implementation
 
-    public double LastAudioCallbackTime => Clock.SystemTime;
+    public double LastAudioCallbackTime { get; set; }
 
     public void Stop()
     {
-        throw new NotImplementedException();
+        WavePlayer.Close();
     }
 
     public void CloseAudioDevice()
@@ -276,12 +280,13 @@ internal class WpfPresenter : IPresenter
 
     public AudioParams? OpenAudioDevice(AudioParams audioParams)
     {
-        throw new NotImplementedException();
+        WavePlayer = new WavePlayer(this);
+        return WavePlayer.AudioParams;
     }
 
     public void PauseAudioDevice()
     {
-        throw new NotImplementedException();
+        WavePlayer?.Pause();
     }
 
     #endregion

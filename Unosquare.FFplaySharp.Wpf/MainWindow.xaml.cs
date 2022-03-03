@@ -25,14 +25,10 @@ public partial class MainWindow : Window
         if (string.IsNullOrWhiteSpace(App.Options.InputFileName))
             return;
 
-        App.Options.IsAudioDisabled = true;
+        //App.Options.IsAudioDisabled = true;
         App.Options.IsSubtitleDisabled = true;
         Presenter = new WpfPresenter() { Window = this };
         Container = MediaContainer.Open(App.Options, Presenter);
         Presenter.Start();
-
-        var player = new WavePlayer();
-        player.Start();
-        _ = new Timer((s) => player.Close()).Change(3000, Timeout.Infinite);
     }
 }
