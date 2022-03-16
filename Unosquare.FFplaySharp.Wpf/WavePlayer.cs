@@ -15,7 +15,7 @@ namespace Unosquare.FFplaySharp.Wpf
         private readonly WaveCallback WaveMessageCallback;
         private IntPtr DeviceHandle = IntPtr.Zero;
         private readonly CancellationTokenSource Cts = new();
-        
+
         private readonly WpfPresenter Presenter;
 
         internal WavePlayer(WpfPresenter presenter)
@@ -165,66 +165,64 @@ namespace Unosquare.FFplaySharp.Wpf
             if (Container is null || !Container.HasAudio)
                 return WriteSineWave(buffer, offset, count);
 
-            fixed (byte* bufferPointer = &buffer[0])
+            using var bufferHandle = buffer.AsMemory(offset).Pin();
+            var outputStreamPointer = (byte*)bufferHandle.Pointer;
+
+            // prepare a new audio buffer
+            Presenter.LastAudioCallbackTime = Clock.SystemTime;
+            var pendingByteCount = count;
+            while (pendingByteCount > 0)
             {
-                var outputStreamPointer = bufferPointer + offset;
-
-                // prepare a new audio buffer
-                Presenter.LastAudioCallbackTime = Clock.SystemTime;
-                var pendingByteCount = count;
-                while (pendingByteCount > 0)
+                if (ReadBufferIndex >= ReadBufferSize)
                 {
-                    if (ReadBufferIndex >= ReadBufferSize)
+                    ReadBuffer = Container.Audio.RefillOutputBuffer();
+                    if (ReadBuffer.Length < 0)
                     {
-                        ReadBuffer = Container.Audio.RefillOutputBuffer();
-                        if (ReadBuffer.Length < 0)
-                        {
-                            // if error, just output silence.
-                            ReadBuffer.Update(null);
-                            ReadBufferSize = Convert.ToInt32(Container.Audio.HardwareSpec.FrameSize *
-                                (double)count / Container.Audio.HardwareSpec.FrameSize);
-                        }
-                        else
-                        {
-                            ReadBufferSize = Convert.ToInt32(ReadBuffer.Length);
-                        }
-
-                        ReadBufferIndex = 0;
-                    }
-
-                    var readByteCount = ReadBufferSize - ReadBufferIndex;
-                    if (readByteCount > pendingByteCount)
-                        readByteCount = pendingByteCount;
-
-                    var inputStreamPointer = ReadBuffer.Target + ReadBufferIndex;
-
-                    if (!Container.IsMuted && ReadBuffer.IsNotNull())
-                    {
-                        Buffer.MemoryCopy(inputStreamPointer, outputStreamPointer, readByteCount, readByteCount);
+                        // if error, just output silence.
+                        ReadBuffer.Update(null);
+                        ReadBufferSize = Convert.ToInt32(Container.Audio.HardwareSpec.FrameSize *
+                            (double)count / Container.Audio.HardwareSpec.FrameSize);
                     }
                     else
                     {
-                        // Clear the output stream.
-                        for (var i = 0; i < readByteCount; i++)
-                            outputStreamPointer[i] = 0;
+                        ReadBufferSize = Convert.ToInt32(ReadBuffer.Length);
                     }
 
-                    pendingByteCount -= readByteCount;
-                    outputStreamPointer += readByteCount;
-                    ReadBufferIndex += readByteCount;
+                    ReadBufferIndex = 0;
                 }
 
-                // Let's assume the audio driver that is used by SDL has two periods.
-                if (!Container.Audio.FrameTime.IsNaN())
+                var readByteCount = ReadBufferSize - ReadBufferIndex;
+                if (readByteCount > pendingByteCount)
+                    readByteCount = pendingByteCount;
+
+                var inputStreamPointer = ReadBuffer.Target + ReadBufferIndex;
+
+                if (!Container.IsMuted && ReadBuffer.IsNotNull())
                 {
-                    var readBufferAvailable = ReadBufferSize - ReadBufferIndex;
-                    var bufferDuration = (2d * Container.Audio.HardwareSpec.BufferSize + readBufferAvailable) / Container.Audio.HardwareSpec.BytesPerSecond;
-                    Container.AudioClock.Set(Container.Audio.FrameTime - bufferDuration, Container.Audio.GroupIndex, Presenter.LastAudioCallbackTime);
-                    Container.ExternalClock.SyncToSlave(Container.AudioClock);
+                    Buffer.MemoryCopy(inputStreamPointer, outputStreamPointer, readByteCount, readByteCount);
+                }
+                else
+                {
+                    // Clear the output stream.
+                    for (var i = 0; i < readByteCount; i++)
+                        outputStreamPointer[i] = 0;
                 }
 
-                return count;
+                pendingByteCount -= readByteCount;
+                outputStreamPointer += readByteCount;
+                ReadBufferIndex += readByteCount;
             }
+
+            // Let's assume the audio driver that is used by SDL has two periods.
+            if (!Container.Audio.FrameTime.IsNaN())
+            {
+                var readBufferAvailable = ReadBufferSize - ReadBufferIndex;
+                var bufferDuration = (2d * Container.Audio.HardwareSpec.BufferSize + readBufferAvailable) / Container.Audio.HardwareSpec.BytesPerSecond;
+                Container.AudioClock.Set(Container.Audio.FrameTime - bufferDuration, Container.Audio.GroupIndex, Presenter.LastAudioCallbackTime);
+                Container.ExternalClock.SyncToSlave(Container.AudioClock);
+            }
+
+            return count;
         }
     }
 }
