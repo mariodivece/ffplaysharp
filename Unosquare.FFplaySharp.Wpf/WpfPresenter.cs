@@ -45,7 +45,7 @@ internal class WpfPresenter : IPresenter
 
         RenderTimer.Elapsed += (s, e) =>
         {
-            if (CurrentPicture is null || Container.Video.Frames.IsClosed)
+            if (CurrentPicture is null || Container is null || Container.Video.Frames.IsClosed)
                 return;
 
             if (WavePlayer is not null && !WavePlayer.HasStarted)
@@ -64,7 +64,7 @@ internal class WpfPresenter : IPresenter
                 RenderTimer.Dispose();
             }
 
-        retry:
+retry:
             if (!Container.Video.Frames.HasPending)
                 return;
 
@@ -194,7 +194,7 @@ internal class WpfPresenter : IPresenter
         {
             ffmpeg.av_image_copy_uc_from(
                 ref targetData, targetStride,
-                ref sourceData, sourceStride,
+                in sourceData, sourceStride,
                 target.PixelFormat, target.Width, target.Height);
 
             return;

@@ -154,7 +154,7 @@ public unsafe class SdlPresenter : IPresenter
                             goto do_seek;
                         case SDL.SDL_Keycode.SDLK_DOWN:
                             incr = -60.0;
-                        do_seek:
+do_seek:
                             if (Container.Options.IsByteSeekingEnabled != 0)
                             {
                                 pos = Container.StreamBytePosition;

@@ -67,7 +67,7 @@ public unsafe class SdlAudioRenderer
         if (wantedChannelLayout == 0 || wantedChannelCount != AudioParams.ChannelCountFor(wantedChannelLayout))
         {
             wantedChannelLayout = AudioParams.DefaultChannelLayoutFor(wantedChannelCount);
-            wantedChannelLayout &= ~ffmpeg.AV_CH_LAYOUT_STEREO_DOWNMIX;
+            wantedChannelLayout &= ~ (long)ffmpeg.AV_CH_LAYOUT_STEREO_DOWNMIX;
         }
 
         wantedChannelCount = AudioParams.ChannelCountFor(wantedChannelLayout);

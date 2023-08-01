@@ -1,0 +1,8 @@
+{
+  "profiles": {
+    "FFplaySharp.Ava": {
+      "commandName": "Project",
+      "commandLineArgs": "C:\\Users\\UnoSp\\OneDrive\\ffme-testsuite\\video-transport-03.ts"
+    }
+  }
+}
