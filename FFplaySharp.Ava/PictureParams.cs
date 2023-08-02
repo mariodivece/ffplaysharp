@@ -37,7 +37,8 @@ namespace FFplaySharp.Ava
 
         public static PictureParams FromDimensions(int width, int height, AVRational sar)
         {
-            var isValidSar = Math.Abs(sar.den) > 0 && Math.Abs(sar.num) > 0;
+            // 这里 1  可能在wpf下适用，可能在ava 下不适用
+            var isValidSar = Math.Abs(sar.den) > 1 && Math.Abs(sar.num) > 1;
 
             return new()
             {

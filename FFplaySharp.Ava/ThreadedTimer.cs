@@ -48,7 +48,7 @@ namespace FFplaySharp.Ava
             try
             {
                 cycleClock.Restart();
-                _ = NativeMethods.BeginTimerResolution(resolutionMillis);
+                // _ = NativeMethods.BeginTimerResolution(resolutionMillis);
                 while (!token.IsCancellationRequested)
                 {
                     Elapsed?.Invoke(this, EventArgs.Empty);
@@ -60,7 +60,7 @@ namespace FFplaySharp.Ava
                         Thread.Sleep(Resolution);
                         // TODO  ffmpeg.av_usleep(999 + 1);
                         st.Stop();
-                        Console.WriteLine($"{resolutionMillis}:{DateTimeOffset.UtcNow.Millisecond}------>{st.ElapsedMilliseconds}");
+                        Console.WriteLine($"{Resolution}:{DateTimeOffset.UtcNow.Millisecond}------>{st.ElapsedMilliseconds}");
                     }
 
                     cycleClock.Restart();
@@ -68,7 +68,7 @@ namespace FFplaySharp.Ava
             }
             finally
             {
-                _ = NativeMethods.EndTimerResolution((uint)Resolution);
+                // _ = NativeMethods.EndTimerResolution(resolutionMillis);
                 IsRunning = false;
             }
         }

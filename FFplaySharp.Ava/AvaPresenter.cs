@@ -21,13 +21,13 @@ namespace FFplaySharp.Ava
         private const bool DropFrames = true;
 
         private readonly ThreadedTimer RenderTimer = new(2);
-        private PictureParams CurrentPicture = new();
+        private PictureParams? CurrentPicture = new();
         private WriteableBitmap? TargetBitmap;
-        private WavePlayer WavePlayer;
+        private WavePlayer? WavePlayer;
 
         public MainWindow? Window { get; init; }
 
-        public MediaContainer Container { get; private set; }
+        public MediaContainer? Container { get; private set; }
         
         public IReadOnlyList<AVPixelFormat> PixelFormats { get; } = new[] { AVPixelFormat.AV_PIX_FMT_BGRA };
 
