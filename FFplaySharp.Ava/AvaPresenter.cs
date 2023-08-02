@@ -24,19 +24,12 @@ namespace FFplaySharp.Ava
         private PictureParams CurrentPicture = new();
         private WriteableBitmap? TargetBitmap;
         private WavePlayer WavePlayer;
-        private long m_HasLockedBuffer = 0;
 
         public MainWindow? Window { get; init; }
 
         public MediaContainer Container { get; private set; }
-
+        
         public IReadOnlyList<AVPixelFormat> PixelFormats { get; } = new[] { AVPixelFormat.AV_PIX_FMT_BGRA };
-
-        private bool HasLockedBuffer
-        {
-            get => Interlocked.Read(ref m_HasLockedBuffer) != 0;
-            set => Interlocked.Exchange(ref m_HasLockedBuffer, value ? 1 : 0);
-        }
 
         public bool Initialize(MediaContainer container)
         {
@@ -132,46 +125,22 @@ namespace FFplaySharp.Ava
                 CurrentPicture = requestedPicture;
                 TargetBitmap = CurrentPicture.CreateBitmap();
                 Window!.targetImage.Source = TargetBitmap;
-                Window!.targetImage.Stretch = Stretch.UniformToFill;
             });
         }
 
         private unsafe bool RenderBackBuffer(FrameHolder frame)
         {
-            if (TargetBitmap is null || HasLockedBuffer)
+            if (TargetBitmap is null || frame.IsUploaded)
                 return false;
-
+            frame.MarkUploaded();
             UiInvoke(() =>
             {
                 CurrentPicture.LockedFramebuffer = TargetBitmap.Lock();
                 CurrentPicture.Buffer = CurrentPicture.LockedFramebuffer.Address;
                 CurrentPicture.Stride = CurrentPicture.LockedFramebuffer.RowBytes;
-                HasLockedBuffer = true;
-            }, DispatcherPriority.Loaded);
-
-            if (!HasLockedBuffer)
-                return false;
-
-            CopyPictureFrame(Container, frame, CurrentPicture, UseNativeMethod);
-            frame.MarkUploaded();
-
-            UiInvokeAsync(() =>
-            {
-                try
-                {
-                    if (!HasLockedBuffer)
-                        return;
-                    CurrentPicture.LockedFramebuffer.Dispose();
-                    Window!.targetImage.InvalidateVisual();
-                }
-                catch (Exception e)
-                {
-                    Console.WriteLine(e);
-                }
-                finally
-                {
-                    HasLockedBuffer = false;
-                }
+                CopyPictureFrame(Container, frame, CurrentPicture, UseNativeMethod);
+                CurrentPicture.LockedFramebuffer.Dispose();
+                Window!.targetImage.InvalidateVisual();
             }, DispatcherPriority.Render);
             return true;
         }

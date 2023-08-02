@@ -8,5 +8,5 @@
         x:Class="FFplaySharp.Ava.Views.MainWindow"
         Icon="/Assets/avalonia-logo.ico"
         Title="FFplaySharp.Ava">
-    <Image Width="1920" Height="1080" x:Name="targetImage"></Image>
+    <Image Width="1920" Height="1080" Stretch="Uniform" x:Name="targetImage"></Image>
 </Window>

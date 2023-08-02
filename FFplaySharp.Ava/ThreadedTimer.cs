@@ -60,7 +60,7 @@ namespace FFplaySharp.Ava
                         Thread.Sleep(Resolution);
                         // TODO  ffmpeg.av_usleep(999 + 1);
                         st.Stop();
-                        //Console.WriteLine($"{resolutionMillis}:{DateTimeOffset.UtcNow.Millisecond}------>{st.ElapsedMilliseconds}");
+                        Console.WriteLine($"{resolutionMillis}:{DateTimeOffset.UtcNow.Millisecond}------>{st.ElapsedMilliseconds}");
                     }
 
                     cycleClock.Restart();

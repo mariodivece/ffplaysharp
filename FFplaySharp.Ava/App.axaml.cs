@@ -16,7 +16,7 @@ public partial class App : Application
         AvaloniaXamlLoader.Load(this);
 
 
-        Helpers.SetFFmpegRootPath(@"c:\ffmpeg\x64");
+        Helpers.SetFFmpegRootPath(@"E:\opensource\pumpkin-windows\Publish\ffmpeg\x64");
         FFLog.Flags = ffmpeg.AV_LOG_SKIP_REPEATED;
         FFLog.Level = ffmpeg.AV_LOG_VERBOSE;
 
