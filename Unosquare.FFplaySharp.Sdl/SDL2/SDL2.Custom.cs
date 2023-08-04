@@ -1,8 +1,8 @@
 ﻿namespace SDL2
 {
-    using System.Runtime.InteropServices;
+using System.Runtime.InteropServices;
 
-    public static partial class SDL
+	public static partial class SDL
     {
 		/* format refers to an SDL_AudioFormat */
 		[DllImport("SDL2", CallingConvention = CallingConvention.Cdecl)]

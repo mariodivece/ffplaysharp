@@ -248,7 +248,8 @@
         public void FindStreamInfo(StringDictionary codecOptions)
         {
             var perStreamOptionsList = FindStreamInfoOptions(codecOptions);
-            var perStreamOptions = (AVDictionary**)ffmpeg.av_mallocz_array((ulong)perStreamOptionsList.Count, (ulong)sizeof(IntPtr));
+            //var perStreamOptions = (AVDictionary**)ffmpeg.av_mallocz_array((ulong)perStreamOptionsList.Count, (ulong)sizeof(IntPtr));
+            var perStreamOptions = (AVDictionary**)ffmpeg.av_malloc_array((ulong)perStreamOptionsList.Count, (ulong)sizeof(IntPtr));
             for (var optionIndex = 0; optionIndex < perStreamOptionsList.Count; optionIndex++)
                 perStreamOptions[optionIndex] = perStreamOptionsList[optionIndex].Target;
 

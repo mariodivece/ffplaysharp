@@ -1,0 +1,8 @@
+{
+  "profiles": {
+    "FFplaySharp.Ava": {
+      "commandName": "Project",
+      "commandLineArgs": "\"F:\\ffmpeg\\guanwangshipin2.mp4\""
+    }
+  }
+}
