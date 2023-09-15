@@ -78,6 +78,13 @@ public unsafe sealed class FFFilterContext : NativeReference<AVFilterContext>
             throw new FFmpegException(resultCode, $"Failed to set option '{name}'.");
     }
 
+    public void SetOption(string name, string value)
+    {
+        var resultCode = ffmpeg.av_opt_set(Target, name, value, SearhChildrenFlags);
+        if (resultCode < 0)
+            throw new FFmpegException(resultCode, $"Failed to set option '{name}'.");
+    }
+
     /// <summary>
     /// Port of av_opt_set_int_list
     /// </summary>

@@ -194,7 +194,7 @@ internal class WpfPresenter : IPresenter
         {
             ffmpeg.av_image_copy_uc_from(
                 ref targetData, targetStride,
-                ref sourceData, sourceStride,
+                in sourceData, sourceStride,
                 target.PixelFormat, target.Width, target.Height);
 
             return;

@@ -47,7 +47,7 @@ public sealed class FrameHolder : IDisposable, ISerialGroupable
     /// </summary>
     public bool IsPictureVerticalFlipped => Frame.IsNotNull() && Frame.LineSize[0] < 0;
 
-    public long ChannelLayout { get; private set; }
+    public AVChannelLayout ChannelLayout { get; private set; }
 
     public bool HasValidTime => !Time.IsNaN();
 

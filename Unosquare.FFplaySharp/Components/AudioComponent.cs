@@ -42,45 +42,45 @@ public unsafe sealed class AudioComponent : FilteringMediaComponent, ISerialGrou
         ConfigureFilters(false);
     }
 
-    
+    [StructLayout(LayoutKind.Sequential)]
+    private struct AVBPrint2
+    {
+        public void* str;
+        public uint len;
+        public uint size;
+        public uint size_max;
+        public byte reserved_internal_buffer;
+    }
+
+
     private static unsafe AVBPrint* AllocateAVBPrint(uint maxSize)
     {
         // https://ffmpeg.org/doxygen/1.0/bprint_8h-source.html
         const int StructurePadding = 1024;
-        var bpStruct = (byte*)ffmpeg.av_mallocz(StructurePadding);
-        var bpStringAlloc = ffmpeg.av_mallocz(maxSize);
+        var bpStructAddress = ffmpeg.av_mallocz(StructurePadding);
+        var bStruct = default(AVBPrint2);
 
-        var currentOffset = 0;
+        bStruct.str = ffmpeg.av_mallocz(maxSize);
+        bStruct.len = 0;
+        bStruct.size = maxSize;
+        bStruct.size_max = maxSize;
+        bStruct.reserved_internal_buffer = 0;
 
-        var stringAddressBytes = BitConverter.GetBytes((nint)bpStringAlloc);
-        foreach (var byteValue in stringAddressBytes)
-            bpStruct[currentOffset++] = byteValue;
-
-        var maxSizeBytes = BitConverter.GetBytes(maxSize);
-        currentOffset = sizeof(nint) + 2 * sizeof(nint);
-        foreach (var byteValue in maxSizeBytes)
-            bpStruct[currentOffset++] = byteValue;
-
-        return (AVBPrint*)bpStruct;
+        Marshal.StructureToPtr(bStruct, (nint)bpStructAddress, true);
+        return (AVBPrint*)bpStructAddress;
     }
 
     private static unsafe void ReleaseAVBPrint(AVBPrint* ptr)
     {
-        var bpStruct = new Span<byte>(ptr, sizeof(nint));
-        var stringAddress = new IntPtr(BitConverter.ToInt64(bpStruct));
-
-        ffmpeg.av_freep(stringAddress.ToPointer());
+        var bpStruct = Marshal.PtrToStructure<AVBPrint2>((nint)ptr);
+        ffmpeg.av_freep(bpStruct.str);
         ffmpeg.av_freep(ptr);
-
-        ptr = null;
     }
 
     private static unsafe string GetAVBPRintString(AVBPrint* ptr)
     {
-        var bpStruct = new Span<byte>(ptr, sizeof(nint));
-        var stringAddress = new IntPtr(BitConverter.ToInt64(bpStruct));
-
-        return Helpers.PtrToString((byte*)stringAddress.ToPointer());
+        var bpStruct = Marshal.PtrToStructure<AVBPrint2>((nint)ptr);
+        return Helpers.PtrToString((byte*)bpStruct.str);
     }
 
     public void ConfigureFilters(bool forceOutputFormat)
@@ -90,8 +90,6 @@ public unsafe sealed class AudioComponent : FilteringMediaComponent, ISerialGrou
 
         try
         {
-            
-            
             var outputSampleFormats = new[] { (int)AVSampleFormat.AV_SAMPLE_FMT_S16 };
             ReallocateFilterGraph();
             var resamplerOptions = RetrieveResamplerOptions();
@@ -102,13 +100,9 @@ public unsafe sealed class AudioComponent : FilteringMediaComponent, ISerialGrou
             var sourceBufferOptions = $"sample_rate={FilterSpec.SampleRate}:sample_fmt={FilterSpec.SampleFormatName}:" +
                 $"channels={FilterSpec.Channels}:time_base={1}/{FilterSpec.SampleRate}";
 
-            if (FilterSpec.ChannelLayout.nb_channels != 0)
-            {
-                var filterChannelLayout = FilterSpec.ChannelLayout;
-                ffmpeg.av_channel_layout_describe_bprint(&filterChannelLayout, bp);
-                sourceBufferOptions = $"{sourceBufferOptions}:channel_layout={GetAVBPRintString(bp)}";
-            }
-                
+            var filterChannelLayout = FilterSpec.ChannelLayout;
+            ffmpeg.av_channel_layout_describe_bprint(&filterChannelLayout, bp);
+            sourceBufferOptions = $"{sourceBufferOptions}:channel_layout={GetAVBPRintString(bp)}";
 
             var inputFilterContext = FFFilterContext.Create(FilterGraph, "abuffer", "audioSourceBuffer", sourceBufferOptions);
             var outputFilterContext = FFFilterContext.Create(FilterGraph, "abuffersink", "audioSinkBuffer");
@@ -119,12 +113,10 @@ public unsafe sealed class AudioComponent : FilteringMediaComponent, ISerialGrou
             if (forceOutputFormat)
             {
                 var outputChannelLayout = new[] { HardwareSpec.ChannelLayout };
-                var outputChannelCount = new[] { HardwareSpec.ChannelLayout != 0 ? -1 : HardwareSpec.Channels };
-                var outputSampleRates = new[] { HardwareSpec.SampleRate };
+                var outputSampleRates = new[] { HardwareSpec.SampleRate, -1 };
 
                 outputFilterContext.SetOption("all_channel_counts", 0);
-                outputFilterContext.SetOptionList("channel_layouts", outputChannelLayout);
-                outputFilterContext.SetOptionList("channel_counts", outputChannelCount);
+                outputFilterContext.SetOption("ch_layouts", GetAVBPRintString(bp));
                 outputFilterContext.SetOptionList("sample_rates", outputSampleRates);
             }
 

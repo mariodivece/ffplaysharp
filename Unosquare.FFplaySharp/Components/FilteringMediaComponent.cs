@@ -78,7 +78,9 @@ public abstract class FilteringMediaComponent : MediaComponent
     protected void ReallocateFilterGraph()
     {
         ReleaseFilterGraph();
-        FilterGraph = new();
-        FilterGraph.ThreadCount = Container.Options.FilteringThreadCount;
+        FilterGraph = new()
+        {
+            ThreadCount = Container.Options.FilteringThreadCount
+        };
     }
 }
