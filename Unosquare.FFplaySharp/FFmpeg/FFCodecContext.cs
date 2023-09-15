@@ -46,9 +46,9 @@ public unsafe sealed class FFCodecContext : CountedReference<AVCodecContext>
 
     public int SampleRate => Target->sample_rate;
 
-    public int Channels => Target->channels;
+    public int Channels => Target->ch_layout.nb_channels;
 
-    public long ChannelLayout => Convert.ToInt64(Target->channel_layout);
+    public AVChannelLayout ChannelLayout => Target->ch_layout;
 
     public AVSampleFormat SampleFormat => Target->sample_fmt;
 

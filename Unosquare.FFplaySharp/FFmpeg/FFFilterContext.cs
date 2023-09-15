@@ -16,7 +16,16 @@ public unsafe sealed class FFFilterContext : NativeReference<AVFilterContext>
 
     public int Channels => ffmpeg.av_buffersink_get_channels(Target);
 
-    public long ChannelLayout => Convert.ToInt64(ffmpeg.av_buffersink_get_channel_layout(Target));
+    public AVChannelLayout ChannelLayout
+    {
+        get
+        {
+            AVChannelLayout layout = default;
+            ffmpeg.av_buffersink_get_ch_layout(Target, &layout);
+            return layout;
+        }
+
+    }
 
     public AVSampleFormat SampleFormat => (AVSampleFormat)ffmpeg.av_buffersink_get_format(Target);
 

@@ -13,7 +13,7 @@ public class AudioParams
 
     public int Channels { get; set; }
 
-    public long ChannelLayout { get; set; }
+    public AVChannelLayout ChannelLayout { get; set; }
 
     public string ChannelLayoutString => GetChannelLayoutString(ChannelLayout);
 
@@ -74,34 +74,42 @@ public class AudioParams
     public static unsafe int ComputeSamplesBufferSize(int channels, int sampleRate, AVSampleFormat sampleFormat, bool align) =>
         ffmpeg.av_samples_get_buffer_size(null, channels, sampleRate, sampleFormat, (align ? 1 : 0));
 
-    public static string GetChannelLayoutString(long channelLayout) =>
-        GetChannelLayoutString(Convert.ToUInt64(channelLayout));
+    public static unsafe string GetChannelLayoutString(AVChannelLayout channelLayout)
+    {
+        const int StringBufferLength = 1024;
+        var filterLayoutString = stackalloc byte[StringBufferLength];
+        ffmpeg.av_channel_layout_describe(&channelLayout, filterLayoutString, StringBufferLength);
+        return Helpers.PtrToString(filterLayoutString);
+    }
 
     public static string GetSampleFormatName(AVSampleFormat format) =>
         ffmpeg.av_get_sample_fmt_name(format);
 
-    public static long DefaultChannelLayoutFor(int channelCount) =>
-        ffmpeg.av_get_default_channel_layout(channelCount);
+    public static unsafe AVChannelLayout DefaultChannelLayoutFor(int channelCount)
+    {
+        var target = default(AVChannelLayout);
+        ffmpeg.av_channel_layout_default(&target, channelCount);
+        return target;
+    }
 
-    public static long ComputeChannelLayout(FFFrame frame)
+    public static AVChannelLayout ComputeChannelLayout(FFFrame frame)
     {
         if (frame.IsNull())
             throw new ArgumentNullException(nameof(frame));
 
-        return frame.ChannelLayout != 0 && frame.Channels == ChannelCountFor(frame.ChannelLayout)
+        return frame.ChannelLayout.nb_channels > 0 && frame.Channels == ChannelCountFor(frame.ChannelLayout)
             ? frame.ChannelLayout
             : DefaultChannelLayoutFor(frame.Channels);
     }
 
-    public static int ChannelCountFor(long channelLayout) =>
-        ffmpeg.av_get_channel_layout_nb_channels(Convert.ToUInt64(channelLayout));
+    public static int ChannelCountFor(AVChannelLayout channelLayout) => channelLayout.nb_channels;
 
-    public static long ValidateChannelLayout(long channelLayout, int channelCount)
+    public static AVChannelLayout ValidateChannelLayout(AVChannelLayout channelLayout, int channelCount)
     {
-        if (channelLayout != 0 && ChannelCountFor(channelLayout) == channelCount)
+        if (channelLayout.nb_channels > 0 && ChannelCountFor(channelLayout) == channelCount)
             return channelLayout;
         else
-            return 0;
+            return default;
     }
 
     public static bool AreDifferent(AVSampleFormat sampleFormatA, long channelCountA, AVSampleFormat sampleFormatB, long channelCountB)
@@ -111,13 +119,5 @@ public class AudioParams
             return ffmpeg.av_get_packed_sample_fmt(sampleFormatA) != ffmpeg.av_get_packed_sample_fmt(sampleFormatB);
         else
             return channelCountA != channelCountB || sampleFormatA != sampleFormatB;
-    }
-
-    private static unsafe string GetChannelLayoutString(ulong channelLayout)
-    {
-        const int StringBufferLength = 1024;
-        var filterLayoutString = stackalloc byte[StringBufferLength];
-        ffmpeg.av_get_channel_layout_string(filterLayoutString, StringBufferLength, -1, channelLayout);
-        return Helpers.PtrToString(filterLayoutString);
     }
 }

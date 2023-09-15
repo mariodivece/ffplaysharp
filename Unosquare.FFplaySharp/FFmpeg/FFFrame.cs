@@ -56,8 +56,8 @@ public unsafe sealed class FFFrame : CountedReference<AVFrame>
         set => Target->extended_data = value;
     }
 
-    public long ChannelLayout =>
-        Convert.ToInt64(Target->channel_layout);
+    public AVChannelLayout ChannelLayout =>
+        Target->ch_layout;
 
     public int SamplesBufferSize =>
         AudioParams.ComputeSamplesBufferSize(Channels, SampleCount, SampleFormat, true);

@@ -50,7 +50,7 @@ public unsafe class SdlAudioRenderer
     public AudioParams Open(AudioParams wantedSpec) =>
         Open(wantedSpec.ChannelLayout, wantedSpec.Channels, wantedSpec.SampleRate);
 
-    private AudioParams Open(long wantedChannelLayout, int wantedChannelCount, int wantedSampleRate)
+    private AudioParams Open(AVChannelLayout wantedChannelLayout, int wantedChannelCount, int wantedSampleRate)
     {
         Volume = Container.Options.StartupVolume;
 
@@ -64,10 +64,9 @@ public unsafe class SdlAudioRenderer
         if (!string.IsNullOrWhiteSpace(env) && int.TryParse(env, out wantedChannelCount))
             wantedChannelLayout = AudioParams.DefaultChannelLayoutFor(wantedChannelCount);
 
-        if (wantedChannelLayout == 0 || wantedChannelCount != AudioParams.ChannelCountFor(wantedChannelLayout))
+        if (wantedChannelLayout.order != AVChannelOrder.AV_CHANNEL_ORDER_NATIVE)
         {
             wantedChannelLayout = AudioParams.DefaultChannelLayoutFor(wantedChannelCount);
-            wantedChannelLayout &= ~ffmpeg.AV_CH_LAYOUT_STEREO_DOWNMIX;
         }
 
         wantedChannelCount = AudioParams.ChannelCountFor(wantedChannelLayout);
@@ -122,7 +121,7 @@ public unsafe class SdlAudioRenderer
         if (deviceSpec.channels != wantedSpec.channels)
         {
             wantedChannelLayout = AudioParams.DefaultChannelLayoutFor(deviceSpec.channels);
-            if (wantedChannelLayout == 0)
+            if (wantedChannelLayout.nb_channels <= 0)
             {
                 ($"SDL advised channel count {deviceSpec.channels} is not supported!").LogError();
                 return audioDeviceSpec;

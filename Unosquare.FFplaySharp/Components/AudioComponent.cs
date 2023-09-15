@@ -42,10 +42,56 @@ public unsafe sealed class AudioComponent : FilteringMediaComponent, ISerialGrou
         ConfigureFilters(false);
     }
 
+    
+    private static unsafe AVBPrint* AllocateAVBPrint(uint maxSize)
+    {
+        // https://ffmpeg.org/doxygen/1.0/bprint_8h-source.html
+        const int StructurePadding = 1024;
+        var bpStruct = (byte*)ffmpeg.av_mallocz(StructurePadding);
+        var bpStringAlloc = ffmpeg.av_mallocz(maxSize);
+
+        var currentOffset = 0;
+
+        var stringAddressBytes = BitConverter.GetBytes((nint)bpStringAlloc);
+        foreach (var byteValue in stringAddressBytes)
+            bpStruct[currentOffset++] = byteValue;
+
+        var maxSizeBytes = BitConverter.GetBytes(maxSize);
+        currentOffset = sizeof(nint) + 2 * sizeof(nint);
+        foreach (var byteValue in maxSizeBytes)
+            bpStruct[currentOffset++] = byteValue;
+
+        return (AVBPrint*)bpStruct;
+    }
+
+    private static unsafe void ReleaseAVBPrint(AVBPrint* ptr)
+    {
+        var bpStruct = new Span<byte>(ptr, sizeof(nint));
+        var stringAddress = new IntPtr(BitConverter.ToInt64(bpStruct));
+
+        ffmpeg.av_freep(stringAddress.ToPointer());
+        ffmpeg.av_freep(ptr);
+
+        ptr = null;
+    }
+
+    private static unsafe string GetAVBPRintString(AVBPrint* ptr)
+    {
+        var bpStruct = new Span<byte>(ptr, sizeof(nint));
+        var stringAddress = new IntPtr(BitConverter.ToInt64(bpStruct));
+
+        return Helpers.PtrToString((byte*)stringAddress.ToPointer());
+    }
+
     public void ConfigureFilters(bool forceOutputFormat)
     {
+
+        var bp = AllocateAVBPrint(2048);
+
         try
         {
+            
+            
             var outputSampleFormats = new[] { (int)AVSampleFormat.AV_SAMPLE_FMT_S16 };
             ReallocateFilterGraph();
             var resamplerOptions = RetrieveResamplerOptions();
@@ -56,8 +102,13 @@ public unsafe sealed class AudioComponent : FilteringMediaComponent, ISerialGrou
             var sourceBufferOptions = $"sample_rate={FilterSpec.SampleRate}:sample_fmt={FilterSpec.SampleFormatName}:" +
                 $"channels={FilterSpec.Channels}:time_base={1}/{FilterSpec.SampleRate}";
 
-            if (FilterSpec.ChannelLayout != 0)
-                sourceBufferOptions = $"{sourceBufferOptions}:channel_layout=0x{FilterSpec.ChannelLayout:x16}";
+            if (FilterSpec.ChannelLayout.nb_channels != 0)
+            {
+                var filterChannelLayout = FilterSpec.ChannelLayout;
+                ffmpeg.av_channel_layout_describe_bprint(&filterChannelLayout, bp);
+                sourceBufferOptions = $"{sourceBufferOptions}:channel_layout={GetAVBPRintString(bp)}";
+            }
+                
 
             var inputFilterContext = FFFilterContext.Create(FilterGraph, "abuffer", "audioSourceBuffer", sourceBufferOptions);
             var outputFilterContext = FFFilterContext.Create(FilterGraph, "abuffersink", "audioSinkBuffer");
@@ -83,6 +134,7 @@ public unsafe sealed class AudioComponent : FilteringMediaComponent, ISerialGrou
         }
         catch
         {
+            ReleaseAVBPrint(bp);
             ReleaseFilterGraph();
             throw;
         }
@@ -123,8 +175,11 @@ public unsafe sealed class AudioComponent : FilteringMediaComponent, ISerialGrou
 
         var wantedSampleCount = SyncWantedSamples(audio.Frame.SampleCount);
 
+        var frameLayout = audio.Frame.ChannelLayout;
+        var streamLyout = StreamSpec.ChannelLayout;
+
         if (audio.Frame.SampleFormat != StreamSpec.SampleFormat ||
-            audio.Frame.ChannelLayout != StreamSpec.ChannelLayout ||
+            ffmpeg.av_channel_layout_compare(&frameLayout, &streamLyout) != 0 ||
             audio.Frame.SampleRate != StreamSpec.SampleRate ||
             (wantedSampleCount != audio.Frame.SampleCount && ConvertContext.IsNull()))
         {
@@ -402,7 +457,8 @@ public unsafe sealed class AudioComponent : FilteringMediaComponent, ISerialGrou
 
             var decoderChannelLayout = AudioParams.ValidateChannelLayout(decodedFrame.ChannelLayout, decodedFrame.Channels);
             var needsDifferentSpec = FilterSpec.IsDifferentTo(decodedFrame) ||
-                FilterSpec.ChannelLayout != decoderChannelLayout ||
+                FilterSpec.ChannelLayout.order != decoderChannelLayout.order ||
+                FilterSpec.ChannelLayout.nb_channels != decoderChannelLayout.nb_channels ||
                 FilterSpec.SampleRate != decodedFrame.SampleRate ||
                 PacketGroupIndex != lastPacketGroupIndex;
 

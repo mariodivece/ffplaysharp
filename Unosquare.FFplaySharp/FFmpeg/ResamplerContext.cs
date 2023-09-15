@@ -9,19 +9,21 @@ public unsafe sealed class ResamplerContext : CountedReference<SwrContext>
     }
 
     public ResamplerContext(
-        long outLayout,
+        AVChannelLayout outLayout,
         AVSampleFormat outFormat,
         int outSampleRate,
-        long inLayout,
+        AVChannelLayout inLayout,
         AVSampleFormat inFormat,
         int inSampleRate,
         [CallerFilePath] string? filePath = default,
         [CallerLineNumber] int? lineNumber = default)
         : base(filePath, lineNumber)
     {
-        var pointer = ffmpeg.swr_alloc_set_opts(null,
-                outLayout, outFormat, outSampleRate,
-                inLayout, inFormat, inSampleRate,
+        var pointer = ffmpeg.swr_alloc();
+
+        ffmpeg.swr_alloc_set_opts2(&pointer,
+                &outLayout, outFormat, outSampleRate,
+                &inLayout, inFormat, inSampleRate,
                 0, null);
 
         Update(pointer);
