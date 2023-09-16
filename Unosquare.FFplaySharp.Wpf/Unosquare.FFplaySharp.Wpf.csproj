@@ -10,10 +10,6 @@
 	</PropertyGroup>
 
 	<ItemGroup>
-	  <PackageReference Include="Unosquare.Hpet" Version="1.0.0-alpha.2" />
-	</ItemGroup>
-
-	<ItemGroup>
 		<ProjectReference Include="..\Unosquare.FFplaySharp\Unosquare.FFplaySharp.csproj" />
 	</ItemGroup>
 

@@ -4,8 +4,8 @@ public unsafe sealed class AudioComponent : FilteringMediaComponent, ISerialGrou
 {
     private readonly double SyncDiffAverageCoffiecient = Math.Exp(Math.Log(0.01) / Constants.AudioDiffAveragesCount);
 
-    private ResamplerContext ConvertContext;
-    private ByteBuffer ResampledOutputBuffer;
+    private ResamplerContext? ConvertContext;
+    private ByteBuffer? ResampledOutputBuffer;
     private long StartPts;
     private AVRational StartPtsTimeBase;
     private long NextPts;

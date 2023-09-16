@@ -14,7 +14,7 @@ public unsafe sealed class FFCodecParameters : NativeReference<AVCodecParameters
 
     public int SampleRate => Target->sample_rate;
 
-    public int Channels => Target->channels;
+    public int Channels => Target->ch_layout.nb_channels;
 
     public int Width => Target->width;
 

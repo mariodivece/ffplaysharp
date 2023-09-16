@@ -1,4 +1,6 @@
-﻿namespace Unosquare.FFplaySharp.Primitives;
+﻿using System.Threading.Channels;
+
+namespace Unosquare.FFplaySharp.Primitives;
 
 /// <summary>
 /// Represents a queue-style data structure that stores
@@ -6,12 +8,9 @@
 /// </summary>
 public sealed class PacketStore : ISerialGroupable, IDisposable
 {
-    private readonly object SyncLock = new();
-    private readonly Queue<FFPacket> Packets = new();
-    private readonly EventAwaiter IsAvailableEvent = new();
-    private bool isDisposed;
+    private readonly Channel<FFPacket> PacketChannel;
+    private long isDisposed;
     private long m_IsClosed = 1; // starts in a blocked state
-
     private int m_ByteSize;
     private long m_DurationUnits;
     private int m_GroupIndex;
@@ -22,6 +21,13 @@ public sealed class PacketStore : ISerialGroupable, IDisposable
     /// <param name="component">The associated component.</param>
     public PacketStore(MediaComponent component)
     {
+        PacketChannel = Channel.CreateUnbounded<FFPacket>(new()
+        {
+            SingleWriter = false,
+            SingleReader = false,
+            AllowSynchronousContinuations = true,
+        });
+
         Component = component;
     }
 
@@ -36,49 +42,37 @@ public sealed class PacketStore : ISerialGroupable, IDisposable
     /// </summary>
     public bool IsClosed
     {
-        get => Interlocked.Read(ref m_IsClosed) != 0;
+        get => Interlocked.Read(ref m_IsClosed) > 0;
         private set => Interlocked.Exchange(ref m_IsClosed, value ? 1 : 0);
     }
 
     /// <summary>
     /// Gets the numer of packets in the queue.
     /// </summary>
-    public int Count
-    {
-        get { lock (SyncLock) return Packets.Count; }
-    }
+    public int Count => PacketChannel.Reader.CanCount ? PacketChannel.Reader.Count : 0;
 
     /// <summary>
     /// Gets the total size in bytes of the packets
     /// and their content buffers.
     /// </summary>
-    public int ByteSize
-    {
-        get { lock (SyncLock) return m_ByteSize; }
-    }
+    public int ByteSize => Interlocked.CompareExchange(ref m_ByteSize, 0, 0);
 
     /// <summary>
     /// Gets the packet queue duration in stream time base units.
     /// </summary>
-    public long DurationUnits
-    {
-        get { lock (SyncLock) return m_DurationUnits; }
-    }
+    public long DurationUnits => Interlocked.Read(ref m_DurationUnits);
 
     /// <summary>
     /// Gets the group (serial) the packet queue is currently on.
     /// </summary>
-    public int GroupIndex
-    {
-        get { lock (SyncLock) return m_GroupIndex; }
-    }
+    public int GroupIndex => Interlocked.CompareExchange(ref m_GroupIndex, 0, 0);
 
     /// <summary>
     /// Opens the queue for enqueueing and dequeueing.
     /// </summary>
     public void Open()
     {
-        if (isDisposed)
+        if (Interlocked.Read(ref isDisposed) > 0)
             throw new ObjectDisposedException(nameof(PacketStore));
 
         IsClosed = false;
@@ -102,18 +96,18 @@ public sealed class PacketStore : ISerialGroupable, IDisposable
         if (packet is null)
             throw new ArgumentNullException(nameof(packet));
 
-        lock (SyncLock)
-        {
-            packet.GroupIndex = packet.IsFlushPacket
-                ? ++m_GroupIndex
-                : m_GroupIndex;
+        packet.GroupIndex = packet.IsFlushPacket
+            ? Interlocked.Increment(ref m_GroupIndex)
+            : Interlocked.CompareExchange(ref m_GroupIndex, 0, 0);
 
-            m_ByteSize += packet.Size + FFPacket.StructureSize;
-            m_DurationUnits += packet.DurationUnits;
-            Packets.Enqueue(packet);
+        Interlocked.Add(ref m_ByteSize, packet.Size + FFPacket.StructureSize);
+        Interlocked.Add(ref m_DurationUnits, packet.DurationUnits);
+        if (!PacketChannel.Writer.TryWrite(packet))
+        {
+            packet.Release();
+            return false;
         }
 
-        IsAvailableEvent.Signal();
         return true;
     }
 
@@ -145,20 +139,17 @@ public sealed class PacketStore : ISerialGroupable, IDisposable
             if (IsClosed)
                 return default;
 
-            lock (SyncLock)
+            if (PacketChannel.Reader.TryRead(out packet) && packet is not null)
             {
-                if (Packets.TryDequeue(out packet) && packet is not null)
-                {
-                    m_ByteSize -= packet.Size + FFPacket.StructureSize;
-                    m_DurationUnits -= packet.DurationUnits;
-                    return true;
-                }
+                Interlocked.Add(ref m_ByteSize, -(packet.Size + FFPacket.StructureSize));
+                Interlocked.Add(ref m_DurationUnits, -packet.DurationUnits);
+                return true;
             }
 
             if (!blockWait)
                 return default;
 
-            IsAvailableEvent.Wait(Constants.WaitTimeout);
+            PacketChannel.Reader.WaitToReadAsync(CancellationToken.None).AsTask().GetAwaiter().GetResult();
         }
     }
 
@@ -167,17 +158,14 @@ public sealed class PacketStore : ISerialGroupable, IDisposable
     /// </summary>
     public void Clear()
     {
-        lock (SyncLock)
+        while (Count > 0)
         {
-            while (Packets.Count != 0)
-            {
-                if (Packets.TryDequeue(out var packet) && packet.IsNotNull())
-                    packet.Release();
-            }
-
-            m_ByteSize = 0;
-            m_DurationUnits = 0;
+            if (PacketChannel.Reader.TryRead(out var packet) && packet is not null && packet.IsNotNull())
+                packet.Release();
         }
+
+        Interlocked.Exchange(ref m_ByteSize, 0);
+        Interlocked.Exchange(ref m_DurationUnits, 0);
     }
 
     /// <summary>
@@ -185,17 +173,19 @@ public sealed class PacketStore : ISerialGroupable, IDisposable
     /// </summary>
     public void Close()
     {
+        if (IsClosed)
+            return;
+
         IsClosed = true;
-        IsAvailableEvent.SignalAll();
+        _ = PacketChannel.Writer.TryComplete();
     }
 
     /// <inheritdoc />
     public void Dispose()
     {
-        if (isDisposed)
+        if (Interlocked.Increment(ref isDisposed) > 1)
             return;
 
-        isDisposed = true;
         Close();
         Clear();
     }

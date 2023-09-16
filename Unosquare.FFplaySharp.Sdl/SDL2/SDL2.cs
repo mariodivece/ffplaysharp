@@ -27,16 +27,13 @@
 #endregion
 
 #region Using Statements
-using System;
 using System.Diagnostics;
 using System.Runtime.InteropServices;
-using System.Runtime.InteropServices.Marshalling;
-using System.Text;
 #endregion
 
 namespace SDL2
 {
-	public static partial class SDL
+    public static partial class SDL
 	{
 		#region SDL2# Variables
 

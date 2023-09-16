@@ -169,7 +169,7 @@ public unsafe class MediaContainer
 
     private bool HasEnoughPacketBuffer => Components.Sum(c => c.Packets.ByteSize) > Constants.MaxQueueSize;
 
-    public static MediaContainer Open(ProgramOptions options, IPresenter presenter)
+    public static MediaContainer? Open(ProgramOptions options, IPresenter presenter)
     {
         if (presenter is null)
             throw new ArgumentNullException(nameof(presenter));
@@ -180,9 +180,7 @@ public unsafe class MediaContainer
         {
             presenter.Initialize(container);
             var o = container.Options;
-            container.Video.LastStreamIndex = container.Video.StreamIndex = -1;
-            container.Audio.LastStreamIndex = container.Audio.StreamIndex = -1;
-            container.Subtitle.LastStreamIndex = container.Subtitle.StreamIndex = -1;
+
             if (string.IsNullOrWhiteSpace(o.InputFileName))
                 throw new ArgumentException($"{nameof(options)}.{nameof(options.InputFileName)} cannot be null.");
 
@@ -194,7 +192,6 @@ public unsafe class MediaContainer
             container.VideoClock = new Clock(container.Video.Packets);
             container.AudioClock = new Clock(container.Audio.Packets);
             container.ExternalClock = new Clock(container.ExternalClock);
-
 
             container.IsMuted = false;
             container.ClockSyncMode = container.Options.ClockSyncType;

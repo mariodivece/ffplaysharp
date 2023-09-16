@@ -3,31 +3,34 @@
 public abstract class MediaComponent
 {
     private readonly ThreeState ReorderPts;
-    private FFPacket PendingPacket;
+    private FFPacket? PendingPacket;
     private bool IsPacketPending;
-    private Thread Worker;
+    private Thread? Worker;
+    private readonly Lazy<FrameStore> m_FrameStore;
 
     protected MediaComponent(MediaContainer container)
     {
         Container = container;
         Packets = new(this);
-        Frames = CreateFrameQueue();
+        m_FrameStore = new(CreateFrameQueue, false);
         ReorderPts = Container.Options.IsPtsReorderingEnabled;
+        StreamIndex = -1;
+        LastStreamIndex = -1;
     }
 
     public MediaContainer Container { get; }
 
     public PacketStore Packets { get; }
 
-    public FrameStore Frames { get; }
+    public FrameStore Frames => m_FrameStore.Value;
 
     public FFCodecContext CodecContext { get; private set; }
 
-    public FFStream Stream { get; protected set; }
+    public FFStream? Stream { get; protected set; }
 
     public int StreamIndex { get; set; }
 
-    public int LastStreamIndex;
+    public int LastStreamIndex { get; set; }
 
     public abstract AVMediaType MediaType { get; }
 

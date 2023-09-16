@@ -12,7 +12,7 @@ public unsafe class FFDictionaryEntry : NativeReference<AVDictionaryEntry>
         Value = Helpers.PtrToString(target->value);
     }
 
-    public string Key { get; }
+    public string? Key { get; }
 
-    public string Value { get; }
+    public new string? Value { get; }
 }
