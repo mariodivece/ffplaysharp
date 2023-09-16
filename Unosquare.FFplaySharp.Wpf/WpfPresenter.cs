@@ -5,7 +5,7 @@ namespace Unosquare.FFplaySharp.Wpf;
 
 internal class WpfPresenter : IPresenter
 {
-    private const bool UseNativeMethod = false;
+    private const bool UseNativeMethod = true;
     private const bool DropFrames = true;
 
     private static readonly Duration LockTimeout = new(TimeSpan.FromMilliseconds(0));

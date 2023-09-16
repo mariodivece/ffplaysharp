@@ -1,7 +1,11 @@
-﻿namespace Unosquare.FFplaySharp.Primitives;
+﻿using Unosquare.Hpet;
+
+namespace Unosquare.FFplaySharp.Primitives;
 
 internal class EventAwaiter
 {
+    private static readonly TimeSpan LoopingTimeout = TimeSpan.FromMilliseconds(1);
+
     private readonly EventQueue WaitQueue = new();
 
     public void Signal() => WaitQueue.Dequeue();
@@ -10,23 +14,19 @@ internal class EventAwaiter
 
     public bool Wait(int millisecondsTimeout)
     {
-        var startTimeUs = ffmpeg.av_gettime_relative();
-        var timeoutUs = millisecondsTimeout * 1000L;
-        var maxSleepUs = millisecondsTimeout * 500L;
-        long remainingUs;
-
+        var startTimestamp = Stopwatch.GetTimestamp();
         var id = WaitQueue.Enqueue();
 
-        do
+        while (true)
         {
             if (!WaitQueue.Contains(id))
                 return true;
 
-            remainingUs = timeoutUs - (ffmpeg.av_gettime_relative() - startTimeUs);
-            if (remainingUs > 0)
-                ffmpeg.av_usleep(Convert.ToUInt32(remainingUs.Clamp(1, maxSleepUs)));
+            if (Stopwatch.GetElapsedTime(startTimestamp).TotalMilliseconds >= millisecondsTimeout)
+                break;
 
-        } while (remainingUs > 0);
+            LoopingTimeout.Delay();
+        }
 
         WaitQueue.Remove(id);
         return false;
