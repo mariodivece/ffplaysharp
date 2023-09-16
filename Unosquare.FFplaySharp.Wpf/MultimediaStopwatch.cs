@@ -2,22 +2,16 @@
 
 public class MultimediaStopwatch
 {
-    private static readonly double SecondsPerTick = 1d / Stopwatch.Frequency;
-
-    private double BaseTime;
+    private long BaseTime;
 
     public MultimediaStopwatch()
     {
 
     }
 
-    public bool IsRunning => Interlocked.CompareExchange(ref BaseTime, 0, 0) != 0;
+    public bool IsRunning => Interlocked.Read(ref BaseTime) != 0;
 
-    public double ElapsedSeconds => (SecondsPerTick * Stopwatch.GetTimestamp()) - Interlocked.CompareExchange(ref BaseTime, 0, 0);
+    public double ElapsedSeconds => Stopwatch.GetElapsedTime(BaseTime).TotalSeconds;
 
-    public double Restart() =>(SecondsPerTick * Stopwatch.GetTimestamp()) - 
-            Interlocked.Exchange(ref BaseTime, SecondsPerTick * Stopwatch.GetTimestamp());
-    
-    public void Restart(double offset) =>
-        Interlocked.Exchange(ref BaseTime, (SecondsPerTick * Stopwatch.GetTimestamp()) - offset);
+    public double Restart() => Stopwatch.GetElapsedTime(Interlocked.Exchange(ref BaseTime, Stopwatch.GetTimestamp())).TotalSeconds;
 }
