@@ -1,6 +1,4 @@
-﻿using System.Windows.Media.Imaging;
-
-namespace Unosquare.FFplaySharp.Wpf;
+﻿namespace Unosquare.FFplaySharp.Wpf;
 
 internal record PictureParams()
 {

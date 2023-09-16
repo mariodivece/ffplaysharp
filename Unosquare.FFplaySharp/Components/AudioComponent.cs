@@ -113,7 +113,7 @@ public unsafe sealed class AudioComponent : FilteringMediaComponent, ISerialGrou
             if (forceOutputFormat)
             {
                 var outputChannelLayout = new[] { HardwareSpec.ChannelLayout };
-                var outputSampleRates = new[] { HardwareSpec.SampleRate, -1 };
+                var outputSampleRates = new[] { HardwareSpec.SampleRate };
 
                 outputFilterContext.SetOption("all_channel_counts", 0);
                 outputFilterContext.SetOption("ch_layouts", GetAVBPRintString(bp));

@@ -5,8 +5,8 @@
     public static partial class SDL
     {
 		/* format refers to an SDL_AudioFormat */
-		[DllImport("SDL2", CallingConvention = CallingConvention.Cdecl)]
-		public static extern unsafe void SDL_MixAudioFormat(
+		[LibraryImport("SDL2")]
+		public static unsafe partial void SDL_MixAudioFormat(
 			byte* dst,
 			byte* src,
 			ushort format,

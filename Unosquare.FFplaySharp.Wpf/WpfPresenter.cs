@@ -1,4 +1,5 @@
 ﻿using System.Windows.Media;
+using Unosquare.Hpet;
 
 namespace Unosquare.FFplaySharp.Wpf;
 
@@ -8,7 +9,7 @@ internal class WpfPresenter : IPresenter
     private const bool DropFrames = true;
 
     private static readonly Duration LockTimeout = new(TimeSpan.FromMilliseconds(0));
-    private readonly ThreadedTimer RenderTimer = new(2);
+    private readonly PrecisionTimer RenderTimer = new(TimeSpan.FromMilliseconds(10), DelayPrecision.Maximum);
     private PictureParams CurrentPicture = new();
     private WriteableBitmap? TargetBitmap;
     private WavePlayer WavePlayer;
@@ -43,7 +44,7 @@ internal class WpfPresenter : IPresenter
         var previousElapsed = default(double);
         var elapsedSamples = new List<double>(2048);
 
-        RenderTimer.Elapsed += (s, e) =>
+        RenderTimer.Ticked += (s, e) =>
         {
             if (CurrentPicture is null || Container.Video.Frames.IsClosed)
                 return;
