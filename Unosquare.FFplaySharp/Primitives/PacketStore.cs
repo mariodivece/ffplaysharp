@@ -1,4 +1,5 @@
 ﻿using System.Threading.Channels;
+using Unosquare.Hpet;
 
 namespace Unosquare.FFplaySharp.Primitives;
 
@@ -8,6 +9,7 @@ namespace Unosquare.FFplaySharp.Primitives;
 /// </summary>
 public sealed class PacketStore : ISerialGroupable, IDisposable
 {
+    private static readonly TimeSpan LoopingTimeout = TimeSpan.FromMilliseconds(1);
     private readonly Channel<FFPacket> PacketChannel;
     private long isDisposed;
     private long m_IsClosed = 1; // starts in a blocked state
@@ -149,7 +151,7 @@ public sealed class PacketStore : ISerialGroupable, IDisposable
             if (!blockWait)
                 return default;
 
-            PacketChannel.Reader.WaitToReadAsync(CancellationToken.None).AsTask().GetAwaiter().GetResult();
+            LoopingTimeout.Delay();
         }
     }
 

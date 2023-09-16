@@ -9,7 +9,7 @@ internal class WpfPresenter : IPresenter
     private const bool DropFrames = true;
 
     private static readonly Duration LockTimeout = new(TimeSpan.FromMilliseconds(0));
-    private readonly PrecisionTimer RenderTimer = new(TimeSpan.FromMilliseconds(10), DelayPrecision.Maximum);
+    private readonly PrecisionTimer RenderTimer = new(TimeSpan.FromMilliseconds(1), DelayPrecision.Default);
     private PictureParams CurrentPicture = new();
     private WriteableBitmap? TargetBitmap;
     private WavePlayer WavePlayer;
