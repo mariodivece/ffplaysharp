@@ -35,6 +35,8 @@ internal unsafe class FFBPrint : CountedReference<AVBPrint>
         bStruct.size = 1;
         bStruct.size_max = uint.MaxValue - 1;
         bStruct.reserved_internal_buffer = 0;
+
+        // point at the address of the reserved_internal_buffer
         bStruct.str = (byte*)((nint)bpStructAddress + ReservedFieldOffset);
 
         Marshal.StructureToPtr(bStruct, (nint)bpStructAddress, true);
