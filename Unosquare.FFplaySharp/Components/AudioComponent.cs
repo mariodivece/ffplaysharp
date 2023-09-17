@@ -42,51 +42,12 @@ public unsafe sealed class AudioComponent : FilteringMediaComponent, ISerialGrou
         ConfigureFilters(false);
     }
 
-    [StructLayout(LayoutKind.Sequential)]
-    private struct AVBPrint2
-    {
-        public void* str;
-        public uint len;
-        public uint size;
-        public uint size_max;
-        public byte reserved_internal_buffer;
-    }
 
-
-    private static unsafe AVBPrint* AllocateAVBPrint(uint maxSize)
-    {
-        // https://ffmpeg.org/doxygen/1.0/bprint_8h-source.html
-        const int StructurePadding = 1024;
-        var bpStructAddress = ffmpeg.av_mallocz(StructurePadding);
-        var bStruct = default(AVBPrint2);
-
-        bStruct.str = ffmpeg.av_mallocz(maxSize);
-        bStruct.len = 0;
-        bStruct.size = maxSize;
-        bStruct.size_max = maxSize;
-        bStruct.reserved_internal_buffer = 0;
-
-        Marshal.StructureToPtr(bStruct, (nint)bpStructAddress, true);
-        return (AVBPrint*)bpStructAddress;
-    }
-
-    private static unsafe void ReleaseAVBPrint(AVBPrint* ptr)
-    {
-        var bpStruct = Marshal.PtrToStructure<AVBPrint2>((nint)ptr);
-        ffmpeg.av_freep(bpStruct.str);
-        ffmpeg.av_freep(ptr);
-    }
-
-    private static unsafe string GetAVBPRintString(AVBPrint* ptr)
-    {
-        var bpStruct = Marshal.PtrToStructure<AVBPrint2>((nint)ptr);
-        return Helpers.PtrToString((byte*)bpStruct.str);
-    }
 
     public void ConfigureFilters(bool forceOutputFormat)
     {
 
-        var bp = AllocateAVBPrint(2048);
+        var bp = new FFBPrint(2048);
 
         try
         {
@@ -101,8 +62,8 @@ public unsafe sealed class AudioComponent : FilteringMediaComponent, ISerialGrou
                 $"channels={FilterSpec.Channels}:time_base={1}/{FilterSpec.SampleRate}";
 
             var filterChannelLayout = FilterSpec.ChannelLayout;
-            ffmpeg.av_channel_layout_describe_bprint(&filterChannelLayout, bp);
-            sourceBufferOptions = $"{sourceBufferOptions}:channel_layout={GetAVBPRintString(bp)}";
+            ffmpeg.av_channel_layout_describe_bprint(&filterChannelLayout, bp.Target);
+            sourceBufferOptions = $"{sourceBufferOptions}:channel_layout={bp.Contents}";
 
             var inputFilterContext = FFFilterContext.Create(FilterGraph, "abuffer", "audioSourceBuffer", sourceBufferOptions);
             var outputFilterContext = FFFilterContext.Create(FilterGraph, "abuffersink", "audioSinkBuffer");
@@ -116,7 +77,7 @@ public unsafe sealed class AudioComponent : FilteringMediaComponent, ISerialGrou
                 var outputSampleRates = new[] { HardwareSpec.SampleRate };
 
                 outputFilterContext.SetOption("all_channel_counts", 0);
-                outputFilterContext.SetOption("ch_layouts", GetAVBPRintString(bp));
+                outputFilterContext.SetOption("ch_layouts", bp.Contents);
                 outputFilterContext.SetOptionList("sample_rates", outputSampleRates);
             }
 
@@ -126,9 +87,12 @@ public unsafe sealed class AudioComponent : FilteringMediaComponent, ISerialGrou
         }
         catch
         {
-            ReleaseAVBPrint(bp);
             ReleaseFilterGraph();
             throw;
+        }
+        finally
+        {
+            bp.Release();
         }
     }
 
