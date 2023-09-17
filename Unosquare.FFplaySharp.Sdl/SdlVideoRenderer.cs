@@ -669,9 +669,9 @@ public unsafe class SdlVideoRenderer
         DefaultHeight = rect.h;
     }
 
-    static double ComputePictureDisplayDuration(double pictureDuration, MediaContainer container)
+    static TimeExtent ComputePictureDisplayDuration(TimeExtent pictureDuration, MediaContainer container)
     {
-        var clockDifference = 0d;
+        TimeExtent clockDifference = TimeExtent.Zero;
 
         /* update delay to follow master synchronisation source */
         if (container.MasterSyncMode != ClockSource.Video)
@@ -684,14 +684,14 @@ public unsafe class SdlVideoRenderer
                delay to compute the threshold. I still don't know
                if it is the best guess */
             var syncThreshold = Math.Max(Constants.MediaSyncThresholdMin, Math.Min(Constants.MediaSyncThresholdMax, pictureDuration));
-            if (!clockDifference.IsNaN() && Math.Abs(clockDifference) < container.MaxPictureDuration)
+            if (!clockDifference.IsNaN && Math.Abs(clockDifference) < container.MaxPictureDuration)
             {
                 if (clockDifference <= -syncThreshold)
                     pictureDuration = Math.Max(0, pictureDuration + clockDifference);
                 else if (clockDifference >= syncThreshold && pictureDuration > Constants.MediaSyncFrameDupThreshold)
                     pictureDuration += clockDifference;
                 else if (clockDifference >= syncThreshold)
-                    pictureDuration = 2 * pictureDuration;
+                    pictureDuration = 2.0 * pictureDuration;
             }
         }
 
@@ -700,13 +700,13 @@ public unsafe class SdlVideoRenderer
         return pictureDuration;
     }
 
-    static double ComputePictureDuration(MediaContainer container, FrameHolder currentFrame, FrameHolder nextFrame)
+    static TimeExtent ComputePictureDuration(MediaContainer container, FrameHolder currentFrame, FrameHolder nextFrame)
     {
         if (currentFrame.GroupIndex != nextFrame.GroupIndex)
             return 0.0;
 
         var pictureDuration = nextFrame.Time - currentFrame.Time;
-        if (pictureDuration.IsNaN() || pictureDuration <= 0 || pictureDuration > container.MaxPictureDuration)
+        if (pictureDuration.IsNaN || pictureDuration <= 0 || pictureDuration > container.MaxPictureDuration)
             return currentFrame.Duration;
         else
             return pictureDuration;

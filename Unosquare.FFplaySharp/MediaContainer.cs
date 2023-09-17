@@ -74,12 +74,12 @@ public unsafe class MediaContainer
         }
     }
 
-    public double PictureDisplayTimer { get; set; }
+    public TimeExtent PictureDisplayTimer { get; set; }
 
     /// <summary>
     /// Maximum duration of a video frame - above this, we consider the jump a timestamp discontinuity
     /// </summary>
-    public double MaxPictureDuration { get; private set; }
+    public TimeExtent MaxPictureDuration { get; private set; }
 
     public bool IsAtEndOfStream { get; private set; }
 
@@ -111,7 +111,7 @@ public unsafe class MediaContainer
     /// <summary>
     /// Gets the current master clock value.
     /// </summary>
-    public double MasterTime
+    public TimeExtent MasterTime
     {
         get
         {
@@ -124,7 +124,7 @@ public unsafe class MediaContainer
         }
     }
 
-    public double ComponentSyncDelay
+    public TimeExtent ComponentSyncDelay
     {
         get
         {

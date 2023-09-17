@@ -11,7 +11,7 @@ public class Clock : ISerialGroupable
     /// <summary>
     /// Clock base minus time at which we updated the clock.
     /// </summary>
-    private double Offset;
+    private TimeExtent Offset;
 
     /// <summary>
     /// Creates a new instance of the <see cref="Clock"/> class.
@@ -33,14 +33,14 @@ public class Clock : ISerialGroupable
     /// <summary>
     /// Gets the current relative system time in seconds.
     /// </summary>
-    public static double SystemTime => Convert.ToDouble(ffmpeg.av_gettime_relative()) / TimeBaseMicros;
+    public static TimeExtent SystemTime => TimeExtent.FromSystem();
 
     /// <summary>
     /// Gets the clock base.
     /// </summary>
-    public double BaseTime { get; private set; }
+    public TimeExtent BaseTime { get; private set; }
 
-    public double LastUpdated { get; private set; }
+    public TimeExtent LastUpdated { get; private set; }
 
     public double SpeedRatio { get; private set; }
 
@@ -64,7 +64,7 @@ public class Clock : ISerialGroupable
     /// <summary>
     /// Gets the current clock value in seconds.
     /// </summary>
-    public double Value
+    public TimeExtent Value
     {
         get
         {
@@ -80,7 +80,7 @@ public class Clock : ISerialGroupable
         }
     }
 
-    public void Set(double baseTime, int groupIndex, double systemTime)
+    public void Set(TimeExtent baseTime, int groupIndex, TimeExtent systemTime)
     {
         BaseTime = baseTime;
         LastUpdated = systemTime;
@@ -88,7 +88,7 @@ public class Clock : ISerialGroupable
         GroupIndex = groupIndex;
     }
 
-    public void Set(double baseTime, int groupIndex) =>
+    public void Set(TimeExtent baseTime, int groupIndex) =>
         Set(baseTime, groupIndex, SystemTime);
 
     public void SetSpeed(double speed)
@@ -108,7 +108,7 @@ public class Clock : ISerialGroupable
 
         var currentTime = Value;
         var slaveTime = slaveClock.Value;
-        if (!slaveTime.IsNaN() && (currentTime.IsNaN() || Math.Abs(currentTime - slaveTime) > Constants.MediaNoSyncThreshold))
+        if (!slaveTime.IsNaN && (currentTime.IsNaN || Math.Abs(currentTime - slaveTime) > Constants.MediaNoSyncThreshold))
             Set(slaveTime, slaveClock.GroupIndex);
     }
 }

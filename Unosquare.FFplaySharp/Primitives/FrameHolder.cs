@@ -20,12 +20,12 @@ public sealed class FrameHolder : IDisposable, ISerialGroupable
     /// Gets or sets the Presentation time in seconds.
     /// This is NOT a timestamp in stream units.
     /// </summary>
-    public double Time { get; private set; }
+    public TimeExtent Time { get; private set; }
 
     /// <summary>
     /// Gets the estimated duration of the frame in seconds.
     /// </summary>
-    public double Duration { get; private set; }
+    public TimeExtent Duration { get; private set; }
 
     /// <summary>
     /// Gets the video frame width in pixels.
@@ -49,7 +49,7 @@ public sealed class FrameHolder : IDisposable, ISerialGroupable
 
     public AVChannelLayout ChannelLayout { get; private set; }
 
-    public bool HasValidTime => !Time.IsNaN();
+    public bool HasValidTime => !Time.IsNaN;
 
     public double StartDisplayTime => Subtitle.IsNotNull()
         ? Time + (Subtitle.StartDisplayTime / 1000d)

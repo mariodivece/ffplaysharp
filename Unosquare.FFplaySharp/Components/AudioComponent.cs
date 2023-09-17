@@ -10,9 +10,9 @@ public unsafe sealed class AudioComponent : FilteringMediaComponent, ISerialGrou
     private AVRational StartPtsTimeBase;
     private long NextPts;
     private AVRational NextPtsTimeBase;
-    private double LastFrameTime;
-    private double SyncDiffTotalDelay; /* used for AV difference average computation */
-    private double SyncDiffDelayThreshold;
+    private TimeExtent LastFrameTime;
+    private TimeExtent SyncDiffTotalDelay; /* used for AV difference average computation */
+    private TimeExtent SyncDiffDelayThreshold;
     private int SyncDiffAverageCount;
     private AudioParams StreamSpec = new();
     private AudioParams FilterSpec = new();
@@ -26,7 +26,7 @@ public unsafe sealed class AudioComponent : FilteringMediaComponent, ISerialGrou
     /// <summary>
     /// Gets or sets the Frame Time (ported from audio_clock)
     /// </summary>
-    public double FrameTime { get; private set; }
+    public TimeExtent FrameTime { get; private set; }
 
     public int GroupIndex { get; private set; } = -1;
 
@@ -294,7 +294,7 @@ public unsafe sealed class AudioComponent : FilteringMediaComponent, ISerialGrou
 
         var clockDelay = Container.AudioClock.Value - Container.MasterTime;
 
-        if (!clockDelay.IsNaN() && Math.Abs(clockDelay) < Constants.MediaNoSyncThreshold)
+        if (!clockDelay.IsNaN && Math.Abs(clockDelay) < Constants.MediaNoSyncThreshold)
         {
             SyncDiffTotalDelay = clockDelay + (SyncDiffAverageCoffiecient * SyncDiffTotalDelay);
             if (SyncDiffAverageCount < Constants.AudioDiffAveragesCount)
@@ -309,7 +309,7 @@ public unsafe sealed class AudioComponent : FilteringMediaComponent, ISerialGrou
 
                 if (Math.Abs(syncDiffDelay) >= SyncDiffDelayThreshold)
                 {
-                    wantedSampleCount = sampleCount + (int)(clockDelay * StreamSpec.SampleRate);
+                    wantedSampleCount = sampleCount + (int)(clockDelay * (double)StreamSpec.SampleRate);
                     var minSampleCount = (int)(sampleCount * (100 - Constants.SampleCorrectionPercentMax) / 100);
                     var maxSampleCount = (int)(sampleCount * (100 + Constants.SampleCorrectionPercentMax) / 100);
                     wantedSampleCount = wantedSampleCount.Clamp(minSampleCount, maxSampleCount);

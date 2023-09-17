@@ -214,7 +214,7 @@ namespace Unosquare.FFplaySharp.Wpf
             }
 
             // Let's assume the audio driver that is used by SDL has two periods.
-            if (!Container.Audio.FrameTime.IsNaN())
+            if (!Container.Audio.FrameTime.IsNaN)
             {
                 var readBufferAvailable = ReadBufferSize - ReadBufferIndex;
                 var bufferDuration = (2d * Container.Audio.HardwareSpec.BufferSize + readBufferAvailable) / Container.Audio.HardwareSpec.BytesPerSecond;

@@ -57,7 +57,8 @@ public unsafe class SdlPresenter : IPresenter
     public void Start()
     {
         // handle an event sent by the GUI.
-        double incr, pos;
+        TimeExtent incr;
+        TimeExtent pos;
 
         while (true)
         {
@@ -170,7 +171,7 @@ public unsafe class SdlPresenter : IPresenter
                             else
                             {
                                 pos = Container.MasterTime;
-                                if (pos.IsNaN())
+                                if (pos.IsNaN)
                                     pos = Container.SeekAbsoluteTarget / Clock.TimeBaseMicros;
                                 pos += incr;
                                 if (Container.Input.StartTime.IsValidPts() && pos < Container.Input.StartTime / Clock.TimeBaseMicros)

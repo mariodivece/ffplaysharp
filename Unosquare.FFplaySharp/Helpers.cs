@@ -120,9 +120,6 @@ public static class Helpers
     public static bool IsFalse(this int x) => x == 0;
 
     [MethodImpl(MethodImplOptions.AggressiveInlining)]
-    public static bool IsNaN(this double x) => double.IsNaN(x);
-
-    [MethodImpl(MethodImplOptions.AggressiveInlining)]
     public static bool IsNull(this IntPtr address) => address == IntPtr.Zero;
 
     [MethodImpl(MethodImplOptions.AggressiveInlining)]

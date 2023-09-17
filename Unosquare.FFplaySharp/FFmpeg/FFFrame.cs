@@ -34,7 +34,7 @@ public unsafe sealed class FFFrame : CountedReference<AVFrame>
 
     public int SampleCount => Target->nb_samples;
 
-    public int Channels => Target->channels;
+    public int Channels => Target->ch_layout.nb_channels;
 
     public int SampleRate => Target->sample_rate;
 

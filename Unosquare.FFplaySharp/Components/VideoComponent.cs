@@ -159,7 +159,7 @@ public sealed class VideoComponent : FilteringMediaComponent
                 var frameTime = Stream.TimeBase.ToFactor() * frame.Pts;
                 var frameDelay = frameTime - Container.MasterTime;
 
-                if (!frameDelay.IsNaN() && Math.Abs(frameDelay) < Constants.MediaNoSyncThreshold &&
+                if (!frameDelay.IsNaN && Math.Abs(frameDelay) < Constants.MediaNoSyncThreshold &&
                     frameDelay - FilterDelay < 0 &&
                     PacketGroupIndex == Container.VideoClock.GroupIndex &&
                     Packets.Count != 0)
