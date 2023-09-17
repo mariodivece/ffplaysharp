@@ -4,10 +4,12 @@ namespace FFmpeg;
 
 internal unsafe class FFBPrint : CountedReference<AVBPrint>
 {
-    public FFBPrint(uint maxSize = 2048, [CallerFilePath] string? filePath = default, [CallerLineNumber] int? lineNumber = default) 
+    private static readonly nint ReservedFieldOffset = sizeof(nint) + 3 * sizeof(uint);
+
+    public FFBPrint([CallerFilePath] string? filePath = default, [CallerLineNumber] int? lineNumber = default) 
         : base(filePath, lineNumber)
     {
-        Update(AllocateAVBPrint(maxSize));
+        Update(AllocateAutoAVBPrint());
     }
 
     public string Contents
@@ -18,22 +20,22 @@ internal unsafe class FFBPrint : CountedReference<AVBPrint>
                 return string.Empty;
 
             var bpStruct = Marshal.PtrToStructure<AVBPrintExtended>(Address);
-            return Helpers.PtrToString((byte*)bpStruct.str) ?? string.Empty;
+            return Helpers.PtrToString(bpStruct.str) ?? string.Empty;
         }
     }
 
-    private static unsafe AVBPrint* AllocateAVBPrint(uint maxSize)
+    private static unsafe AVBPrint* AllocateAutoAVBPrint()
     {
         // https://ffmpeg.org/doxygen/1.0/bprint_8h-source.html
         const int StructurePadding = 1024;
         var bpStructAddress = ffmpeg.av_mallocz(StructurePadding);
         var bStruct = default(AVBPrintExtended);
 
-        bStruct.str = ffmpeg.av_mallocz(maxSize);
         bStruct.len = 0;
-        bStruct.size = maxSize;
-        bStruct.size_max = maxSize;
+        bStruct.size = 1;
+        bStruct.size_max = uint.MaxValue - 1;
         bStruct.reserved_internal_buffer = 0;
+        bStruct.str = (byte*)((nint)bpStructAddress + ReservedFieldOffset);
 
         Marshal.StructureToPtr(bStruct, (nint)bpStructAddress, true);
         return (AVBPrint*)bpStructAddress;
@@ -42,14 +44,19 @@ internal unsafe class FFBPrint : CountedReference<AVBPrint>
     protected override unsafe void ReleaseInternal(AVBPrint* target)
     {
         var bpStruct = Marshal.PtrToStructure<AVBPrintExtended>((nint)target);
-        ffmpeg.av_freep(&bpStruct.str);
+
+        var isAllocated = target + ReservedFieldOffset != bpStruct.str;
+
+        if (isAllocated)
+            ffmpeg.av_freep(&bpStruct.str);
+
         ffmpeg.av_freep(&target);
     }
 
     [StructLayout(LayoutKind.Sequential)]
     private struct AVBPrintExtended
     {
-        public void* str;
+        public byte* str;
         public uint len;
         public uint size;
         public uint size_max;
