@@ -11,7 +11,7 @@
 
 	<ItemGroup>
 		<PackageReference Include="FFmpeg.AutoGen" Version="6.0.0.2" />
-		<PackageReference Include="Unosquare.Hpet" Version="1.0.0-alpha.2" />
+		<PackageReference Include="Unosquare.Hpet" Version="1.0.0-alpha.3" />
 	</ItemGroup>
 
 </Project>

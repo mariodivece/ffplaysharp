@@ -51,17 +51,17 @@ public sealed class FrameHolder : IDisposable, ISerialGroupable
 
     public bool HasValidTime => !Time.IsNaN;
 
-    public double StartDisplayTime => Subtitle.IsNotNull()
+    public TimeExtent StartDisplayTime => Subtitle.IsNotNull()
         ? Time + (Subtitle.StartDisplayTime / 1000d)
         : Time;
 
-    public double EndDisplayTime => Subtitle.IsNotNull()
+    public TimeExtent EndDisplayTime => Subtitle.IsNotNull()
         ? Time + (Subtitle.EndDisplayTime / 1000d)
         : Time + Duration;
 
     public void MarkUploaded() => IsUploaded = true;
 
-    public void Update(FFFrame sourceFrame, int groupIndex, double time, double duration)
+    public void Update(FFFrame sourceFrame, int groupIndex, TimeExtent time, TimeExtent duration)
     {
         if (sourceFrame.IsNull())
             throw new ArgumentNullException(nameof(sourceFrame));

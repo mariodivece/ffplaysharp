@@ -1,4 +1,6 @@
-﻿namespace Unosquare.FFplaySharp.Sdl;
+﻿using Unosquare.Hpet;
+
+namespace Unosquare.FFplaySharp.Sdl;
 
 public unsafe class SdlPresenter : IPresenter
 {

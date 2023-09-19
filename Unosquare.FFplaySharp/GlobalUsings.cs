@@ -9,3 +9,4 @@ global using System.Text;
 global using Unosquare.FFplaySharp;
 global using Unosquare.FFplaySharp.Components;
 global using Unosquare.FFplaySharp.Primitives;
+global using Unosquare.Hpet;

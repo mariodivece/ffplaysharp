@@ -1,7 +1,7 @@
 ﻿namespace Unosquare.FFplaySharp.Sdl;
 
 using SDL2;
-
+using Unosquare.Hpet;
 
 public unsafe class SdlVideoRenderer
 {
@@ -671,7 +671,7 @@ public unsafe class SdlVideoRenderer
 
     static TimeExtent ComputePictureDisplayDuration(TimeExtent pictureDuration, MediaContainer container)
     {
-        TimeExtent clockDifference = TimeExtent.Zero;
+        var clockDifference = TimeExtent.Zero;
 
         /* update delay to follow master synchronisation source */
         if (container.MasterSyncMode != ClockSource.Video)
