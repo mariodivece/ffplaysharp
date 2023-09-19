@@ -1,4 +1,5 @@
-﻿using System.Windows.Controls;
+﻿using System.Globalization;
+using System.Text;
 using System.Windows.Media;
 using Unosquare.Hpet;
 
@@ -6,10 +7,12 @@ namespace Unosquare.FFplaySharp.Wpf;
 
 internal class WpfPresenter : IPresenter
 {
+    const double MediaSyncThresholdMin = 0.04;
+    const double MediaSyncThresholdMax = 0.01;
+    const double MediaSyncFrameDupThreshold = 0.01;
+
     private const bool UseNativeMethod = true;
     private const bool DropFrames = true;
-
-    private readonly object SyncLock = new();
 
     private static readonly Duration LockTimeout = new(TimeSpan.FromMilliseconds(0));
     private readonly PrecisionTimer RenderTimer = new(TimeSpan.FromMilliseconds(1), DelayPrecision.Default);
@@ -17,21 +20,15 @@ internal class WpfPresenter : IPresenter
     private PictureParams? RequestedPictureSize;
     private WriteableBitmap? TargetBitmap;
     private WavePlayer WavePlayer;
-    private long m_HasLockedBuffer = 0;
-    private TimeSpan? LastRenderCallTime;
 
+    private bool ForceRefresh;
+    private int DroppedPictureCount;
 
     public MainWindow? Window { get; init; }
 
     public MediaContainer Container { get; private set; }
 
     public IReadOnlyList<AVPixelFormat> PixelFormats { get; } = new[] { AVPixelFormat.AV_PIX_FMT_BGRA };
-
-    private bool HasLockedBuffer
-    {
-        get => Interlocked.Read(ref m_HasLockedBuffer) != 0;
-        set => Interlocked.Exchange(ref m_HasLockedBuffer, value ? 1 : 0);
-    }
 
     public bool Initialize(MediaContainer container)
     {
@@ -44,16 +41,7 @@ internal class WpfPresenter : IPresenter
         if (Window is null)
             throw new InvalidOperationException("Cannot proceed with rendering without setting the Window property");
 
-        CompositionTarget.Rendering += CompositionTarget_Rendering;
-
-        var frameNumber = 0;
-        var startNextFrame = default(bool);
-        var runtimeStopwatch = new MultimediaStopwatch();
-        var frameStopwatch = new MultimediaStopwatch();
-        var pictureDuration = TimeExtent.NaN;
-        var compensation = TimeExtent.Zero;
-        var previousElapsed = TimeExtent.Zero;
-        var elapsedSamples = new List<TimeExtent>(2048);
+        var remainingTime = 0d;
 
         RenderTimer.Ticked += (s, e) =>
         {
@@ -63,82 +51,59 @@ internal class WpfPresenter : IPresenter
             if (WavePlayer is not null && !WavePlayer.HasStarted)
                 WavePlayer.Start();
 
-            if (Container.IsAtEndOfStream && !Container.Video.Frames.HasPending && Container.Video.HasFinishedDecoding)
-            {
-                var runtimeClock = runtimeStopwatch.ElapsedSeconds;
-                var videoClock = Container.VideoClock.Value;
-                var drift = runtimeClock - videoClock;
-                Debug.WriteLine($"Done reading and displaying frames. "
-                    + $"RT: {runtimeClock:n3} VCLK: {videoClock:n3} DRIFT: {drift:n3}");
-
-                Debug.WriteLine($"Frame Average Elapsed: {elapsedSamples.Average(c => c.Milliseconds):n4} ms.");
-
-                RenderTimer.Dispose();
-            }
-
-        retry:
-            if (!Container.Video.Frames.HasPending)
+            if (remainingTime > 0.001)
                 return;
 
-            var frame = Container.Video.Frames.WaitPeekShowable();
-            if (frame is null)
-                return;
+            remainingTime = 0.001;
 
-            // Handle first incoming frame.
-            if (pictureDuration.IsNaN)
-            {
-                runtimeStopwatch.Restart();
-                frameStopwatch.Restart();
-                pictureDuration = frame.Duration;
-                startNextFrame = false;
-            }
-
-            if (startNextFrame)
-            {
-                startNextFrame = false;
-                compensation = pictureDuration - previousElapsed;
-                pictureDuration = frame.Duration + compensation;
-                if (frame.HasValidTime)
-                    Container.UpdateVideoPts(frame.Time, frame.GroupIndex);
-
-                frameNumber++;
-#if DEBUG
-                Debug.WriteLine($"NUM: {frameNumber,-6} PREV: {previousElapsed.Milliseconds,6:n2} COMP: {compensation.Milliseconds,6:n2} NEXT: {pictureDuration.Milliseconds,6:n2}");
-#endif
-            }
-
-            if (!frame.IsUploaded && (!DropFrames || pictureDuration > 0))
-                RenderBackBuffer(frame);
-
-            if (frameStopwatch.ElapsedSeconds >= pictureDuration)
-            {
-                Container.Video.Frames.Dequeue();
-                startNextFrame = true;
-                previousElapsed = frameStopwatch.Restart();
-                elapsedSamples.Add(previousElapsed);
-                goto retry;
-            }
+            if (Container.ShowMode is not ShowMode.None && (!Container.IsPaused || ForceRefresh))
+                Present(ref remainingTime);
         };
 
         RenderTimer.Start();
     }
 
-    private void CompositionTarget_Rendering(object? sender, EventArgs e)
+    static TimeExtent ComputePictureDisplayDuration(TimeExtent pictureDuration, MediaContainer container)
     {
-        if (e is not RenderingEventArgs renderingEvent)
-            return;
+        var clockDifference = TimeExtent.Zero;
 
-        if (sender is not Dispatcher dispatcher)
-            return;
+        /* update delay to follow master synchronisation source */
+        if (container.MasterSyncMode != ClockSource.Video)
+        {
+            /* if video is slave, we try to correct big delays by
+               duplicating or deleting a frame */
+            clockDifference = container.VideoClock.Value - container.MasterTime;
 
-        if (dispatcher != Window?.Dispatcher)
-            return;
+            /* skip or repeat frame. We take into account the
+               delay to compute the threshold. I still don't know
+               if it is the best guess */
+            var syncThreshold = Math.Max(MediaSyncThresholdMin, Math.Min(MediaSyncThresholdMax, pictureDuration));
+            if (!clockDifference.IsNaN && Math.Abs(clockDifference) < container.MaxPictureDuration)
+            {
+                if (clockDifference <= -syncThreshold)
+                    pictureDuration = Math.Max(0, pictureDuration + clockDifference);
+                else if (clockDifference >= syncThreshold && pictureDuration > MediaSyncFrameDupThreshold)
+                    pictureDuration += clockDifference;
+                else if (clockDifference >= syncThreshold)
+                    pictureDuration = 2.0 * pictureDuration;
+            }
+        }
 
-        if (LastRenderCallTime is not null && renderingEvent.RenderingTime == LastRenderCallTime)
-            return;
+        ($"video: delay={pictureDuration,-8:n4} A-V={-clockDifference,-8:n4}.").LogTrace();
 
-        LastRenderCallTime = renderingEvent.RenderingTime;
+        return pictureDuration;
+    }
 
+    static TimeExtent ComputePictureDuration(MediaContainer container, FrameHolder currentFrame, FrameHolder nextFrame)
+    {
+        if (currentFrame.GroupIndex != nextFrame.GroupIndex)
+            return 0.0;
+
+        var pictureDuration = nextFrame.Time - currentFrame.Time;
+        if (pictureDuration.IsNaN || pictureDuration <= 0 || pictureDuration > container.MaxPictureDuration)
+            return currentFrame.Duration;
+        else
+            return pictureDuration;
     }
 
     public void UpdatePictureSize(int width, int height, AVRational sar)
@@ -166,43 +131,28 @@ internal class WpfPresenter : IPresenter
         Window!.targetImage.Source = TargetBitmap;
     }
 
-    private unsafe bool RenderBackBuffer(FrameHolder frame)
+    private unsafe bool RenderToBackBuffer()
     {
-        if (TargetBitmap is null || HasLockedBuffer)
+        var frame = Container.Video.Frames.WaitPeekReadable();
+
+        if (frame is null)
             return false;
+        
 
         UiInvoke(() =>
         {
             UiRecreatePictureIfRequired();
 
-            if (HasLockedBuffer)
+            if (TargetBitmap is null)
                 return;
 
-            if (!TargetBitmap.TryLock(LockTimeout))
-                return;
-
+            TargetBitmap.Lock();
             CurrentPictureSize.Buffer = TargetBitmap.BackBuffer;
             CurrentPictureSize.Stride = TargetBitmap.BackBufferStride;
-            HasLockedBuffer = true;
-        }, DispatcherPriority.Loaded);
-
-        lock (SyncLock)
-        {
-            if (!HasLockedBuffer)
-                return false;
-
             CopyPictureFrame(Container, frame, CurrentPictureSize, UseNativeMethod);
-        }
-
-
-        UiInvokeAsync(() =>
-        {
-            if (!HasLockedBuffer)
-                return;
-
             TargetBitmap.AddDirtyRect(CurrentPictureSize.ToRect());
             TargetBitmap.Unlock();
-            HasLockedBuffer = false;
+
         }, DispatcherPriority.Render);
 
         return true;
@@ -274,6 +224,86 @@ internal class WpfPresenter : IPresenter
             source.MarkUploaded();
         }
     }
+
+    /* called to display each frame */
+    public void Present(ref double remainingTime)
+    {
+        if (!Container.IsPaused && Container.MasterSyncMode == ClockSource.External && Container.IsRealTime)
+            Container.SyncExternalClockSpeed();
+
+        if (Container.HasVideo)
+        {
+        retry:
+            if (!Container.Video.Frames.HasPending)
+            {
+                // nothing to do, no picture to display in the queue
+            }
+            else
+            {
+                /* dequeue the picture */
+                var previousPicture = Container.Video.Frames.WaitPeekReadable();
+                var currentPicture = Container.Video.Frames.PeekShowable();
+
+                if (currentPicture.GroupIndex != Container.Video.Packets.GroupIndex)
+                {
+                    Container.Video.Frames.Dequeue();
+                    goto retry;
+                }
+
+                if (previousPicture.GroupIndex != currentPicture.GroupIndex)
+                    Container.PictureDisplayTimer = Clock.SystemTime;
+
+                if (Container.IsPaused)
+                    goto display;
+
+                // compute nominal last_duration
+                var pictureDuration = ComputePictureDuration(Container, previousPicture, currentPicture);
+                var pictureDisplayDuration = ComputePictureDisplayDuration(pictureDuration, Container);
+
+                var currentTime = Clock.SystemTime;
+                if (currentTime < Container.PictureDisplayTimer + pictureDisplayDuration)
+                {
+                    remainingTime = Math.Min(Container.PictureDisplayTimer + pictureDisplayDuration - currentTime, remainingTime);
+                    goto display;
+                }
+
+                Container.PictureDisplayTimer += pictureDisplayDuration;
+                if (pictureDisplayDuration > 0 && currentTime - Container.PictureDisplayTimer > MediaSyncThresholdMax)
+                    Container.PictureDisplayTimer = currentTime;
+
+                if (currentPicture.HasValidTime)
+                    Container.UpdateVideoPts(currentPicture.Time, currentPicture.GroupIndex);
+
+                if (Container.Video.Frames.PendingCount > 1)
+                {
+                    var nextPicture = Container.Video.Frames.PeekShowablePlus();
+                    var duration = ComputePictureDuration(Container, currentPicture, nextPicture);
+                    if (Container.IsInStepMode == false &&
+                        (Container.Options.IsFrameDropEnabled > 0 ||
+                        (Container.Options.IsFrameDropEnabled != 0 && Container.MasterSyncMode != ClockSource.Video)) &&
+                        currentTime > Container.PictureDisplayTimer + duration)
+                    {
+                        DroppedPictureCount++;
+                        Container.Video.Frames.Dequeue();
+                        goto retry;
+                    }
+                }
+
+                Container.Video.Frames.Dequeue();
+                ForceRefresh = true;
+
+                if (Container.IsInStepMode && !Container.IsPaused)
+                    Container.StreamTogglePause();
+            }
+        display:
+            /* display picture */
+            if (!Container.Options.IsDisplayDisabled && ForceRefresh && Container.ShowMode == ShowMode.Video && Container.Video.Frames.IsReadIndexShown)
+                RenderToBackBuffer();
+        }
+
+        ForceRefresh = false;
+    }
+
 
     private void UiInvoke(Action action, DispatcherPriority priority = DispatcherPriority.Normal)
     {
