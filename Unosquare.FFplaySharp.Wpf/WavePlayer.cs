@@ -93,10 +93,7 @@ namespace Unosquare.FFplaySharp.Wpf
                     waveOutClose(DeviceHandle);
 
                 foreach (var buffer in Buffers)
-                {
-                    if (buffer is not null)
-                        buffer.Dispose();
-                }
+                    buffer?.Dispose();
 
                 Cts.Dispose();
             }
