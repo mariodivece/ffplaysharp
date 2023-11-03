@@ -1,4 +1,4 @@
-﻿namespace Unosquare.FFplaySharp.Wpf.Audio;
+﻿namespace Unosquare.FFplaySharp.WinWave.Audio;
 
 /// <summary>
 /// Wave Callback Strategy

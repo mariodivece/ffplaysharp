@@ -1,6 +1,6 @@
 ﻿using System.Runtime.InteropServices;
 
-namespace Unosquare.FFplaySharp.Wpf.Audio;
+namespace Unosquare.FFplaySharp.WinWave.Audio;
 
 // http://msdn.microsoft.com/en-us/library/dd757347(v=VS.85).aspx
 [StructLayout(LayoutKind.Explicit)]

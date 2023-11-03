@@ -1,6 +1,6 @@
 ﻿using System.Runtime.InteropServices;
 
-namespace Unosquare.FFplaySharp.Wpf.Audio;
+namespace Unosquare.FFplaySharp.WinWave.Audio;
 
 /// <summary>
 /// WaveHeader interop structure (WAVEHDR)

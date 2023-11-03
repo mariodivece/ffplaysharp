@@ -1,7 +1,8 @@
-﻿using System.IO;
+﻿using System.Diagnostics;
+using System.IO;
 using System.Runtime.InteropServices;
 
-namespace Unosquare.FFplaySharp.Wpf.Audio;
+namespace Unosquare.FFplaySharp.WinWave.Audio;
 
 
 /// <summary>

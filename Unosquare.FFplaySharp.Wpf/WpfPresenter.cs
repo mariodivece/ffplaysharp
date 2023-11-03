@@ -1,6 +1,5 @@
-﻿using System.Globalization;
-using System.Text;
-using System.Windows.Media;
+﻿using System.Windows.Media;
+using Unosquare.FFplaySharp.WinWave;
 using Unosquare.Hpet;
 
 namespace Unosquare.FFplaySharp.Wpf;

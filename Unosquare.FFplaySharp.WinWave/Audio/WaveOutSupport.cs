@@ -1,4 +1,4 @@
-﻿namespace Unosquare.FFplaySharp.Wpf.Audio;
+﻿namespace Unosquare.FFplaySharp.WinWave.Audio;
 
 /// <summary>
 /// Flags indicating what features this WaveOut device supports

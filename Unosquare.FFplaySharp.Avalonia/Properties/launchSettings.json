@@ -1,0 +1,8 @@
+{
+  "profiles": {
+    "Unosquare.FFplaySharp.Avalonia": {
+      "commandName": "Project",
+      "commandLineArgs": "C:\\Users\\UnoSp\\OneDrive\\ffme-testsuite\\issue-446-mp460Hz.mp4"
+    }
+  }
+}

@@ -1,6 +1,6 @@
 ﻿using System.Runtime.InteropServices;
 
-namespace Unosquare.FFplaySharp.Wpf.Audio;
+namespace Unosquare.FFplaySharp.WinWave.Audio;
 
 /// <summary>
 /// WaveOutCapabilities structure (based on WAVEOUTCAPS2 from mmsystem.h)

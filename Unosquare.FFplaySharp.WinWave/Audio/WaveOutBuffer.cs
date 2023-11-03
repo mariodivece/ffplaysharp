@@ -5,7 +5,7 @@ using System.Runtime.InteropServices;
 using System.Text;
 using System.Threading.Tasks;
 
-namespace Unosquare.FFplaySharp.Wpf.Audio;
+namespace Unosquare.FFplaySharp.WinWave.Audio;
 
 /// <summary>
 /// A buffer of Wave samples for streaming to a Wave Output device

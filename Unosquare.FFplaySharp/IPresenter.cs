@@ -4,7 +4,7 @@ public interface IPresenter
 {
     MediaContainer Container { get; }
 
-    double LastAudioCallbackTime { get; }
+    double LastAudioCallbackTime { get; set; }
 
     IReadOnlyList<AVPixelFormat> PixelFormats { get; }
 

@@ -14,7 +14,7 @@ public unsafe class SdlPresenter : IPresenter
 
     public MediaContainer Container { get; private set; }
 
-    public double LastAudioCallbackTime { get; internal set; }
+    public double LastAudioCallbackTime { get; set; }
 
     public uint SdlInitFlags { get; set; }
 
