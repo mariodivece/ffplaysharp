@@ -194,6 +194,10 @@ public unsafe class ProgramOptions
 
     public int FilteringThreadCount { get; set; }
 
+    public int VideoMaxPixelWidth { get; set; } = -1;
+
+    public int VideoMaxPixelHeight { get; set; } = -1;
+
     // Internal option dictionaries
     public StringDictionary ScalerOptions { get; } = new();
 

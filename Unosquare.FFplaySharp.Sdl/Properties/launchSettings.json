@@ -2,7 +2,7 @@
   "profiles": {
     "Unosquare.FFplaySharp.Sdl": {
       "commandName": "Project",
-      "commandLineArgs": "C:\\Users\\UnoSp\\OneDrive\\ffme-testsuite\\youtube-export-06.mp4",
+      "commandLineArgs": "C:\\Users\\UnoSp\\OneDrive\\ffme-testsuite\\video-60fps-01.mp4",
       "environmentVariables": {
         "ExampleCommandLineArgs": "C:\\Users\\UnoSp\\OneDrive\\ffme-testsuite\\video-subtitles-03.mkv -vf edgedetect=low=0.1:high=0.4 -vf gblur -vf graphmonitor -vf hflip -vf vflip -autoexit"
       },

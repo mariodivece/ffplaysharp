@@ -6,8 +6,13 @@
 		mc:Ignorable="d" d:DesignWidth="800" d:DesignHeight="450"
         x:Class="Unosquare.FFplaySharp.Avalonia.MainWindow"
         Title="Unosquare.FFplaySharp.Avalonia">
-	<views:MediaPresenter x:Name="AvaloniaPresenter"
-						  RenderEdgeMode="Antialias"
-						  RenderInterpolationMode="HighQuality">
-	</views:MediaPresenter>
+	<Grid>
+		<views:MediaPresenter x:Name="AvaloniaPresenter"
+							  Name="AvaloniaPresenter"
+					  RenderEdgeMode="Aliased"
+					  RenderInterpolationMode="MediumQuality">
+		</views:MediaPresenter>
+		<TextBlock VerticalAlignment="Bottom" Text="{Binding #AvaloniaPresenter.PicturePixelSize}"></TextBlock>
+	</Grid>
+
 </Window>

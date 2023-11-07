@@ -1,4 +1,6 @@
-﻿namespace Unosquare.FFplaySharp.Components;
+﻿using System.ComponentModel;
+
+namespace Unosquare.FFplaySharp.Components;
 
 public sealed class VideoComponent : FilteringMediaComponent
 {
@@ -34,6 +36,9 @@ public sealed class VideoComponent : FilteringMediaComponent
         var lastGroupIndex = -1;
         var lastFilterIndex = 0;
 
+        var lastWantedWidth = Container.Options.VideoMaxPixelWidth;
+        var lastWantedHeight = Container.Options.VideoMaxPixelHeight;
+
         while (true)
         {
             resultCode = DecodeFrame(decodedFrame);
@@ -46,6 +51,9 @@ public sealed class VideoComponent : FilteringMediaComponent
 
             var isReconfigNeeded = lastWidth != decodedFrame.Width || lastHeight != decodedFrame.Height || lastFormat != (int)decodedFrame.PixelFormat ||
                 lastGroupIndex != PacketGroupIndex || lastFilterIndex != CurrentFilterIndex;
+
+            isReconfigNeeded |= Container.Options.VideoMaxPixelWidth > 0 && lastWantedWidth != Container.Options.VideoMaxPixelWidth;
+            isReconfigNeeded |= Container.Options.VideoMaxPixelHeight > 0 && lastWantedHeight != Container.Options.VideoMaxPixelHeight;
 
             if (isReconfigNeeded)
             {
@@ -71,6 +79,10 @@ public sealed class VideoComponent : FilteringMediaComponent
                     Container.Presenter.HandleFatalException(ex);
                     break;
                 }
+                finally
+                {
+                    
+                }
 
                 lastWidth = decodedFrame.Width;
                 lastHeight = decodedFrame.Height;
@@ -78,6 +90,9 @@ public sealed class VideoComponent : FilteringMediaComponent
                 lastGroupIndex = PacketGroupIndex;
                 lastFilterIndex = CurrentFilterIndex;
                 frameRate = OutputFilter.FrameRate;
+
+                lastWantedWidth = Container.Options.VideoMaxPixelWidth;
+                lastWantedHeight = Container.Options.VideoMaxPixelHeight;
             }
 
             resultCode = EnqueueFilteringFrame(decodedFrame);
@@ -231,6 +246,46 @@ public sealed class VideoComponent : FilteringMediaComponent
         outputFilter.SetOptionList("pix_fmts", outputPixelFormats.ToArray());
 
         var lastFilter = outputFilter;
+
+        // Make pixels square by combining scale and setsar, making sure the resulting resolution is even.
+        if (decoderFrame.SampleAspectRatio.num != 1 && decoderFrame.SampleAspectRatio.den != 1)
+        {
+            (double sarX, double sarY) = (decoderFrame.SampleAspectRatio.num, decoderFrame.SampleAspectRatio.den);
+            var factorX = sarX > sarY ? 1 : sarX / sarY;
+            var factorY = sarY > sarX ? 1 : sarY / sarX;
+
+            // Normalize so no measure is less than 1
+            factorX = factorX > factorY ? 1 / factorY : 1;
+            factorY = factorX > factorY ? 1 : 1 / factorX;
+
+            lastFilter = InsertFilter("scale",
+                "eval=frame" +
+                $":w='iw*{factorX:n6}'" +
+                $":h='ih*{factorY:n6}'" +
+                ":interl=-1" +
+                ":flags=neighbor",
+                lastFilter);
+            lastFilter = InsertFilter("setsar", "1/1", lastFilter);
+        }
+
+        // Autoscaling. No need to output a huge frame if our display area is smaller.
+        (int maxWidth, int maxHeight) = (Container.Options.VideoMaxPixelWidth, Container.Options.VideoMaxPixelHeight);
+        if (maxWidth > 0 && maxHeight > 0 && (decoderFrame.Width > maxWidth || decoderFrame.Height > maxHeight))
+        {
+            const int OutputMultiple = 2;
+
+            var ratioX = (double)maxWidth / decoderFrame.Width;
+            var ratioY = (double)maxHeight / decoderFrame.Height;
+            var ratio = Math.Min(ratioX, ratioY);
+
+            var outX = decoderFrame.Width * ratio;
+            var outY = decoderFrame.Height * ratio;
+
+            var outputWidth = (int)Math.Round(outX / OutputMultiple, 0) * OutputMultiple;
+            var outputHeight = (int)Math.Round(outY / OutputMultiple, 0) * OutputMultiple;
+            lastFilter = InsertFilter("scale", $"{outputWidth}:{outputHeight}:flags=neighbor", lastFilter);
+        }
+
         if (Container.Options.IsAutorotateEnabled)
         {
             var theta = Stream.ComputeDisplayRotation();

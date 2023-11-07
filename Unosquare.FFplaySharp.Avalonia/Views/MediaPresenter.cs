@@ -1,4 +1,5 @@
 ﻿using Avalonia.Controls;
+using Avalonia.Input;
 using Avalonia.LogicalTree;
 using Avalonia.Media;
 using Avalonia.Media.Imaging;
@@ -7,6 +8,7 @@ using FFmpeg.AutoGen;
 using System;
 using System.Collections.Generic;
 using System.Diagnostics;
+using System.Threading.Tasks;
 using Unosquare.FFplaySharp.Primitives;
 using Unosquare.FFplaySharp.WinWave;
 using Unosquare.Hpet;
@@ -28,6 +30,7 @@ internal class MediaPresenter : VideoPresenterBase, IPresenter
     public bool Initialize(MediaContainer container)
     {
         Container = container;
+        Container.Options.IsFrameDropEnabled = DropFrames ? ThreeState.On : ThreeState.Off;
         return true;
     }
 
@@ -69,45 +72,61 @@ internal class MediaPresenter : VideoPresenterBase, IPresenter
 
     public void UpdatePictureSize(int width, int height, AVRational sar)
     {
-        var requestedPictureSize = PictureParams.FromDimensions(width, height, new() { num = sar.num * 96, den = sar.den * 96 });
-        var currentPictureSize = PictureParams.FromDimensions(TargetBitmap);
-        if (TargetBitmap is not null && requestedPictureSize.MatchesDimensions(currentPictureSize))
-            return;
+        lock (SyncLock)
+        {
+            var requestedPictureSize = PictureParams.FromDimensions(width, height, new() { num = sar.num * 96, den = sar.den * 96 });
+            var currentPictureSize = PictureParams.FromDimensions(TargetBitmap);
+            if (TargetBitmap is not null && requestedPictureSize.MatchesDimensions(currentPictureSize))
+                return;
 
-        TargetBitmap?.Dispose();
-        TargetBitmap = requestedPictureSize.ToWriteableBitmap();
+            TargetBitmap?.Dispose();
+            TargetBitmap = requestedPictureSize.ToWriteableBitmap();
+        }
     }
 
     public override void Render(DrawingContext context)
     {
         try
         {
-            if (Bounds.Width <= 0 || Bounds.Height <= 0 || !isRunning)
-                return;
-
-            if (TargetBitmap is null || Container.Video.Frames.IsClosed)
-                return;
-
-            if (WavePlayer is not null && !WavePlayer.HasStarted)
-                WavePlayer.Start();
-
-            if (remainingTime > 0.001)
-                return;
-
-            remainingTime = 0.001;
-
-            PicturePixelSize = TargetBitmap?.PixelSize ?? default;
-            UpdateContextRects();
-
-            if (Container.ShowMode is not ShowMode.None && (!Container.IsPaused || forceRefresh))
+            lock (SyncLock)
             {
-                Present(context);
-                context.DrawImage(TargetBitmap!, ContextSourceRect, ContextTargetRect);
+                if (Bounds.Width <= 0 || Bounds.Height <= 0 || !isRunning)
+                    return;
+
+                if (TargetBitmap is null || Container.Video.Frames.IsClosed)
+                    return;
+
+                if (WavePlayer is not null && !WavePlayer.HasStarted)
+                    WavePlayer.Start();
+
+                if (remainingTime > 0.001)
+                    return;
+
+                remainingTime = 0.001;
+                PicturePixelSize = TargetBitmap?.PixelSize ?? default;
+
+                UpdateContextRects();
+
+                if (Container.ShowMode is not ShowMode.None && (!Container.IsPaused || forceRefresh))
+                {
+                    Present(context);
+                    context.DrawImage(TargetBitmap!, ContextSourceRect, ContextTargetRect);
+                }
             }
         }
         finally
         {
-            Dispatcher.UIThread.InvokeAsync(InvalidateVisual, DispatcherPriority.Background);
+            Dispatcher.UIThread.InvokeAsync(() =>
+            {
+                if (Container is null)
+                    return;
+
+                Container.Options.VideoMaxPixelWidth = (int)(Bounds.Width * 96d / 72d);
+                Container.Options.VideoMaxPixelHeight = (int)(Bounds.Height * 96d / 72d);
+
+                InvalidateVisual();
+            }, DispatcherPriority.Background);
+
         }
 
     }
@@ -189,7 +208,7 @@ internal class MediaPresenter : VideoPresenterBase, IPresenter
                 Container.Video.Frames.IsReadIndexShown)
             {
                 RenderCurrentFrame();
-                
+
             }
         }
 
