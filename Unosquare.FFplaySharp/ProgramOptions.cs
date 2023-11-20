@@ -323,7 +323,7 @@ public unsafe class ProgramOptions
             isConsumed = true;
         }
 
-        if (!isConsumed && (o = FFMediaClass.Format.FindOption(optionName, SearchFlags)).IsNotNull())
+        if (!isConsumed && (o = FFMediaClass.Format.FindOption(optionName, 0, SearchFlags)).IsNotNull())
         {
 
             var dummyScaler = new RescalerContext();
@@ -348,7 +348,7 @@ public unsafe class ProgramOptions
             isConsumed = true;
         }
 
-        if (!isConsumed && (o = FFMediaClass.Resampler.FindOption(optionName, SearchFlags)).IsNotNull())
+        if (!isConsumed && (o = FFMediaClass.Resampler.FindOption(optionName, 0, SearchFlags)).IsNotNull())
         {
             var dummyResampler = new ResamplerContext();
             var setResult = dummyResampler.SetOption(optionName, optionValue);
