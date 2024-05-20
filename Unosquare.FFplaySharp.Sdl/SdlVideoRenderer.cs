@@ -581,9 +581,7 @@ public unsafe class SdlVideoRenderer
                     .Append(ci, $"fd={(Container.Video.DroppedFrameCount + DroppedPictureCount)} | ")
                     .Append(ci, $"aq={(audioQueueSize / 1024)}KB | ")
                     .Append(ci, $"vq={(videoQueueSize / 1024)}KB | ")
-                    .Append(ci, $"sq={subtitleQueueSize}B | ")
-                    .Append(ci, $" f={(Container.HasVideo ? Container.Video.CodecContext.FaultyDtsCount : 0)} / ")
-                    .Append(ci, $"{(Container.HasVideo ? Container.Video.CodecContext.FaultyPtsCount : 0)}");
+                    .Append(ci, $"sq={subtitleQueueSize}B");
 
                 var paddingLength = 90 - buf.Length;
                 if (paddingLength > 0)
@@ -645,8 +643,8 @@ public unsafe class SdlVideoRenderer
             pixelFormat == AVPixelFormat.AV_PIX_FMT_ABGR)
             sdlBlendMode = SDL.SDL_BlendMode.SDL_BLENDMODE_BLEND;
 
-        if (SdlTextureMap.ContainsKey(pixelFormat))
-            sdlPixelFormat = SdlTextureMap[pixelFormat];
+        if (SdlTextureMap.TryGetValue(pixelFormat, out uint value))
+            sdlPixelFormat = value;
 
         return (sdlPixelFormat, sdlBlendMode);
     }

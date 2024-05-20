@@ -341,7 +341,7 @@ public unsafe sealed class AudioComponent : FilteringMediaComponent, ISerialGrou
 
         base.InitializeDecoder(codecContext, streamIndex);
 
-        if (Container.Input.IsSeekMethodUnknown)
+        if (Container.Input.Flags.HasFlag(ffmpeg.AVFMT_NOTIMESTAMPS))
         {
             StartPts = Stream.StartTime;
             StartPtsTimeBase = Stream.TimeBase;

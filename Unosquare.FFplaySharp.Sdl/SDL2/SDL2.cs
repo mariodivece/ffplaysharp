@@ -2172,7 +2172,7 @@ namespace SDL2
 		public static partial SDL_bool SDL_Vulkan_GetInstanceExtensions(
 			IntPtr window,
 			out uint pCount,
-			IntPtr[] pNames
+			[Out] IntPtr[] pNames
 		);
 
 		/* window refers to an SDL_Window.
@@ -4916,7 +4916,7 @@ namespace SDL2
 
 		[LibraryImport(nativeLibName)]
 		public static partial int SDL_PeepEvents(
-			SDL_Event[] events,
+			[Out] SDL_Event[] events,
 			int numevents,
 			SDL_eventaction action,
 			SDL_EventType minType,

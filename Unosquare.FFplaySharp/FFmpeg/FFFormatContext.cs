@@ -75,17 +75,11 @@
         public void DumpFormat(string fileName) =>
             ffmpeg.av_dump_format(Target, 0, fileName, 0);
 
-        public bool IsSeekMethodUnknown =>
-            Address.IsNotNull() &&
-            InputFormat.IsNotNull() &&
-            InputFormat!.Flags.HasFlag(Constants.SeekMethodUnknownFlags) &&
-            InputFormat.Target->read_seek.Pointer.IsNull();
-
         public bool IsRealTime
         {
             get
             {
-                var formatNames = InputFormat?.ShortNames?.Select(c => c.ToUpperInvariant()) ?? Array.Empty<string>();
+                var formatNames = InputFormat?.ShortNames?.Select(c => c.ToUpperInvariant()) ?? [];
                 if (formatNames.Any(c => c == "RTP" || c == "RTSP" || c == "SDP"))
                     return true;
 

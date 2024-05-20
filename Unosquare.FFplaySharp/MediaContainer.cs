@@ -28,7 +28,7 @@ public unsafe class MediaContainer
         Video = new(this);
         Subtitle = new(this);
         Presenter = presenter;
-        Components = new List<MediaComponent>() { Audio, Video, Subtitle };
+        Components = [Audio, Video, Subtitle];
     }
 
     public FFFormatContext Input { get; private set; }

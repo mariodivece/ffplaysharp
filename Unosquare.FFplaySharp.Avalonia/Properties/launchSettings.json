@@ -2,7 +2,7 @@
   "profiles": {
     "Unosquare.FFplaySharp.Avalonia": {
       "commandName": "Project",
-      "commandLineArgs": "C:\\Users\\UnoSp\\OneDrive\\ffme-testsuite\\video-4k-01.mp4"
+      "commandLineArgs": "C:\\Users\\UnoSp\\OneDrive\\ffme-testsuite\\youtube-export-06.mp4"
     }
   }
 }

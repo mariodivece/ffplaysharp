@@ -21,7 +21,7 @@ public unsafe class SdlPresenter : IPresenter
     private ProgramOptions Options => Container.Options;
 
     public IReadOnlyList<AVPixelFormat> PixelFormats =>
-        Video?.RetrieveSupportedPixelFormats() ?? Array.Empty<AVPixelFormat>();
+        Video?.RetrieveSupportedPixelFormats() ?? [];
 
     public bool Initialize(MediaContainer container)
     {
@@ -276,8 +276,7 @@ public unsafe class SdlPresenter : IPresenter
     /// </summary>
     public void Stop()
     {
-        if (Container is not null)
-            Container.Close();
+        Container?.Close();
 
         Video.Close();
         Container.Options.VideoFilterGraphs.Clear();

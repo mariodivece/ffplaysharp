@@ -1,6 +1,4 @@
-﻿using System.ComponentModel;
-
-namespace Unosquare.FFplaySharp.Components;
+﻿namespace Unosquare.FFplaySharp.Components;
 
 public sealed class VideoComponent : FilteringMediaComponent
 {

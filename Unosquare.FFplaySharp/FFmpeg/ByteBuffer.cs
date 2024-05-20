@@ -29,9 +29,9 @@ public unsafe sealed class ByteBuffer : CountedReference<byte>
         Buffer.MemoryCopy(source, Target, maxLength, maxLength);
     }
 
-    protected override void ReleaseInternal(byte* pointer)
+    protected override void ReleaseInternal(byte* target)
     {
-        ffmpeg.av_free(pointer);
+        ffmpeg.av_free(target);
         Length = 0;
     }
 }

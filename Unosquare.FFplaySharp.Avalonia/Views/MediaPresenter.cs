@@ -90,6 +90,12 @@ internal class MediaPresenter : VideoPresenterBase, IPresenter
         {
             lock (SyncLock)
             {
+                if (Container is null)
+                    return;
+
+                Container.Options.VideoMaxPixelWidth = (int)(Bounds.Width * 96d / 72d);
+                Container.Options.VideoMaxPixelHeight = (int)(Bounds.Height * 96d / 72d);
+
                 if (Bounds.Width <= 0 || Bounds.Height <= 0 || !isRunning)
                     return;
 
@@ -118,12 +124,6 @@ internal class MediaPresenter : VideoPresenterBase, IPresenter
         {
             Dispatcher.UIThread.InvokeAsync(() =>
             {
-                if (Container is null)
-                    return;
-
-                Container.Options.VideoMaxPixelWidth = (int)(Bounds.Width * 96d / 72d);
-                Container.Options.VideoMaxPixelHeight = (int)(Bounds.Height * 96d / 72d);
-
                 InvalidateVisual();
             }, DispatcherPriority.Background);
 

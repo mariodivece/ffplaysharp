@@ -18,7 +18,7 @@ public unsafe sealed class FFInputFormat : NativeReference<AVInputFormat>
     public int Flags => Target->flags;
 
     public IReadOnlyList<string> ShortNames => Target is null
-        ? Array.Empty<string>()
+        ? []
         : Helpers.PtrToString(Target->name)!.Split(',', SplitOptions);
 
     public static FFInputFormat Find(string shortName)

@@ -40,10 +40,6 @@ public unsafe sealed class FFCodecContext : CountedReference<AVCodecContext>
 
     public int Height => Target->height;
 
-    public long FaultyPtsCount => Target->pts_correction_num_faulty_pts;
-
-    public long FaultyDtsCount => Target->pts_correction_num_faulty_dts;
-
     public int SampleRate => Target->sample_rate;
 
     public int Channels => Target->ch_layout.nb_channels;
