@@ -476,6 +476,8 @@ public unsafe class MediaContainer
             if (lowResFactor != 0)
                 codecOptions["lowres"] = $"{lowResFactor}";
 
+            codecOptions.Set("flags", "+copy_opaque", ffmpeg.AV_DICT_MULTIKEY);
+
             try
             {
                 codecContext.Open(codec, codecOptions);

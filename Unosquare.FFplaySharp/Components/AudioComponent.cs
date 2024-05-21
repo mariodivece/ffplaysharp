@@ -46,7 +46,6 @@ public unsafe sealed class AudioComponent : FilteringMediaComponent, ISerialGrou
 
     public void ConfigureFilters(bool forceOutputFormat)
     {
-
         var bp = new FFBPrint();
 
         try

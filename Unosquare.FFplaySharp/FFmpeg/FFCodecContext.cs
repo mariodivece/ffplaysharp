@@ -77,8 +77,7 @@ public unsafe sealed class FFCodecContext : CountedReference<AVCodecContext>
 
     public void Open(FFCodec codec, FFDictionary codecOptions)
     {
-        if (codecOptions is null)
-            throw new ArgumentNullException(nameof(codecOptions));
+        ArgumentNullException.ThrowIfNull(codecOptions);
 
         if (codec.IsNull())
             throw new ArgumentNullException(nameof(codec));
