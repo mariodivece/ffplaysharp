@@ -1,6 +1,4 @@
-﻿using FFmpeg.AutoGen;
-
-namespace FFmpeg;
+﻿namespace FFmpeg;
 
 internal unsafe class FFBPrint : CountedReference<AVBPrint>
 {

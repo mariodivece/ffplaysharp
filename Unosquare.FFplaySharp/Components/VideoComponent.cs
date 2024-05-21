@@ -286,7 +286,7 @@ public sealed class VideoComponent : FilteringMediaComponent
 
         if (Container.Options.IsAutorotateEnabled)
         {
-            var theta = Stream.ComputeDisplayRotation();
+            var theta = Stream.ComputeDisplayRotation(decoderFrame);
 
             if (Math.Abs(theta - 90) < 1.0)
             {

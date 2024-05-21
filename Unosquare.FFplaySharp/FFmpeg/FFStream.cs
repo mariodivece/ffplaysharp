@@ -47,9 +47,42 @@ public unsafe sealed class FFStream : NativeReference<AVStream>
     /// </summary>
     /// <param name="stream"></param>
     /// <returns></returns>
+    [Obsolete("Use alternative method with same name that takes in a frame as a parameter.")]
     public double ComputeDisplayRotation()
     {
         var displayMatrix = ffmpeg.av_stream_get_side_data(Target, AVPacketSideDataType.AV_PKT_DATA_DISPLAYMATRIX, null);
+        var theta = displayMatrix is not null ? -ComputeMatrixRotation((int*)displayMatrix) : 0d;
+        theta -= 360 * Math.Floor(theta / 360 + 0.9 / 360);
+
+        if (Math.Abs(theta - 90 * Math.Round(theta / 90, 0)) > 2)
+            ("Odd rotation angle.\n" +
+            "If you want to help, upload a sample " +
+            "of this file to https://streams.videolan.org/upload/ " +
+            "and contact the ffmpeg-devel mailing list. (ffmpeg-devel@ffmpeg.org)").LogWarning();
+
+        return theta;
+    }
+
+    public double ComputeDisplayRotation(FFFrame decoderFrame)
+    {
+        ArgumentNullException.ThrowIfNull(decoderFrame);
+
+        int* displayMatrix = null;
+        var sd = ffmpeg.av_frame_get_side_data(decoderFrame.Target, AVFrameSideDataType.AV_FRAME_DATA_DISPLAYMATRIX);
+        if (sd is not null)
+            displayMatrix = (int*)sd->data;
+
+        if (displayMatrix is null)
+        {
+            var psd = ffmpeg.av_packet_side_data_get(
+                CodecParameters.Target->coded_side_data,
+                CodecParameters.Target->nb_coded_side_data,
+                AVPacketSideDataType.AV_PKT_DATA_DISPLAYMATRIX);
+
+            if (psd is not null)
+                displayMatrix = (int*)psd->data;
+        }
+
         var theta = displayMatrix is not null ? -ComputeMatrixRotation((int*)displayMatrix) : 0d;
         theta -= 360 * Math.Floor(theta / 360 + 0.9 / 360);
 
