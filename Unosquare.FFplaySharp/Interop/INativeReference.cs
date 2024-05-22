@@ -1,4 +1,4 @@
-﻿namespace Unosquare.FFplaySharp.Primitives;
+﻿namespace Unosquare.FFplaySharp.Interop;
 
 /// <summary>
 /// Interface that defines the members required

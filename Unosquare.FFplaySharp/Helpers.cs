@@ -1,4 +1,6 @@
-﻿namespace Unosquare.FFplaySharp;
+﻿using Unosquare.FFplaySharp.Interop;
+
+namespace Unosquare.FFplaySharp;
 
 public static class Helpers
 {

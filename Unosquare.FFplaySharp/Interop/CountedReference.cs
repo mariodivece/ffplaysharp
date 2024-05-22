@@ -1,4 +1,4 @@
-﻿namespace Unosquare.FFplaySharp.Primitives;
+﻿namespace Unosquare.FFplaySharp.Interop;
 
 public abstract unsafe class CountedReference<T> : NativeReference<T>, INativeCountedReference
     where T : unmanaged

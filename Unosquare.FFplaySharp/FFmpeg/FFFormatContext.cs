@@ -5,6 +5,7 @@
     using System.Collections.Generic;
     using System.Runtime.CompilerServices;
     using Unosquare.FFplaySharp;
+    using Unosquare.FFplaySharp.Interop;
     using Unosquare.FFplaySharp.Primitives;
 
     public unsafe sealed class FFFormatContext : CountedReference<AVFormatContext>

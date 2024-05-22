@@ -1,4 +1,5 @@
-﻿using Unosquare.Hpet;
+﻿using Unosquare.FFplaySharp.Interop;
+using Unosquare.Hpet;
 
 namespace Unosquare.FFplaySharp.Sdl;
 

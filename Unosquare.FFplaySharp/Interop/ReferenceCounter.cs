@@ -1,4 +1,4 @@
-﻿namespace Unosquare.FFplaySharp.Primitives;
+﻿namespace Unosquare.FFplaySharp.Interop;
 
 public static class ReferenceCounter
 {

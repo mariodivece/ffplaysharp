@@ -1,4 +1,6 @@
-﻿namespace FFmpeg;
+﻿using Unosquare.FFplaySharp.Interop;
+
+namespace FFmpeg;
 
 public unsafe class FFDictionaryEntry : NativeReference<AVDictionaryEntry>
 {
