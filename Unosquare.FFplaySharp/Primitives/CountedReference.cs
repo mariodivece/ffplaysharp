@@ -18,10 +18,10 @@ public abstract unsafe class CountedReference<T> : NativeReference<T>, INativeCo
 
     public void Release()
     {
-        if (Address.IsNotNull())
-            ReleaseInternal(Target);
+        if (!IsEmpty)
+            ReleaseInternal(this);
 
-        Update(IntPtr.Zero);
+        ClearPointer();
         ReferenceCounter.Remove(this);
     }
 

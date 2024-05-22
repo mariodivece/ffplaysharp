@@ -8,15 +8,15 @@ public unsafe sealed class FFSubtitleRect : NativeReference<AVSubtitleRect>
         // placeholder
     }
 
-    public int X => Target->x;
+    public int X => Reference->x;
 
-    public int Y => Target->y;
+    public int Y => Reference->y;
 
-    public int W => Target->w;
+    public int W => Reference->w;
 
-    public int H => Target->h;
+    public int H => Reference->h;
 
-    public byte_ptrArray4 Data => Target->data;
+    public byte_ptrArray4 Data => Reference->data;
 
-    public int_array4 LineSize => Target->linesize;
+    public int_array4 LineSize => Reference->linesize;
 }

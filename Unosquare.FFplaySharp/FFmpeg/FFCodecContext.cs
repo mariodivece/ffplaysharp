@@ -5,86 +5,86 @@ public unsafe sealed class FFCodecContext : CountedReference<AVCodecContext>
     public FFCodecContext([CallerFilePath] string? filePath = default, [CallerLineNumber] int? lineNumber = default)
         : base(filePath, lineNumber)
     {
-        Update(ffmpeg.avcodec_alloc_context3(null));
+        UpdatePointer(ffmpeg.avcodec_alloc_context3(null));
     }
 
     public AVRational PacketTimeBase
     {
-        get => Target->pkt_timebase;
-        set => Target->pkt_timebase = value;
+        get => Reference->pkt_timebase;
+        set => Reference->pkt_timebase = value;
     }
 
     public AVCodecID CodecId
     {
-        get => Target->codec_id;
-        set => Target->codec_id = value;
+        get => Reference->codec_id;
+        set => Reference->codec_id = value;
     }
 
     public string CodecName => FFCodec.GetName(CodecId);
 
     public int LowResFactor
     {
-        get => Target->lowres;
-        set => Target->lowres = value;
+        get => Reference->lowres;
+        set => Reference->lowres = value;
     }
 
     public int Flags2
     {
-        get => Target->flags2;
-        set => Target->flags2 = value;
+        get => Reference->flags2;
+        set => Reference->flags2 = value;
     }
 
-    public AVMediaType CodecType => Target->codec_type;
+    public AVMediaType CodecType => Reference->codec_type;
 
-    public int Width => Target->width;
+    public int Width => Reference->width;
 
-    public int Height => Target->height;
+    public int Height => Reference->height;
 
-    public int SampleRate => Target->sample_rate;
+    public int SampleRate => Reference->sample_rate;
 
-    public int Channels => Target->ch_layout.nb_channels;
+    public int Channels => Reference->ch_layout.nb_channels;
 
-    public AVChannelLayout ChannelLayout => Target->ch_layout;
+    public AVChannelLayout ChannelLayout => Reference->ch_layout;
 
-    public AVSampleFormat SampleFormat => Target->sample_fmt;
+    public AVSampleFormat SampleFormat => Reference->sample_fmt;
 
     public void ApplyStreamParameters(FFStream stream)
     {
-        var resultCode = ffmpeg.avcodec_parameters_to_context(Target, stream.CodecParameters.Target);
+        var resultCode = ffmpeg.avcodec_parameters_to_context(Reference, stream.CodecParameters.Reference);
         if (resultCode < 0)
             throw new FFmpegException(resultCode, "Unable to apply stream parameters");
     }
 
     public int ReceiveFrame(FFFrame frame) =>
-        ffmpeg.avcodec_receive_frame(Target, frame.Target);
+        ffmpeg.avcodec_receive_frame(Reference, frame.Reference);
 
     public int DecodeSubtitle(FFSubtitle frame, FFPacket packet, ref int gotSubtitle)
     {
         int gotResult;
         var resultCode = ffmpeg.avcodec_decode_subtitle2(
-            Target,
-            frame.Target,
+            Reference,
+            frame.Reference,
             &gotResult,
-            packet.Target);
+            packet.Reference);
 
         gotSubtitle = gotResult;
         return resultCode;
     }
 
-    public void FlushBuffers() => ffmpeg.avcodec_flush_buffers(Target);
+    public void FlushBuffers() => ffmpeg.avcodec_flush_buffers(this);
 
-    public int SendPacket(FFPacket packet) => ffmpeg.avcodec_send_packet(Target, packet.Target);
+    public int SendPacket(FFPacket packet) => ffmpeg.avcodec_send_packet(this, packet);
 
     public void Open(FFCodec codec, FFDictionary codecOptions)
     {
-        ArgumentNullException.ThrowIfNull(codecOptions);
+        ArgumentNullException.ThrowIfNull((object?)codecOptions);
 
         if (codec.IsNull())
             throw new ArgumentNullException(nameof(codec));
 
-        var codecOptionsArg = codecOptions.Target;
-        var resultCode = ffmpeg.avcodec_open2(Target, codec.Target, &codecOptionsArg);
-        codecOptions.Update(codecOptionsArg);
+        var codecOptionsArg = codecOptions.Reference;
+        var resultCode = ffmpeg.avcodec_open2(this, codec, &codecOptionsArg);
+        codecOptions.UpdatePointer(codecOptionsArg);
 
         if (resultCode < 0)
             throw new FFmpegException(resultCode, $"Could not open codec '{codec.Name}'");

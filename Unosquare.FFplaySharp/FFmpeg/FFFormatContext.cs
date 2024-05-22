@@ -12,50 +12,50 @@
         public FFFormatContext([CallerFilePath] string? filePath = default, [CallerLineNumber] int? lineNumber = default)
             : base(filePath, lineNumber)
         {
-            Update(ffmpeg.avformat_alloc_context());
+            UpdatePointer(ffmpeg.avformat_alloc_context());
             Streams = new(this);
             Chapters = new(this);
         }
 
         public AVIOInterruptCB_callback_func InterruptCallback
         {
-            get => Target->interrupt_callback.callback;
-            set => Target->interrupt_callback.callback = value;
+            get => Reference->interrupt_callback.callback;
+            set => Reference->interrupt_callback.callback = value;
         }
 
         public StreamSet Streams { get; }
 
         public ChapterSet Chapters { get; }
 
-        public FFInputFormat? InputFormat => Target->iformat is not null
-            ? new(Target->iformat)
+        public FFInputFormat? InputFormat => Reference->iformat is not null
+            ? new(Reference->iformat)
             : default;
 
-        public FFIOContext? IO => Target->pb is not null
-            ? new(Target->pb)
+        public FFIOContext? IO => Reference->pb is not null
+            ? new(Reference->pb)
             : default;
 
         public IReadOnlyDictionary<string, string> Metadata =>
-            FFDictionary.Extract(Target->metadata);
+            FFDictionary.Extract(Reference->metadata);
 
         public int Flags
         {
-            get => Target->flags;
-            set => Target->flags = value;
+            get => Reference->flags;
+            set => Reference->flags = value;
         }
 
-        public long Duration => Target->duration;
+        public long Duration => Reference->duration;
 
         public double DurationSeconds => Duration / Clock.TimeBaseMicros;
 
-        public long StartTime => Target->start_time;
+        public long StartTime => Reference->start_time;
 
-        public string? Url => Target->url is not null
-            ? Helpers.PtrToString(Target->url)
+        public string? Url => Reference->url is not null
+            ? Helpers.PtrToString(Reference->url)
             : default;
 
         public int FindBestStream(AVMediaType mediaType, int wantedStreamIndex, int relatedStreamIndex) =>
-            ffmpeg.av_find_best_stream(Target, mediaType, wantedStreamIndex, relatedStreamIndex, null, 0);
+            ffmpeg.av_find_best_stream(this, mediaType, wantedStreamIndex, relatedStreamIndex, null, 0);
 
         public int FindBestVideoStream(int wantedStreamIndex) =>
             FindBestStream(AVMediaType.AVMEDIA_TYPE_VIDEO, wantedStreamIndex, -1);
@@ -67,13 +67,13 @@
             FindBestStream(AVMediaType.AVMEDIA_TYPE_SUBTITLE, wantedStreamIndex, relatedStreamIndex);
 
         public int ReadPlay() =>
-            ffmpeg.av_read_play(Target);
+            ffmpeg.av_read_play(this);
 
         public int ReadPause() =>
-            ffmpeg.av_read_pause(Target);
+            ffmpeg.av_read_pause(this);
 
         public void DumpFormat(string fileName) =>
-            ffmpeg.av_dump_format(Target, 0, fileName, 0);
+            ffmpeg.av_dump_format(this, 0, fileName, 0);
 
         public bool IsRealTime
         {
@@ -89,34 +89,29 @@
             }
         }
 
-        public void InjectGlobalSideData() => ffmpeg.av_format_inject_global_side_data(Target);
+        public void InjectGlobalSideData() => ffmpeg.av_format_inject_global_side_data(this);
 
         public int SeekFile(long seekTargetMin, long seekTarget, long seekTargetMax, int seekFlags = 0) =>
-            ffmpeg.avformat_seek_file(Target, -1, seekTargetMin, seekTarget, seekTargetMax, seekFlags);
+            ffmpeg.avformat_seek_file(this, -1, seekTargetMin, seekTarget, seekTargetMax, seekFlags);
 
         public int ReadFrame(out FFPacket packet)
         {
             packet = new FFPacket();
-            return ffmpeg.av_read_frame(Target, packet.Target);
+            return ffmpeg.av_read_frame(this, packet);
         }
 
-        public AVRational GuessFrameRate(FFStream stream) => ffmpeg.av_guess_frame_rate(Target, stream.Target, null);
+        public AVRational GuessFrameRate(FFStream stream) => ffmpeg.av_guess_frame_rate(this, stream, null);
 
         public AVRational GuessAspectRatio(FFStream stream, FFFrame? frame = default) =>
-            ffmpeg.av_guess_sample_aspect_ratio(Target, stream.Target, frame.IsNotNull() ? frame!.Target : default);
+            ffmpeg.av_guess_sample_aspect_ratio(this, stream, (frame is not null && !frame.IsEmpty) ? frame : null);
 
         public void OpenInput(string filePath, FFInputFormat format, FFDictionary formatOptions)
         {
             const string ScanAllPmtsKey = "scan_all_pmts";
 
-            if (filePath is null)
-                throw new ArgumentNullException(nameof(filePath));
-
-            if (format is null)
-                throw new ArgumentNullException(nameof(format));
-
-            if (formatOptions is null)
-                throw new ArgumentNullException(nameof(formatOptions));
+            ArgumentNullException.ThrowIfNull(filePath);
+            ArgumentNullException.ThrowIfNull((object?)format);
+            ArgumentNullException.ThrowIfNull((object?)formatOptions);
 
             var isScanAllPmtsSet = false;
             if (!formatOptions.ContainsKey(ScanAllPmtsKey))
@@ -125,13 +120,13 @@
                 isScanAllPmtsSet = true;
             }
 
-            var context = Target;
-            var formatOptionsPtr = formatOptions.Target;
-            var resultCode = ffmpeg.avformat_open_input(&context, filePath, format.Target, &formatOptionsPtr);
-            Update(context);
-            formatOptions.Update(formatOptionsPtr);
+            var context = Reference;
+            var formatOptionsPtr = formatOptions.Reference;
+            var resultCode = ffmpeg.avformat_open_input(&context, filePath, format.Reference, &formatOptionsPtr);
+            UpdatePointer(context);
+            formatOptions.UpdatePointer(formatOptionsPtr);
             if (context is not null)
-                format.Update(context->iformat);
+                format.UpdatePointer(context->iformat);
 
             if (isScanAllPmtsSet)
                 formatOptions.Remove(ScanAllPmtsKey);
@@ -141,7 +136,7 @@
         }
 
         public int MatchStreamSpecifier(FFStream stream, string specifier) =>
-            ffmpeg.avformat_match_stream_specifier(Target, stream.Target, specifier);
+            ffmpeg.avformat_match_stream_specifier(Reference, stream, specifier);
 
         /// <summary>
         /// Port of check_stream_specifier.
@@ -176,13 +171,13 @@
 
             var filteredOptions = new FFDictionary();
 
-            int optionFlags = Target->oformat is not null
+            int optionFlags = Reference->oformat is not null
                 ? ffmpeg.AV_OPT_FLAG_ENCODING_PARAM
                 : ffmpeg.AV_OPT_FLAG_DECODING_PARAM;
 
             if (codec.IsNull())
             {
-                codec = Target->oformat is not null
+                codec = Reference->oformat is not null
                     ? FFCodec.FromEncoderId(codecId)
                     : FFCodec.FromDecoderId(codecId);
             }
@@ -244,9 +239,9 @@
             var perStreamOptionsList = FindStreamInfoOptions(codecOptions);
             var perStreamOptions = (AVDictionary**)ffmpeg.av_calloc((ulong)perStreamOptionsList.Count, (ulong)sizeof(IntPtr));
             for (var optionIndex = 0; optionIndex < perStreamOptionsList.Count; optionIndex++)
-                perStreamOptions[optionIndex] = perStreamOptionsList[optionIndex].Target;
+                perStreamOptions[optionIndex] = perStreamOptionsList[optionIndex].Reference;
 
-            var resultCode = ffmpeg.avformat_find_stream_info(Target, perStreamOptions);
+            var resultCode = ffmpeg.avformat_find_stream_info(Reference, perStreamOptions);
             ffmpeg.av_freep(&perStreamOptions);
 
             foreach (var optionsDictionary in perStreamOptionsList)

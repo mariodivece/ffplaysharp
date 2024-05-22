@@ -8,7 +8,7 @@ public unsafe sealed class FFChapter : NativeReference<AVChapter>
         // placeholder
     }
 
-    public long StartTime => Target->start;
+    public long StartTime => Reference->start;
 
-    public AVRational TimeBase => Target->time_base;
+    public AVRational TimeBase => Reference->time_base;
 }

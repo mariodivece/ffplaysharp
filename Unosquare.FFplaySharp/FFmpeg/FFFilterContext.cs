@@ -10,26 +10,26 @@ public unsafe sealed class FFFilterContext : NativeReference<AVFilterContext>
         // placeholder
     }
 
-    public AVRational FrameRate => ffmpeg.av_buffersink_get_frame_rate(Target);
+    public AVRational FrameRate => ffmpeg.av_buffersink_get_frame_rate(Reference);
 
-    public int SampleRate => ffmpeg.av_buffersink_get_sample_rate(Target);
+    public int SampleRate => ffmpeg.av_buffersink_get_sample_rate(Reference);
 
-    public int Channels => ffmpeg.av_buffersink_get_channels(Target);
+    public int Channels => ffmpeg.av_buffersink_get_channels(Reference);
 
     public AVChannelLayout ChannelLayout
     {
         get
         {
             AVChannelLayout layout = default;
-            ffmpeg.av_buffersink_get_ch_layout(Target, &layout);
+            ffmpeg.av_buffersink_get_ch_layout(this, &layout);
             return layout;
         }
 
     }
 
-    public AVSampleFormat SampleFormat => (AVSampleFormat)ffmpeg.av_buffersink_get_format(Target);
+    public AVSampleFormat SampleFormat => (AVSampleFormat)ffmpeg.av_buffersink_get_format(this);
 
-    public AVRational TimeBase => ffmpeg.av_buffersink_get_time_base(Target);
+    public AVRational TimeBase => ffmpeg.av_buffersink_get_time_base(this);
 
     public static FFFilterContext Create(FFFilterGraph graph, string knownFilterName, string name, string? options = default)
     {
@@ -50,7 +50,7 @@ public unsafe sealed class FFFilterContext : NativeReference<AVFilterContext>
 
         AVFilterContext* pointer = default;
         var resultCode = ffmpeg.avfilter_graph_create_filter(
-            &pointer, filter.Target, name, options, null, graph.Target);
+            &pointer, filter, name, options, null, graph);
 
         return pointer is not null && resultCode >= 0
             ? new FFFilterContext(pointer)
@@ -65,7 +65,7 @@ public unsafe sealed class FFFilterContext : NativeReference<AVFilterContext>
         if (output.IsNull())
             throw new ArgumentNullException(nameof(output));
 
-        var resultCode = ffmpeg.avfilter_link(input.Target, 0, output.Target, 0);
+        var resultCode = ffmpeg.avfilter_link(input, 0, output, 0);
         if (resultCode != 0)
             throw new FFmpegException(resultCode, "Failed to link filters.");
     }
@@ -73,14 +73,14 @@ public unsafe sealed class FFFilterContext : NativeReference<AVFilterContext>
 
     public void SetOption(string name, int value)
     {
-        var resultCode = ffmpeg.av_opt_set_int(Target, name, value, SearhChildrenFlags);
+        var resultCode = ffmpeg.av_opt_set_int(this, name, value, SearhChildrenFlags);
         if (resultCode < 0)
             throw new FFmpegException(resultCode, $"Failed to set option '{name}'.");
     }
 
     public void SetOption(string name, string value)
     {
-        var resultCode = ffmpeg.av_opt_set(Target, name, value, SearhChildrenFlags);
+        var resultCode = ffmpeg.av_opt_set(this, name, value, SearhChildrenFlags);
         if (resultCode < 0)
             throw new FFmpegException(resultCode, $"Failed to set option '{name}'.");
     }
@@ -95,21 +95,19 @@ public unsafe sealed class FFFilterContext : NativeReference<AVFilterContext>
     public void SetOptionList<T>(string name, T[] values)
         where T : unmanaged
     {
-        if (values is null)
-            throw new ArgumentNullException(nameof(values));
-
+        ArgumentNullException.ThrowIfNull(values);
         var pinnedValues = stackalloc T[values.Length];
         for (var i = 0; i < values.Length; i++)
             pinnedValues[i] = values[i];
 
-        var resultCode = ffmpeg.av_opt_set_bin(Target, name, (byte*)pinnedValues, values.Length * sizeof(T), SearhChildrenFlags);
+        var resultCode = ffmpeg.av_opt_set_bin(this, name, (byte*)pinnedValues, values.Length * sizeof(T), SearhChildrenFlags);
         if (resultCode < 0)
             throw new FFmpegException(resultCode, $"Could not set option list for '{name}'");
     }
 
     public int GetSinkFrame(FFFrame decodedFrame) =>
-        ffmpeg.av_buffersink_get_frame_flags(Target, decodedFrame.Target, 0);
+        ffmpeg.av_buffersink_get_frame_flags(this, decodedFrame, 0);
 
     public int AddSourceFrame(FFFrame decodedFrame) =>
-        ffmpeg.av_buffersrc_add_frame(Target, decodedFrame.Target);
+        ffmpeg.av_buffersrc_add_frame(this, decodedFrame);
 }

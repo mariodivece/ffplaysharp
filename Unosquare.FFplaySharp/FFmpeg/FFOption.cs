@@ -8,5 +8,5 @@ public unsafe sealed class FFOption : NativeReference<AVOption>
 
     }
 
-    public AVOptionType Type => Target->type;
+    public AVOptionType Type => Reference->type;
 }

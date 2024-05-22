@@ -8,14 +8,14 @@ public unsafe sealed class FFCodec : NativeReference<AVCodec>
         // placeholder
     }
 
-    public AVCodecID Id => Target->id;
+    public AVCodecID Id => Reference->id;
 
     public FFMediaClass PrivateClass =>
-        FFMediaClass.FromPrivateClass(Target->priv_class)!;
+        FFMediaClass.FromPrivateClass(Reference->priv_class)!;
 
-    public int MaxLowResFactor => Target->max_lowres;
+    public int MaxLowResFactor => Reference->max_lowres;
 
-    public string? Name => Address.IsNull() ? default : GetName(Target->id);
+    public string? Name => Address.IsNull() ? default : GetName(Reference->id);
 
     public static string GetName(AVCodecID codecId) => ffmpeg.avcodec_get_name(codecId);
 

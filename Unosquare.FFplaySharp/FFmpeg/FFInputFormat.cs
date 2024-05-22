@@ -15,11 +15,11 @@ public unsafe sealed class FFInputFormat : NativeReference<AVInputFormat>
         // placeholder
     }
 
-    public int Flags => Target->flags;
+    public int Flags => Reference->flags;
 
-    public IReadOnlyList<string> ShortNames => Target is null
+    public IReadOnlyList<string> ShortNames => Reference is null
         ? []
-        : Helpers.PtrToString(Target->name)!.Split(',', SplitOptions);
+        : Helpers.PtrToString(Reference->name)!.Split(',', SplitOptions);
 
     public static FFInputFormat Find(string shortName)
     {

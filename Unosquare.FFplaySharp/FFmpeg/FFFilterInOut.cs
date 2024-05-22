@@ -16,36 +16,36 @@ public unsafe sealed class FFFilterInOut : NativeReference<AVFilterInOut>
 
     public string? Name
     {
-        get => Helpers.PtrToString(Target->name);
-        set => Target->name = value is not null ? ffmpeg.av_strdup(value) : default;
+        get => Helpers.PtrToString(Reference->name);
+        set => Reference->name = value is not null ? ffmpeg.av_strdup(value) : default;
     }
 
     public int PadIndex
     {
-        get => Target->pad_idx;
-        set => Target->pad_idx = value;
+        get => Reference->pad_idx;
+        set => Reference->pad_idx = value;
     }
 
     public FFFilterInOut? Next
     {
-        get => Address.IsNotNull() && Target->next is not null ? new(Target->next) : default;
-        set => Target->next = value.IsNotNull() ? value!.Target : default;
+        get => !IsEmpty && Reference->next is not null ? new(Reference->next) : default;
+        set => Reference->next = value.IsNotNull() ? value!.Reference : default;
     }
 
     public FFFilterContext? Filter
     {
-        get => Address.IsNotNull() && Target->filter_ctx is not null ? new(Target->filter_ctx) : default;
-        set => Target->filter_ctx = value.IsNotNull() ? value!.Target : default;
+        get => !IsEmpty && Reference->filter_ctx is not null ? new(Reference->filter_ctx) : default;
+        set => Reference->filter_ctx = value.IsNotNull() ? value!.Reference : default;
     }
 
     public void Release()
     {
-        if (Address.IsNotNull())
+        if (!IsEmpty)
         {
-            var pointer = Target;
+            var pointer = Reference;
             ffmpeg.avfilter_inout_free(&pointer);
         }
 
-        Update(IntPtr.Zero);
+        ClearPointer();
     }
 }

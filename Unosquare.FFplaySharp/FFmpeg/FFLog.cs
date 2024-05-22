@@ -21,10 +21,10 @@ public static unsafe class FFLog
         Log(null, ffmpeg.AV_LOG_ERROR, message, addNewLine);
 
     public static void LogError(this FFCodecContext context, string message, bool addNewLine = true) =>
-        Log(context.Target, ffmpeg.AV_LOG_ERROR, message, addNewLine);
+        Log(context.Reference, ffmpeg.AV_LOG_ERROR, message, addNewLine);
 
     public static void LogError(this FFFormatContext context, string message, bool addNewLine = true) =>
-        Log(context.Target, ffmpeg.AV_LOG_ERROR, message, addNewLine);
+        Log(context.Reference, ffmpeg.AV_LOG_ERROR, message, addNewLine);
 
     public static void LogWarning(this string message, bool addNewLine = true) =>
         Log(null, ffmpeg.AV_LOG_WARNING, message, addNewLine);

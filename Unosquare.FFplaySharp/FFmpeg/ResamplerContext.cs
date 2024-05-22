@@ -5,7 +5,7 @@ public unsafe sealed class ResamplerContext : CountedReference<SwrContext>
     public ResamplerContext([CallerFilePath] string? filePath = default, [CallerLineNumber] int? lineNumber = default)
         : base(filePath, lineNumber)
     {
-        Update(ffmpeg.swr_alloc());
+        UpdatePointer(ffmpeg.swr_alloc());
     }
 
     public ResamplerContext(
@@ -26,20 +26,20 @@ public unsafe sealed class ResamplerContext : CountedReference<SwrContext>
                 &inLayout, inFormat, inSampleRate,
                 0, null);
 
-        Update(pointer);
+        UpdatePointer(pointer);
     }
 
     public int Convert(byte** output, int outputCount, byte** input, int inputCount) =>
-        ffmpeg.swr_convert(Target, output, outputCount, input, inputCount);
+        ffmpeg.swr_convert(Reference, output, outputCount, input, inputCount);
 
     public int SetCompensation(int delta, int distance) =>
-        ffmpeg.swr_set_compensation(Target, delta, distance);
+        ffmpeg.swr_set_compensation(Reference, delta, distance);
 
     public int Initialize() =>
-        ffmpeg.swr_init(Target);
+        ffmpeg.swr_init(Reference);
 
     public int SetOption(string key, string value) =>
-        ffmpeg.av_opt_set(Target, key, value, 0);
+        ffmpeg.av_opt_set(Reference, key, value, 0);
 
     protected override unsafe void ReleaseInternal(SwrContext* pointer) =>
         ffmpeg.swr_free(&pointer);

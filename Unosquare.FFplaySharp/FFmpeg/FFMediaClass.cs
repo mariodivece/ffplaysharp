@@ -22,10 +22,9 @@ public unsafe sealed class FFMediaClass : NativeReference<AVClass>
     /// <returns></returns>
     public FFOption? FindOption(string optionName, int optionFlags = default, int searchFlags = ffmpeg.AV_OPT_SEARCH_FAKE_OBJ)
     {
-        if (Address.IsNull())
-            return default;
+        if (IsEmpty) return default;
 
-        var option = ffmpeg.av_opt_find(Target, optionName, null, optionFlags, searchFlags);
+        var option = ffmpeg.av_opt_find(this, optionName, null, optionFlags, searchFlags);
         return option is not null && option->flags != (int)AVOptionType.AV_OPT_TYPE_FLAGS
             ? new(option)
             : default;

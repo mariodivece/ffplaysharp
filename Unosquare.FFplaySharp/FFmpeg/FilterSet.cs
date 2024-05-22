@@ -10,9 +10,9 @@ public unsafe sealed class FilterSet : NativeChildSet<FFFilterGraph, FFFilterCon
 
     public override FFFilterContext this[int index]
     {
-        get => new(Parent.Target->filters[index]);
-        set => Parent.Target->filters[index] = value.Target;
+        get => new(Parent.Reference->filters[index]);
+        set => Parent.Reference->filters[index] = value.Reference;
     }
 
-    public override int Count => Convert.ToInt32(Parent.Target->nb_filters);
+    public override int Count => Convert.ToInt32(Parent.Reference->nb_filters);
 }

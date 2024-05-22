@@ -61,7 +61,7 @@ public unsafe sealed class AudioComponent : FilteringMediaComponent, ISerialGrou
                 $"channels={FilterSpec.Channels}:time_base={1}/{FilterSpec.SampleRate}";
 
             var filterChannelLayout = FilterSpec.ChannelLayout;
-            ffmpeg.av_channel_layout_describe_bprint(&filterChannelLayout, bp.Target);
+            ffmpeg.av_channel_layout_describe_bprint(&filterChannelLayout, bp);
             sourceBufferOptions = $"{sourceBufferOptions}:channel_layout={bp.Contents}";
 
             var inputFilterContext = FFFilterContext.Create(FilterGraph, "abuffer", "audioSourceBuffer", sourceBufferOptions);
@@ -164,7 +164,7 @@ public unsafe sealed class AudioComponent : FilteringMediaComponent, ISerialGrou
 
         int resampledBufferSize;
 
-        if (ConvertContext.IsNotNull())
+        if (ConvertContext is not null && !ConvertContext.IsEmpty)
         {
             var wantedOutputSize = wantedSampleCount * HardwareSpec.SampleRate / audio.Frame.SampleRate + 256;
             var outputBufferSize = AudioParams.ComputeSamplesBufferSize(
@@ -190,11 +190,11 @@ public unsafe sealed class AudioComponent : FilteringMediaComponent, ISerialGrou
 
             ResampledOutputBuffer = ByteBuffer.Reallocate(ResampledOutputBuffer, (ulong)outputBufferSize);
             var audioBufferIn = audio.Frame.ExtendedData;
-            var audioBufferOut = ResampledOutputBuffer.Target;
+            var audioBufferOut = ResampledOutputBuffer.Reference;
             var outputSampleCount = ConvertContext.Convert(
                 &audioBufferOut, wantedOutputSize, audioBufferIn, audio.Frame.SampleCount);
 
-            ResampledOutputBuffer.Update(audioBufferOut);
+            ResampledOutputBuffer.UpdatePointer(audioBufferOut);
             audio.Frame.ExtendedData = audioBufferIn;
 
             if (outputSampleCount < 0)
@@ -210,12 +210,12 @@ public unsafe sealed class AudioComponent : FilteringMediaComponent, ISerialGrou
                     ReleaseConvertContext();
             }
 
-            result.Update(ResampledOutputBuffer.Target);
+            result.UpdatePointer(ResampledOutputBuffer.Reference);
             resampledBufferSize = outputSampleCount * HardwareSpec.Channels * HardwareSpec.BytesPerSample;
         }
         else
         {
-            result.Update(audio.Frame.Data[0]);
+            result.UpdatePointer(audio.Frame.Data[0]);
             resampledBufferSize = audio.Frame.SamplesBufferSize;
         }
 

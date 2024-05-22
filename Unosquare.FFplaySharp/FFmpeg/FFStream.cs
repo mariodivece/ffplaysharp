@@ -10,27 +10,27 @@ public unsafe sealed class FFStream : NativeReference<AVStream>
 
     public AVDiscard DiscardFlags
     {
-        get => Target->discard;
-        set => Target->discard = value;
+        get => Reference->discard;
+        set => Reference->discard = value;
     }
 
     public FFFormatContext FormatContext { get; }
 
-    public FFCodecParameters CodecParameters => new(Target->codecpar);
+    public FFCodecParameters CodecParameters => new(Reference->codecpar);
 
-    public int Index => Target->index;
+    public int Index => Reference->index;
 
-    public AVRational TimeBase => Target->time_base;
+    public AVRational TimeBase => Reference->time_base;
 
-    public long StartTime => Target->start_time;
+    public long StartTime => Reference->start_time;
 
-    public int DispositionFlags => Target->disposition;
+    public int DispositionFlags => Reference->disposition;
 
     public IReadOnlyList<FFProgram> FindPrograms()
     {
         var result = new List<FFProgram>(16);
         AVProgram* program = default;
-        while ((program = ffmpeg.av_find_program_from_stream(FormatContext.Target, program, Index)) is not null)
+        while ((program = ffmpeg.av_find_program_from_stream(FormatContext.Reference, program, Index)) is not null)
             result.Add(new(program));
 
         return result;
@@ -38,7 +38,7 @@ public unsafe sealed class FFStream : NativeReference<AVStream>
 
     public FFPacket CloneAttachedPicture()
     {
-        var packet = &Target->attached_pic;
+        var packet = &Reference->attached_pic;
         return FFPacket.Clone(packet);
     }
 
@@ -50,7 +50,7 @@ public unsafe sealed class FFStream : NativeReference<AVStream>
     [Obsolete("Use alternative method with same name that takes in a frame as a parameter.")]
     public double ComputeDisplayRotation()
     {
-        var displayMatrix = ffmpeg.av_stream_get_side_data(Target, AVPacketSideDataType.AV_PKT_DATA_DISPLAYMATRIX, null);
+        var displayMatrix = ffmpeg.av_stream_get_side_data(Reference, AVPacketSideDataType.AV_PKT_DATA_DISPLAYMATRIX, null);
         var theta = displayMatrix is not null ? -ComputeMatrixRotation((int*)displayMatrix) : 0d;
         theta -= 360 * Math.Floor(theta / 360 + 0.9 / 360);
 
@@ -65,18 +65,18 @@ public unsafe sealed class FFStream : NativeReference<AVStream>
 
     public double ComputeDisplayRotation(FFFrame decoderFrame)
     {
-        ArgumentNullException.ThrowIfNull(decoderFrame);
+        ArgumentNullException.ThrowIfNull((object?)decoderFrame);
 
         int* displayMatrix = null;
-        var sd = ffmpeg.av_frame_get_side_data(decoderFrame.Target, AVFrameSideDataType.AV_FRAME_DATA_DISPLAYMATRIX);
+        var sd = ffmpeg.av_frame_get_side_data(decoderFrame.Reference, AVFrameSideDataType.AV_FRAME_DATA_DISPLAYMATRIX);
         if (sd is not null)
             displayMatrix = (int*)sd->data;
 
         if (displayMatrix is null)
         {
             var psd = ffmpeg.av_packet_side_data_get(
-                CodecParameters.Target->coded_side_data,
-                CodecParameters.Target->nb_coded_side_data,
+                CodecParameters.Reference->coded_side_data,
+                CodecParameters.Reference->nb_coded_side_data,
                 AVPacketSideDataType.AV_PKT_DATA_DISPLAYMATRIX);
 
             if (psd is not null)

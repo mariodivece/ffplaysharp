@@ -8,17 +8,17 @@ public unsafe sealed class FFCodecParameters : NativeReference<AVCodecParameters
         // placeholder
     }
 
-    public AVMediaType CodecType => Target->codec_type;
+    public AVMediaType CodecType => Reference->codec_type;
 
-    public AVCodecID CodecId => Target->codec_id;
+    public AVCodecID CodecId => Reference->codec_id;
 
-    public int SampleRate => Target->sample_rate;
+    public int SampleRate => Reference->sample_rate;
 
-    public int Channels => Target->ch_layout.nb_channels;
+    public int Channels => Reference->ch_layout.nb_channels;
 
-    public int Width => Target->width;
+    public int Width => Reference->width;
 
-    public int Height => Target->height;
+    public int Height => Reference->height;
 
-    public AVRational SampleAspectRatio => Target->sample_aspect_ratio;
+    public AVRational SampleAspectRatio => Reference->sample_aspect_ratio;
 }

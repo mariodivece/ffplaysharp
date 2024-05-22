@@ -1,28 +1,56 @@
 ﻿namespace Unosquare.FFplaySharp.Primitives;
 
 
+/// <summary>
+/// A base implementation of an object that wraps a
+/// strongly typed native reference.
+/// </summary>
+/// <typeparam name="T">Generic type parameter.</typeparam>
 public abstract unsafe class NativeReference<T> : INativeReference<T>
     where T : unmanaged
 {
+    /// <summary>
+    /// Initializes a new instance of the <see cref="NativeReference{T}"/> class.
+    /// </summary>
+    /// <param name="target">The target pointer to wrap.</param>
     protected NativeReference(T* target)
     {
-        Update(target);
+        UpdatePointer(target);
     }
 
+    /// <summary>
+    /// Initializes a new instance of the <see cref="NativeReference{T}"/> class.
+    /// </summary>
     protected NativeReference()
     {
         // placeholder
     }
 
-    public IntPtr Address { get; protected set; } = IntPtr.Zero;
+    /// <inheritdoc/>
+    public nint Address { get; protected set; } = nint.Zero;
 
-    public T* Target => (T*)Address;
+    /// <inheritdoc/>
+    public T* Reference => (T*)Address;
 
-    public T Value => Address.IsNull() ? default : *Target;
+    /// <inheritdoc/>
+    public T? Dereference() => Address == nint.Zero ? default : *Reference;
 
-    public void Update(IntPtr address) => Address = address;
+    /// <inheritdoc/>
+    public bool IsEmpty => Address == nint.Zero;
 
-    public void Update(T* target) => Address = target is null
-        ? IntPtr.Zero
+    /// <inheritdoc/>
+    public void UpdatePointer(nint address) =>
+        Address = address;
+
+    /// <inheritdoc/>
+    public void UpdatePointer(T* target) => Address = target is null
+        ? nint.Zero
         : new(target);
+
+    /// <inheritdoc/>
+    public void ClearPointer() => Address = nint.Zero;
+
+    public static implicit operator T*(NativeReference<T>? reference) =>
+        reference is null ? default : reference.Reference;
+
 }

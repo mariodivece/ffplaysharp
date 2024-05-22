@@ -10,9 +10,9 @@ public unsafe sealed class ChapterSet : NativeChildSet<FFFormatContext, FFChapte
 
     public override FFChapter this[int index]
     {
-        get => new(Parent.Target->chapters[index]);
-        set => Parent.Target->chapters[index] = value.Target;
+        get => new(Parent.Reference->chapters[index]);
+        set => Parent.Reference->chapters[index] = value.Reference;
     }
 
-    public override int Count => Convert.ToInt32(Parent.Target->nb_chapters);
+    public override int Count => Convert.ToInt32(Parent.Reference->nb_chapters);
 }

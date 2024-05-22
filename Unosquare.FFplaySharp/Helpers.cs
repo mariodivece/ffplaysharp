@@ -82,27 +82,11 @@ public static class Helpers
 
     [MethodImpl(MethodImplOptions.AggressiveInlining)]
     public static unsafe string? PtrToString(byte* target) => target is null
-        ? default
-        : PtrToString((IntPtr)target);
+        ? default : PtrToString((nint)target);
 
     [MethodImpl(MethodImplOptions.AggressiveInlining)]
-    public static unsafe string? PtrToString(IntPtr address)
-    {
-        if (address.IsNull())
-            return default;
-
-        var source = (byte*)address.ToPointer();
-        var length = 0;
-        while (source[length] != 0)
-            ++length;
-
-        if (length == 0)
-            return string.Empty;
-
-        var target = stackalloc byte[length];
-        Buffer.MemoryCopy(source, target, length, length);
-        return Encoding.UTF8.GetString(target, length);
-    }
+    public static unsafe string? PtrToString(nint address) => address == nint.Zero ?
+        default : (Marshal.PtrToStringUTF8(address) ?? string.Empty);
 
     [MethodImpl(MethodImplOptions.AggressiveInlining)]
     public static bool IsValidPts(this long pts) => pts != ffmpeg.AV_NOPTS_VALUE;
@@ -120,10 +104,10 @@ public static class Helpers
     public static bool IsFalse(this int x) => x == 0;
 
     [MethodImpl(MethodImplOptions.AggressiveInlining)]
-    public static bool IsNull(this IntPtr address) => address == IntPtr.Zero;
+    public static bool IsNull(this nint address) => address == nint.Zero;
 
     [MethodImpl(MethodImplOptions.AggressiveInlining)]
-    public static bool IsNotNull(this IntPtr address) => address != IntPtr.Zero;
+    public static bool IsNotNull(this nint address) => address != nint.Zero;
 
     [MethodImpl(MethodImplOptions.AggressiveInlining)]
     public static bool IsNull(this INativeReference? obj) => obj is null || obj.Address == IntPtr.Zero;

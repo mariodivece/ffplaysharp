@@ -7,7 +7,7 @@ internal unsafe class FFBPrint : CountedReference<AVBPrint>
     public FFBPrint([CallerFilePath] string? filePath = default, [CallerLineNumber] int? lineNumber = default) 
         : base(filePath, lineNumber)
     {
-        Update(AllocateAutoAVBPrint());
+        UpdatePointer(AllocateAutoAVBPrint());
     }
 
     public string Contents

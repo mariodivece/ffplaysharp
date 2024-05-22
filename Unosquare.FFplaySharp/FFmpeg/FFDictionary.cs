@@ -9,7 +9,7 @@ public unsafe class FFDictionary : CountedReference<AVDictionary>
         ReferenceCounter.Remove(this);
     }
 
-    public FFDictionaryEntry? First => Target is null ? default : FirstEntry(Target);
+    public FFDictionaryEntry? First => IsEmpty ? default : FirstEntry(this);
 
     public string? this[string key]
     {
@@ -29,14 +29,14 @@ public unsafe class FFDictionary : CountedReference<AVDictionary>
 
     public void Set(string key, string? value, int flags)
     {
-        var wasNull = Address.IsNull();
-        var pointer = Target;
+        var wasNull = IsEmpty;
+        var pointer = Reference;
         pointer = SetEntry(pointer, key, value, flags);
-        Update(pointer);
+        UpdatePointer(pointer);
 
         if (wasNull && Address.IsNotNull())
             ObjectId = ReferenceCounter.Add(this, Source);
-        else if (!wasNull && Address.IsNull())
+        else if (!wasNull && IsEmpty)
             ReferenceCounter.Remove(this);
     }
 
@@ -47,24 +47,22 @@ public unsafe class FFDictionary : CountedReference<AVDictionary>
         Set(key, default);
 
     public FFDictionaryEntry? Next(FFDictionaryEntry? previous) =>
-        NextEntry(Target, previous);
+        NextEntry(this, previous);
 
     public FFDictionaryEntry? Find(string key, bool matchCase = false) =>
-        FindEntry(Target, key, matchCase);
+        FindEntry(this, key, matchCase);
 
     public bool ContainsKey(string key, bool matchCase = false) =>
         Find(key, matchCase).IsNotNull();
 
     public Dictionary<string, string> ToDictionary() =>
-        Extract(Target);
+        Extract(this);
 
     public static FFDictionary FromManaged(Dictionary<string, string> other,
         [CallerFilePath] string? filePath = default,
         [CallerLineNumber] int? lineNumber = default)
     {
-        if (other is null)
-            throw new ArgumentNullException(nameof(other));
-
+        ArgumentNullException.ThrowIfNull(other);
         var result = new FFDictionary(filePath, lineNumber);
         foreach (var kvp in other)
             result[kvp.Key] = kvp.Value;
@@ -85,7 +83,7 @@ public unsafe class FFDictionary : CountedReference<AVDictionary>
         if (dictionary is null)
             return default;
 
-        var previous = previousEntry.IsNotNull() ? previousEntry!.Target : default;
+        var previous = previousEntry.IsNotNull() ? previousEntry!.Reference : default;
         var entry = ffmpeg.av_dict_get(dictionary, string.Empty, previous, ffmpeg.AV_DICT_IGNORE_SUFFIX);
         return entry is not null ? new(entry) : default;
     }

@@ -162,8 +162,8 @@ public unsafe class SdlPresenter : IPresenter
                             {
                                 pos = Container.StreamBytePosition;
 
-                                if (Container.Input.Target->bit_rate != 0)
-                                    incr *= Container.Input.Target->bit_rate / 8.0;
+                                if (Container.Input.Reference->bit_rate != 0)
+                                    incr *= Container.Input.Reference->bit_rate / 8.0;
                                 else
                                     incr *= 180000.0;
 

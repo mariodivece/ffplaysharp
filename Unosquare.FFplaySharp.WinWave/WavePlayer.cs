@@ -178,7 +178,7 @@ public class WavePlayer : IWaveProvider
                 if (ReadBuffer.Length < 0)
                 {
                     // if error, just output silence.
-                    ReadBuffer.Update(null);
+                    ReadBuffer.ClearPointer();
                     ReadBufferSize = Convert.ToInt32(Container.Audio.HardwareSpec.FrameSize *
                         (double)count / Container.Audio.HardwareSpec.FrameSize);
                 }
@@ -194,7 +194,7 @@ public class WavePlayer : IWaveProvider
             if (readByteCount > pendingByteCount)
                 readByteCount = pendingByteCount;
 
-            var inputStreamPointer = ReadBuffer.Target + ReadBufferIndex;
+            var inputStreamPointer = ReadBuffer.Reference + ReadBufferIndex;
 
             if (!Container.IsMuted && ReadBuffer.IsNotNull())
             {

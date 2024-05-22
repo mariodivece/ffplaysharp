@@ -6,7 +6,7 @@ public unsafe sealed class ByteBuffer : CountedReference<byte>
         : base(filePath, lineNumber)
     {
         var pointer = (byte*)ffmpeg.av_mallocz(length);
-        Update(pointer);
+        UpdatePointer(pointer);
         Length = length;
     }
 
@@ -26,7 +26,7 @@ public unsafe sealed class ByteBuffer : CountedReference<byte>
     public void Write(byte* source, int length)
     {
         var maxLength = Math.Min(Convert.ToInt32(Length), length);
-        Buffer.MemoryCopy(source, Target, maxLength, maxLength);
+        Buffer.MemoryCopy(source, Reference, maxLength, maxLength);
     }
 
     protected override void ReleaseInternal(byte* target)

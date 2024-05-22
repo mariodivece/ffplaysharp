@@ -171,7 +171,7 @@ public unsafe class SdlAudioRenderer
                 if (ReadBuffer.Length < 0)
                 {
                     // if error, just output silence.
-                    ReadBuffer.Update(null);
+                    ReadBuffer.ClearPointer();
                     ReadBufferSize = Convert.ToInt32(Container.Audio.HardwareSpec.FrameSize *
                         (double)Constants.SdlAudioMinBufferSize / Container.Audio.HardwareSpec.FrameSize);
                 }
@@ -188,7 +188,7 @@ public unsafe class SdlAudioRenderer
                 readByteCount = pendingByteCount;
 
             var outputStreamPointer = (byte*)audioStream.ToPointer();
-            var inputStreamPointer = ReadBuffer.Target + ReadBufferIndex;
+            var inputStreamPointer = ReadBuffer.Reference + ReadBufferIndex;
 
             if (!Container.IsMuted && ReadBuffer.IsNotNull() && Volume == SDL.SDL_MIX_MAXVOLUME)
             {
