@@ -121,15 +121,15 @@
                 isScanAllPmtsSet = true;
             }
 
-            var context = Reference;
-            var formatOptionsPtr = formatOptions.Reference;
-            var resultCode = ffmpeg.avformat_open_input(&context, filePath, format, &formatOptionsPtr);
-            UpdatePointer(context);
-
-            formatOptions.UpdatePointer(formatOptionsPtr);
-
-            if (context is not null)
-                format.UpdatePointer(context->iformat);
+            int resultCode;
+            using (var context = AsDoublePointer())
+            using (var formatOptionsPtr = formatOptions.AsDoublePointer())
+            {
+                resultCode = ffmpeg.avformat_open_input(context, filePath, format, formatOptionsPtr);
+            }
+            
+            if (this.IsValid())
+                format.UpdatePointer(Reference->iformat);
 
             if (isScanAllPmtsSet)
                 formatOptions.Remove(ScanAllPmtsKey);
