@@ -159,11 +159,11 @@ public unsafe class MediaContainer
 
     public IReadOnlyList<MediaComponent> Components { get; }
 
-    public bool HasVideo => Video is not null && Video.Stream.IsNotNull() && Video.StreamIndex >= 0;
+    public bool HasVideo => Video is not null && Video.Stream.IsValid() && Video.StreamIndex >= 0;
 
-    public bool HasAudio => Audio is not null && Audio.Stream.IsNotNull() && Audio.StreamIndex >= 0;
+    public bool HasAudio => Audio is not null && Audio.Stream.IsValid() && Audio.StreamIndex >= 0;
 
-    public bool HasSubtitles => Subtitle is not null && Subtitle.Stream.IsNotNull() && Subtitle.StreamIndex >= 0;
+    public bool HasSubtitles => Subtitle is not null && Subtitle.Stream.IsValid() && Subtitle.StreamIndex >= 0;
 
     private bool HasEnoughPacketCount => Components.All(c => c.HasEnoughPackets);
 
@@ -171,8 +171,7 @@ public unsafe class MediaContainer
 
     public static MediaContainer? Open(ProgramOptions options, IPresenter presenter)
     {
-        if (presenter is null)
-            throw new ArgumentNullException(nameof(presenter));
+        ArgumentNullException.ThrowIfNull(presenter);
 
         var container = new MediaContainer(options, presenter);
 
@@ -278,11 +277,11 @@ public unsafe class MediaContainer
         var nextStreamIndex = startStreamIndex;
 
         FFProgram? program = default;
-        if (component.IsVideo && component.StreamIndex != -1)
+        if (component.IsVideo && component.StreamIndex != -1 && component.Stream.IsValid())
         {
             var programs = component.Stream.FindPrograms();
             program = programs.Any() ? programs[0] : default;
-            if (program.IsNotNull())
+            if (program.IsValid())
             {
                 var streamIndices = program.StreamIndices;
 
@@ -317,7 +316,7 @@ public unsafe class MediaContainer
             if (nextStreamIndex == startStreamIndex)
                 return;
 
-            var resultStreamIndex = program.IsNotNull()
+            var resultStreamIndex = program.IsValid()
                 ? Convert.ToInt32(program!.StreamIndices[nextStreamIndex])
                 : nextStreamIndex;
 
@@ -338,7 +337,7 @@ public unsafe class MediaContainer
         }
 
         // Finally, close the existing component and open the new one.
-        if (program.IsNotNull() && nextStreamIndex != -1)
+        if (program.IsValid() && nextStreamIndex != -1)
             nextStreamIndex = program!.StreamIndices[nextStreamIndex];
 
         ($"Switch {component.MediaTypeString} stream from #{component.StreamIndex} to #{nextStreamIndex}.").LogInfo();
@@ -437,7 +436,7 @@ public unsafe class MediaContainer
                 ? FFCodec.FromDecoderName(forcedCodecName)
                 : codec;
 
-            if (codec.IsNull())
+            if (codec.IsVoid())
             {
                 var codecName = !string.IsNullOrWhiteSpace(forcedCodecName)
                     ? forcedCodecName
@@ -494,7 +493,7 @@ public unsafe class MediaContainer
             }
             finally
             {
-                codecOptions.Release();
+                codecOptions.Dispose();
             }
 
             IsAtEndOfStream = false;
@@ -511,7 +510,7 @@ public unsafe class MediaContainer
         }
         catch
         {
-            codecContext.Release();
+            codecContext.Dispose();
             throw;
         }
     }
@@ -530,7 +529,7 @@ public unsafe class MediaContainer
             component.Close();
 
         // Close the input context.
-        Input?.Release();
+        Input?.Dispose();
         Input = default;
 
         // Release packets and frames
@@ -541,8 +540,8 @@ public unsafe class MediaContainer
         }
 
         NeedsMorePacketsEvent.SignalAll();
-        Video.ConvertContext?.Release();
-        Subtitle.ConvertContext?.Release();
+        Video.ConvertContext?.Dispose();
+        Subtitle.ConvertContext?.Dispose();
     }
 
     private void StartReadThread()
@@ -628,8 +627,8 @@ public unsafe class MediaContainer
             if (Options.IsStreamInfoEnabled)
                 Input.FindStreamInfo(Options.CodecOptions);
 
-            if (Input.IO.IsNotNull())
-                Input.IO!.EndOfStream = false; // FIXME hack, ffplay maybe should not use avio_feof() to test for the end
+            if (Input.IO.IsValid())
+                Input.IO.EndOfStream = false; // FIXME hack, ffplay maybe should not use avio_feof() to test for the end
 
             if (Options.IsByteSeekingEnabled.IsAuto())
             {
@@ -668,7 +667,7 @@ public unsafe class MediaContainer
         }
         finally
         {
-            formatOptions.Release();
+            formatOptions.Dispose();
         }
     }
 
@@ -780,7 +779,7 @@ public unsafe class MediaContainer
                         Input.ReadPlay();
                 }
 
-                if (IsPaused && (isRstpStream || (Input.IO.IsNotNull() && isMmshProtocol)))
+                if (IsPaused && (isRstpStream || (Input.IO.IsValid() && isMmshProtocol)))
                 {
                     // wait 10 ms to avoid trying to get another packet
                     // XXX: horrible
@@ -830,7 +829,7 @@ public unsafe class MediaContainer
         }
         catch (Exception ex)
         {
-            Input?.Release();
+            Input?.Dispose();
             Input = default;
             Presenter.HandleFatalException(ex);
         }
@@ -879,7 +878,7 @@ public unsafe class MediaContainer
 
         if (resultCode < 0)
         {
-            readPacket.Release();
+            readPacket.Dispose();
 
             if (!IsAtEndOfStream && (resultCode == ffmpeg.AVERROR_EOF || Input.IO.TestEndOfStream()))
             {
@@ -892,7 +891,7 @@ public unsafe class MediaContainer
                 IsAtEndOfStream = true;
             }
 
-            if (Input.IO.IsNotNull() && Input.IO!.Error != 0)
+            if (Input.IO.IsValid() && Input.IO.Error != 0)
                 return false;
 
             NeedsMorePacketsEvent.Wait(Constants.WaitTimeout);
@@ -917,7 +916,7 @@ public unsafe class MediaContainer
         if (isPacketInPlayRange && FindComponentByStreamIndex(readPacket.StreamIndex) is MediaComponent component)
             component.Packets.Enqueue(readPacket);
         else
-            readPacket.Release();
+            readPacket.Dispose();
 
         return true;
     }

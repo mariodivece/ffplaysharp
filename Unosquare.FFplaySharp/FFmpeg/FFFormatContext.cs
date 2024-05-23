@@ -86,7 +86,7 @@
 
                 var url = Url?.ToUpperInvariant() ?? string.Empty;
                 var isRealtimeProtocol = url.StartsWith("RTP:", StringComparison.Ordinal) || url.StartsWith("UDP:", StringComparison.Ordinal);
-                return IO.IsNotNull() && isRealtimeProtocol;
+                return IO.IsValid() && isRealtimeProtocol;
             }
         }
 
@@ -104,7 +104,7 @@
         public AVRational GuessFrameRate(FFStream stream) => ffmpeg.av_guess_frame_rate(this, stream, null);
 
         public AVRational GuessAspectRatio(FFStream stream, FFFrame? frame = default) =>
-            ffmpeg.av_guess_sample_aspect_ratio(this, stream, (frame is not null && !frame.IsEmpty) ? frame : null);
+            ffmpeg.av_guess_sample_aspect_ratio(this, stream, frame.IsValid() ? frame : null);
 
         public void OpenInput(string filePath, FFInputFormat format, FFDictionary formatOptions)
         {
@@ -167,7 +167,7 @@
             StringDictionary allOptions,
             AVCodecID codecId,
             FFStream stream,
-            FFCodec? codec)
+            FFCodec? codec = null)
         {
 
             var filteredOptions = new FFDictionary();
@@ -176,7 +176,7 @@
                 ? ffmpeg.AV_OPT_FLAG_ENCODING_PARAM
                 : ffmpeg.AV_OPT_FLAG_DECODING_PARAM;
 
-            if (codec.IsNull())
+            if (codec.IsVoid())
             {
                 codec = Reference->oformat is not null
                     ? FFCodec.FromEncoderId(codecId)
@@ -220,8 +220,8 @@
                 if (checkResult <= 0)
                     continue;
 
-                if (FFMediaClass.Codec.HasOption(optionName, optionFlags) || codec.IsNull() ||
-                    codec!.PrivateClass.HasOption(optionName, optionFlags))
+                if (FFMediaClass.Codec.HasOption(optionName, optionFlags) || codec.IsVoid() ||
+                    codec.PrivateClass.HasOption(optionName, optionFlags))
                 {
                     filteredOptions[optionName] = t.Value;
                 }
@@ -246,13 +246,13 @@
             ffmpeg.av_freep(&perStreamOptions);
 
             foreach (var optionsDictionary in perStreamOptionsList)
-                optionsDictionary.Release();
+                optionsDictionary.Dispose();
 
             if (resultCode < 0)
                 throw new FFmpegException(resultCode, "Unable to find codec paramenters from per-stream options.");
         }
 
-        protected override unsafe void ReleaseInternal(AVFormatContext* target) =>
+        protected override unsafe void ReleaseNative(AVFormatContext* target) =>
             ffmpeg.avformat_close_input(&target);
 
         /// <summary>

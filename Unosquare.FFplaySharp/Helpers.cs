@@ -106,14 +106,5 @@ public static class Helpers
     public static bool IsFalse(this int x) => x == 0;
 
     [MethodImpl(MethodImplOptions.AggressiveInlining)]
-    public static bool IsNull(this nint address) => address == nint.Zero;
-
-    [MethodImpl(MethodImplOptions.AggressiveInlining)]
-    public static bool IsNotNull(this nint address) => address != nint.Zero;
-
-    [MethodImpl(MethodImplOptions.AggressiveInlining)]
-    public static bool IsNull(this INativeReference? obj) => obj is null || obj.Address == IntPtr.Zero;
-
-    [MethodImpl(MethodImplOptions.AggressiveInlining)]
-    public static bool IsNotNull(this INativeReference? obj) => obj is not null && obj.Address != IntPtr.Zero;
+    public static bool IsNullPointer(this nint address) => address == nint.Zero;
 }

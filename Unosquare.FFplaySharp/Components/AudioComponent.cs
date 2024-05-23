@@ -42,14 +42,12 @@ public unsafe sealed class AudioComponent : FilteringMediaComponent, ISerialGrou
         ConfigureFilters(false);
     }
 
-
-
     public void ConfigureFilters(bool forceOutputFormat)
     {
-        var bp = new FFBPrint();
-
         try
         {
+            using var bp = new FFBPrint();
+
             var outputSampleFormats = new[] { (int)AVSampleFormat.AV_SAMPLE_FMT_S16 };
             ReallocateFilterGraph();
             var resamplerOptions = RetrieveResamplerOptions();
@@ -88,10 +86,6 @@ public unsafe sealed class AudioComponent : FilteringMediaComponent, ISerialGrou
         {
             ReleaseFilterGraph();
             throw;
-        }
-        finally
-        {
-            bp.Release();
         }
     }
 
@@ -136,7 +130,7 @@ public unsafe sealed class AudioComponent : FilteringMediaComponent, ISerialGrou
         if (audio.Frame.SampleFormat != StreamSpec.SampleFormat ||
             ffmpeg.av_channel_layout_compare(&frameLayout, &streamLyout) != 0 ||
             audio.Frame.SampleRate != StreamSpec.SampleRate ||
-            (wantedSampleCount != audio.Frame.SampleCount && ConvertContext.IsNull()))
+            (wantedSampleCount != audio.Frame.SampleCount && ConvertContext.IsVoid()))
         {
             ReleaseConvertContext();
             ConvertContext = new(
@@ -147,7 +141,7 @@ public unsafe sealed class AudioComponent : FilteringMediaComponent, ISerialGrou
                 audio.Frame.SampleFormat,
                 audio.Frame.SampleRate);
 
-            if (ConvertContext.IsNull() || ConvertContext.Initialize() < 0)
+            if (ConvertContext.IsVoid() || ConvertContext.Initialize() < 0)
             {
                 ($"Cannot create sample rate converter for conversion of {audio.Frame.SampleRate} Hz " +
                 $"{audio.Frame.SampleFormatName} {audio.Frame.Channels} channels to " +
@@ -164,7 +158,7 @@ public unsafe sealed class AudioComponent : FilteringMediaComponent, ISerialGrou
 
         int resampledBufferSize;
 
-        if (ConvertContext is not null && !ConvertContext.IsEmpty)
+        if (ConvertContext.IsValid())
         {
             var wantedOutputSize = wantedSampleCount * HardwareSpec.SampleRate / audio.Frame.SampleRate + 256;
             var outputBufferSize = AudioParams.ComputeSamplesBufferSize(
@@ -304,7 +298,7 @@ public unsafe sealed class AudioComponent : FilteringMediaComponent, ISerialGrou
 
         ReleaseConvertContext();
 
-        ResampledOutputBuffer?.Release();
+        ResampledOutputBuffer?.Dispose();
         ResampledOutputBuffer = default;
 
         Container.Input.Streams[StreamIndex].DiscardFlags = AVDiscard.AVDISCARD_ALL;
@@ -360,7 +354,7 @@ public unsafe sealed class AudioComponent : FilteringMediaComponent, ISerialGrou
 
     private void ReleaseConvertContext()
     {
-        ConvertContext?.Release();
+        ConvertContext?.Dispose();
         ConvertContext = default;
     }
 
@@ -473,6 +467,6 @@ public unsafe sealed class AudioComponent : FilteringMediaComponent, ISerialGrou
 
         // Ported as the_end section.
         ReleaseFilterGraph();
-        decodedFrame.Release();
+        decodedFrame.Dispose();
     }
 }

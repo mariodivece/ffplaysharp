@@ -69,7 +69,7 @@ public abstract class FilteringMediaComponent : MediaComponent
 
     protected void ReleaseFilterGraph()
     {
-        FilterGraph?.Release();
+        FilterGraph?.Dispose();
         FilterGraph = default;
         InputFilter = default;
         OutputFilter = default;

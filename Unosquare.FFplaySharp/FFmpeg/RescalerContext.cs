@@ -8,7 +8,6 @@ public unsafe sealed class RescalerContext : CountedReference<SwsContext>
         UpdatePointer(ffmpeg.sws_alloc_context());
     }
 
-
     public void Reallocate(
         int inW, int inH, AVPixelFormat inFormat, int outW, int outH, AVPixelFormat outFormat, int interpolationFlags = Constants.RescalerInterpolation)
     {
@@ -17,7 +16,7 @@ public unsafe sealed class RescalerContext : CountedReference<SwsContext>
 
         if (updatedPointer is null)
         {
-            Release();
+            Dispose();
             return;
         }
 
@@ -36,6 +35,6 @@ public unsafe sealed class RescalerContext : CountedReference<SwsContext>
         return ffmpeg.sws_scale(Reference, inPlanes, inStrides, 0, inH, targetScan, targetStride);
     }
 
-    protected override unsafe void ReleaseInternal(SwsContext* target) =>
+    protected override unsafe void ReleaseNative(SwsContext* target) =>
         ffmpeg.sws_freeContext(target);
 }

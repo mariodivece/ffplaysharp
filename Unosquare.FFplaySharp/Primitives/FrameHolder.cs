@@ -45,17 +45,17 @@ public sealed class FrameHolder : IDisposable, ISerialGroupable
     /// <summary>
     /// Gets whether the video frame is flipped vertically.
     /// </summary>
-    public bool IsPictureVerticalFlipped => Frame.IsNotNull() && Frame.LineSize[0] < 0;
+    public bool IsPictureVerticalFlipped => Frame.IsValid() && Frame.LineSize[0] < 0;
 
     public AVChannelLayout ChannelLayout { get; private set; }
 
     public bool HasValidTime => !Time.IsNaN;
 
-    public TimeExtent StartDisplayTime => Subtitle.IsNotNull()
+    public TimeExtent StartDisplayTime => Subtitle.IsValid()
         ? Time + (Subtitle.StartDisplayTime / 1000d)
         : Time;
 
-    public TimeExtent EndDisplayTime => Subtitle.IsNotNull()
+    public TimeExtent EndDisplayTime => Subtitle.IsValid()
         ? Time + (Subtitle.EndDisplayTime / 1000d)
         : Time + Duration;
 
@@ -63,7 +63,7 @@ public sealed class FrameHolder : IDisposable, ISerialGroupable
 
     public void Update(FFFrame sourceFrame, int groupIndex, TimeExtent time, TimeExtent duration)
     {
-        if (sourceFrame.IsNull())
+        if (sourceFrame.IsVoid())
             throw new ArgumentNullException(nameof(sourceFrame));
 
         sourceFrame.MoveTo(Frame);
@@ -78,10 +78,10 @@ public sealed class FrameHolder : IDisposable, ISerialGroupable
 
     public void Update(FFSubtitle sourceFrame, FFCodecContext codecContext, int groupIndex, double time)
     {
-        if (codecContext.IsNull())
+        if (codecContext.IsVoid())
             throw new ArgumentNullException(nameof(codecContext));
 
-        Subtitle?.Release();
+        Subtitle?.Dispose();
         Subtitle = sourceFrame;
         IsUploaded = false;
         GroupIndex = groupIndex;
@@ -100,16 +100,16 @@ public sealed class FrameHolder : IDisposable, ISerialGroupable
     public void Reset()
     {
         Frame?.Reset();
-        Subtitle?.Release();
+        Subtitle?.Dispose();
         Subtitle = default;
     }
 
     public void Dispose()
     {
-        Frame?.Release();
+        Frame?.Dispose();
         Frame = default;
 
-        Subtitle?.Release();
+        Subtitle?.Dispose();
         Subtitle = default;
     }
 }

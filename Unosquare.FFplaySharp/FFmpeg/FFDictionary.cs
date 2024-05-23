@@ -21,7 +21,7 @@ public unsafe class FFDictionary : CountedReference<AVDictionary>
     {
         var result = new StringDictionary();
         FFDictionaryEntry? entry = default;
-        while ((entry = NextEntry(dictionary, entry)).IsNotNull())
+        while ((entry = NextEntry(dictionary, entry)).IsValid())
             result[entry!.Key] = entry.Value;
 
         return result;
@@ -34,7 +34,7 @@ public unsafe class FFDictionary : CountedReference<AVDictionary>
         pointer = SetEntry(pointer, key, value, flags);
         UpdatePointer(pointer);
 
-        if (wasNull && Address.IsNotNull())
+        if (wasNull && !IsEmpty)
             ObjectId = ReferenceCounter.Add(this, Source);
         else if (!wasNull && IsEmpty)
             ReferenceCounter.Remove(this);
@@ -53,7 +53,7 @@ public unsafe class FFDictionary : CountedReference<AVDictionary>
         FindEntry(this, key, matchCase);
 
     public bool ContainsKey(string key, bool matchCase = false) =>
-        Find(key, matchCase).IsNotNull();
+        Find(key, matchCase).IsValid();
 
     public Dictionary<string, string> ToDictionary() =>
         Extract(this);
@@ -70,7 +70,7 @@ public unsafe class FFDictionary : CountedReference<AVDictionary>
         return result;
     }
 
-    protected override void ReleaseInternal(AVDictionary* target) =>
+    protected override void ReleaseNative(AVDictionary* target) =>
          ffmpeg.av_dict_free(&target);
 
     private static FFDictionaryEntry? FirstEntry(AVDictionary* dictionary)
@@ -83,7 +83,7 @@ public unsafe class FFDictionary : CountedReference<AVDictionary>
         if (dictionary is null)
             return default;
 
-        var previous = previousEntry.IsNotNull() ? previousEntry!.Reference : default;
+        var previous = previousEntry.IsValid() ? previousEntry.Reference : default;
         var entry = ffmpeg.av_dict_get(dictionary, string.Empty, previous, ffmpeg.AV_DICT_IGNORE_SUFFIX);
         return entry is not null ? new(entry) : default;
     }

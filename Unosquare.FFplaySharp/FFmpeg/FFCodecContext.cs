@@ -79,7 +79,7 @@ public unsafe sealed class FFCodecContext : CountedReference<AVCodecContext>
     {
         ArgumentNullException.ThrowIfNull((object?)codecOptions);
 
-        if (codec.IsNull())
+        if (codec.IsVoid())
             throw new ArgumentNullException(nameof(codec));
 
         var codecOptionsArg = codecOptions.Reference;
@@ -90,6 +90,6 @@ public unsafe sealed class FFCodecContext : CountedReference<AVCodecContext>
             throw new FFmpegException(resultCode, $"Could not open codec '{codec.Name}'");
     }
 
-    protected override unsafe void ReleaseInternal(AVCodecContext* target) =>
+    protected override unsafe void ReleaseNative(AVCodecContext* target) =>
         ffmpeg.avcodec_free_context(&target);
 }

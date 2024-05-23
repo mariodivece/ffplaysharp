@@ -75,6 +75,6 @@ public unsafe sealed class FFFrame : CountedReference<AVFrame>
         ffmpeg.av_frame_move_ref(destination, this);
     }
 
-    protected override unsafe void ReleaseInternal(AVFrame* target) =>
+    protected override unsafe void ReleaseNative(AVFrame* target) =>
         ffmpeg.av_frame_free(&target);
 }

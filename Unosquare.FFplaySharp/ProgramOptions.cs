@@ -305,15 +305,15 @@ public unsafe class ProgramOptions
         FFOption? o = default;
         bool isConsumed = false;
 
-        if ((o = FFMediaClass.Codec.FindOption(strippedOptionName, default, SearchFlags)).IsNotNull() || (
+        if ((o = FFMediaClass.Codec.FindOption(strippedOptionName, default, SearchFlags)).IsValid() || (
             (optionName.StartsWith('a') || optionName.StartsWith('v') || optionName.StartsWith('s')) &&
-            (o = FFMediaClass.Codec.FindOption(optionName[1..])).IsNotNull()))
+            (o = FFMediaClass.Codec.FindOption(optionName[1..])).IsValid()))
         {
             CodecOptions.Set(o, optionName, optionValue);
             isConsumed = true;
         }
 
-        if ((o = FFMediaClass.Format.FindOption(optionName, SearchFlags)).IsNotNull())
+        if ((o = FFMediaClass.Format.FindOption(optionName, SearchFlags)).IsValid())
         {
             FormatOptions.Set(o!, optionName, optionValue);
 
@@ -323,12 +323,12 @@ public unsafe class ProgramOptions
             isConsumed = true;
         }
 
-        if (!isConsumed && (o = FFMediaClass.Format.FindOption(optionName, 0, SearchFlags)).IsNotNull())
+        if (!isConsumed && (o = FFMediaClass.Format.FindOption(optionName, 0, SearchFlags)).IsValid())
         {
 
             var dummyScaler = new RescalerContext();
             var setResult = dummyScaler.SetOption(optionName, optionValue);
-            dummyScaler.Release();
+            dummyScaler.Dispose();
 
             var invalidOptions = new[] { "srcw", "srch", "dstw", "dsth", "src_format", "dst_format" };
 
@@ -348,11 +348,11 @@ public unsafe class ProgramOptions
             isConsumed = true;
         }
 
-        if (!isConsumed && (o = FFMediaClass.Resampler.FindOption(optionName, 0, SearchFlags)).IsNotNull())
+        if (!isConsumed && (o = FFMediaClass.Resampler.FindOption(optionName, 0, SearchFlags)).IsValid())
         {
             var dummyResampler = new ResamplerContext();
             var setResult = dummyResampler.SetOption(optionName, optionValue);
-            dummyResampler.Release();
+            dummyResampler.Dispose();
 
             if (setResult < 0)
             {

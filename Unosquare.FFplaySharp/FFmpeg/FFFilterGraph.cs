@@ -43,6 +43,6 @@ public unsafe sealed class FFFilterGraph : CountedReference<AVFilterGraph>
     public int SetOption(string key, string value) =>
         ffmpeg.av_opt_set(this, key, value, 0);
 
-    protected override unsafe void ReleaseInternal(AVFilterGraph* target) =>
+    protected override unsafe void ReleaseNative(AVFilterGraph* target) =>
         ffmpeg.avfilter_graph_free(&target);
 }

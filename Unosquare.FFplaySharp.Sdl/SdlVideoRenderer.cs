@@ -1,6 +1,7 @@
 ﻿namespace Unosquare.FFplaySharp.Sdl;
 
 using SDL2;
+using Unosquare.FFplaySharp.Interop;
 using Unosquare.Hpet;
 
 public unsafe class SdlVideoRenderer
@@ -92,23 +93,23 @@ public unsafe class SdlVideoRenderer
 
         SDL.SDL_SetHint(SDL.SDL_HINT_RENDER_SCALE_QUALITY, "best");
 
-        if (!RenderingWindow.IsNull())
+        if (!RenderingWindow.IsNullPointer())
         {
             SdlRenderer = SDL.SDL_CreateRenderer(RenderingWindow, -1, SDL.SDL_RendererFlags.SDL_RENDERER_ACCELERATED | SDL.SDL_RendererFlags.SDL_RENDERER_PRESENTVSYNC);
-            if (SdlRenderer.IsNull())
+            if (SdlRenderer.IsNullPointer())
             {
                 ($"Failed to initialize a hardware accelerated renderer: {SDL.SDL_GetError()}.").LogWarning();
                 SdlRenderer = SDL.SDL_CreateRenderer(RenderingWindow, -1, 0);
             }
 
-            if (!SdlRenderer.IsNull())
+            if (!SdlRenderer.IsNullPointer())
             {
                 if (SDL.SDL_GetRendererInfo(SdlRenderer, out SdlRendererInfo) == 0)
                     ($"Initialized {Helpers.PtrToString(SdlRendererInfo.name)} renderer.").LogVerbose();
             }
         }
 
-        if (RenderingWindow.IsNull() || SdlRenderer.IsNull() || SdlRendererInfo.num_texture_formats <= 0)
+        if (RenderingWindow.IsNullPointer() || SdlRenderer.IsNullPointer() || SdlRendererInfo.num_texture_formats <= 0)
         {
             var errorMessage = $"Failed to create window or renderer: {SDL.SDL_GetError()}.";
             errorMessage.LogFatal();
@@ -144,13 +145,13 @@ public unsafe class SdlVideoRenderer
     private int ReallocateTexture(
         ref IntPtr texture, uint sdlFormat, int pixelWidth, int pixelHeight, SDL.SDL_BlendMode blendMode, bool zeroBytes)
     {
-        if (texture.IsNull() || SDL.SDL_QueryTexture(texture, out var format, out var _, out var w, out var h) < 0 || pixelWidth != w || pixelHeight != h || sdlFormat != format)
+        if (texture.IsNullPointer() || SDL.SDL_QueryTexture(texture, out var format, out var _, out var w, out var h) < 0 || pixelWidth != w || pixelHeight != h || sdlFormat != format)
         {
-            if (!texture.IsNull())
+            if (!texture.IsNullPointer())
                 SDL.SDL_DestroyTexture(texture);
 
             texture = SDL.SDL_CreateTexture(SdlRenderer, sdlFormat, (int)SDL.SDL_TextureAccess.SDL_TEXTUREACCESS_STREAMING, pixelWidth, pixelHeight);
-            if (texture.IsNull())
+            if (texture.IsNullPointer())
                 return -1;
 
             if (SDL.SDL_SetTextureBlendMode(texture, blendMode) < 0)
@@ -209,7 +210,7 @@ public unsafe class SdlVideoRenderer
                             targetRect.w, targetRect.h, AVPixelFormat.AV_PIX_FMT_PAL8,
                             targetRect.w, targetRect.h, AVPixelFormat.AV_PIX_FMT_BGRA, 0);
 
-                        if (Container.Subtitle.ConvertContext.IsNull())
+                        if (Container.Subtitle.ConvertContext.IsVoid())
                         {
                             ("Cannot initialize the conversion context.").LogFatal();
                             return;
@@ -291,16 +292,16 @@ public unsafe class SdlVideoRenderer
 
     public void Close()
     {
-        if (!SdlRenderer.IsNull())
+        if (!SdlRenderer.IsNullPointer())
             SDL.SDL_DestroyRenderer(SdlRenderer);
 
-        if (!RenderingWindow.IsNull())
+        if (!RenderingWindow.IsNullPointer())
             SDL.SDL_DestroyWindow(RenderingWindow);
 
-        if (!VideoTexture.IsNull())
+        if (!VideoTexture.IsNullPointer())
             SDL.SDL_DestroyTexture(VideoTexture);
 
-        if (!SubtitleTexture.IsNull())
+        if (!SubtitleTexture.IsNullPointer())
             SDL.SDL_DestroyTexture(SubtitleTexture);
     }
 
@@ -371,7 +372,7 @@ public unsafe class SdlVideoRenderer
                 video.Width, video.Height, frame.PixelFormat,
                 video.Width, video.Height, AVPixelFormat.AV_PIX_FMT_BGRA);
 
-            if (convertContext.IsNotNull())
+            if (convertContext.IsValid())
             {
                 if (SDL.SDL_LockTexture(texture, ref textureRect, out var textureAddress, out var texturePitch) == 0)
                 {

@@ -91,12 +91,11 @@ public sealed class PacketStore : ISerialGroupable, IDisposable
     {
         if (IsClosed)
         {
-            packet?.Release();
+            packet?.Dispose();
             return false;
         }
 
-        if (packet is null)
-            throw new ArgumentNullException(nameof(packet));
+        ArgumentNullException.ThrowIfNull((object?)packet);
 
         packet.GroupIndex = packet.IsFlushPacket
             ? Interlocked.Increment(ref m_GroupIndex)
@@ -106,7 +105,7 @@ public sealed class PacketStore : ISerialGroupable, IDisposable
         Interlocked.Add(ref m_DurationUnits, packet.DurationUnits);
         if (!PacketChannel.Writer.TryWrite(packet))
         {
-            packet.Release();
+            packet.Dispose();
             return false;
         }
 
@@ -162,8 +161,8 @@ public sealed class PacketStore : ISerialGroupable, IDisposable
     {
         while (Count > 0)
         {
-            if (PacketChannel.Reader.TryRead(out var packet) && packet is not null && packet.IsNotNull())
-                packet.Release();
+            if (PacketChannel.Reader.TryRead(out var packet) && packet is not null)
+                packet.Dispose();
         }
 
         Interlocked.Exchange(ref m_ByteSize, 0);

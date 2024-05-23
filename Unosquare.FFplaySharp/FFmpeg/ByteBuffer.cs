@@ -14,9 +14,9 @@ public unsafe sealed class ByteBuffer : CountedReference<byte>
 
     public static ByteBuffer Reallocate(ByteBuffer original, ulong length)
     {
-        if (original.IsNull() || original.Length < length)
+        if (original.IsVoid() || original.Length < length)
         {
-            original?.Release();
+            original?.Dispose();
             return new(length);
         }
 
@@ -29,7 +29,7 @@ public unsafe sealed class ByteBuffer : CountedReference<byte>
         Buffer.MemoryCopy(source, Reference, maxLength, maxLength);
     }
 
-    protected override void ReleaseInternal(byte* target)
+    protected override void ReleaseNative(byte* target)
     {
         ffmpeg.av_free(target);
         Length = 0;

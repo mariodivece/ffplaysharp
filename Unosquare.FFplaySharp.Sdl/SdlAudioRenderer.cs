@@ -1,4 +1,6 @@
-﻿namespace Unosquare.FFplaySharp.Sdl;
+﻿using Unosquare.FFplaySharp.Interop;
+
+namespace Unosquare.FFplaySharp.Sdl;
 
 public unsafe class SdlAudioRenderer
 {
@@ -190,7 +192,7 @@ public unsafe class SdlAudioRenderer
             var outputStreamPointer = (byte*)audioStream.ToPointer();
             var inputStreamPointer = ReadBuffer.Reference + ReadBufferIndex;
 
-            if (!Container.IsMuted && ReadBuffer.IsNotNull() && Volume == SDL.SDL_MIX_MAXVOLUME)
+            if (!Container.IsMuted && ReadBuffer.IsValid() && Volume == SDL.SDL_MIX_MAXVOLUME)
             {
                 Buffer.MemoryCopy(inputStreamPointer, outputStreamPointer, readByteCount, readByteCount);
             }
@@ -200,7 +202,7 @@ public unsafe class SdlAudioRenderer
                 for (var i = 0; i < readByteCount; i++)
                     outputStreamPointer[i] = 0;
 
-                if (!Container.IsMuted && ReadBuffer.IsNotNull())
+                if (!Container.IsMuted && ReadBuffer.IsValid())
                     SDL.SDL_MixAudioFormat(
                         outputStreamPointer,
                         inputStreamPointer,

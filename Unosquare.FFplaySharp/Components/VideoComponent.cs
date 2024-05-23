@@ -135,7 +135,7 @@ public sealed class VideoComponent : FilteringMediaComponent
         }
 
         ReleaseFilterGraph();
-        decodedFrame?.Release();
+        decodedFrame.Dispose();
         return; // 0;
     }
 
@@ -200,7 +200,7 @@ public sealed class VideoComponent : FilteringMediaComponent
         string filterName, string? filterArgs, FFFilterContext lastFilter)
     {
         var filter = FFFilter.FromName(filterName);
-        if (filter.IsNull())
+        if (filter.IsVoid())
             throw new ArgumentException($"Known filter name '{filterName}' not found.", nameof(filterName));
 
         var insertedFilter = FFFilterContext.Create(

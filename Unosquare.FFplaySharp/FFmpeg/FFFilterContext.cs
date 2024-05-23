@@ -36,7 +36,7 @@ public unsafe sealed class FFFilterContext : NativeReference<AVFilterContext>
     public static FFFilterContext Create(FFFilterGraph graph, string knownFilterName, string name, string? options = default)
     {
         var filter = FFFilter.FromName(knownFilterName);
-        if (filter.IsNull())
+        if (filter.IsVoid())
             throw new ArgumentNullException(nameof(knownFilterName));
 
         return Create(graph, filter!, name, options);
@@ -44,10 +44,10 @@ public unsafe sealed class FFFilterContext : NativeReference<AVFilterContext>
 
     public static FFFilterContext Create(FFFilterGraph graph, FFFilter filter, string name, string? options = default)
     {
-        if (graph.IsNull())
+        if (graph.IsVoid())
             throw new ArgumentNullException(nameof(graph));
 
-        if (filter.IsNull())
+        if (filter.IsVoid())
             throw new ArgumentNullException(nameof(graph));
 
         AVFilterContext* pointer = default;
@@ -61,10 +61,10 @@ public unsafe sealed class FFFilterContext : NativeReference<AVFilterContext>
 
     public static void Link(FFFilterContext input, FFFilterContext output)
     {
-        if (input.IsNull())
+        if (input.IsVoid())
             throw new ArgumentNullException(nameof(input));
 
-        if (output.IsNull())
+        if (output.IsVoid())
             throw new ArgumentNullException(nameof(output));
 
         var resultCode = ffmpeg.avfilter_link(input, 0, output, 0);

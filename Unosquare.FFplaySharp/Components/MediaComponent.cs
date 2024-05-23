@@ -46,14 +46,14 @@ public abstract class MediaComponent
 
     public bool IsPictureAttachmentStream =>
         MediaType.IsVideo() &&
-        Stream.IsNotNull() &&
+        Stream.IsValid() &&
         Stream.DispositionFlags.HasFlag(ffmpeg.AV_DISPOSITION_ATTACHED_PIC);
 
     public bool HasEnoughPackets
     {
         get
         {
-            var duration = Packets.DurationUnits > 0
+            var duration = Stream.IsValid() && Packets.DurationUnits > 0
                 ? Stream.TimeBase.ToFactor() * Packets.DurationUnits
                 : 0d;
 
@@ -69,7 +69,7 @@ public abstract class MediaComponent
 
     public int FinalPacketGroupIndex { get; protected set; }
 
-    public bool HasFinishedDecoding => Stream.IsNull() || (FinalPacketGroupIndex == Packets.GroupIndex && !Frames.HasPending);
+    public bool HasFinishedDecoding => Stream.IsVoid() || (FinalPacketGroupIndex == Packets.GroupIndex && !Frames.HasPending);
 
     public virtual void Close()
     {
@@ -143,24 +143,24 @@ public abstract class MediaComponent
                     Packets.TryDequeue(true, out currentPacket);
                     if (Packets.IsClosed)
                     {
-                        currentPacket?.Release();
+                        currentPacket?.Dispose();
                         return -1;
                     }
 
-                    if (currentPacket.IsNotNull())
+                    if (currentPacket.IsValid())
                         PacketGroupIndex = currentPacket!.GroupIndex;
                 }
 
                 if (Packets.GroupIndex == PacketGroupIndex)
                     break;
 
-                currentPacket?.Release();
+                currentPacket?.Dispose();
 
             } while (true);
 
             if (currentPacket.IsFlushPacket)
             {
-                currentPacket.Release();
+                currentPacket.Dispose();
                 FlushCodecBuffers();
             }
             else
@@ -199,7 +199,7 @@ public abstract class MediaComponent
                     }
                 }
 
-                currentPacket?.Release();
+                currentPacket?.Dispose();
             }
         }
     }
@@ -220,8 +220,8 @@ public abstract class MediaComponent
 
     public void DisposeDecoder()
     {
-        PendingPacket?.Release();
-        CodecContext.Release();
+        PendingPacket?.Dispose();
+        CodecContext.Dispose();
         CodecContext = default;
     }
 

@@ -1,6 +1,4 @@
-﻿using Unosquare.FFplaySharp.Interop;
-
-namespace FFmpeg;
+﻿namespace FFmpeg;
 
 public unsafe sealed class FFFilterInOut : NativeReference<AVFilterInOut>
 {
@@ -31,13 +29,13 @@ public unsafe sealed class FFFilterInOut : NativeReference<AVFilterInOut>
     public FFFilterInOut? Next
     {
         get => !IsEmpty && Reference->next is not null ? new(Reference->next) : default;
-        set => Reference->next = value.IsNotNull() ? value!.Reference : default;
+        set => Reference->next = value.IsValid() ? value.Reference : default;
     }
 
     public FFFilterContext? Filter
     {
         get => !IsEmpty && Reference->filter_ctx is not null ? new(Reference->filter_ctx) : default;
-        set => Reference->filter_ctx = value.IsNotNull() ? value!.Reference : default;
+        set => Reference->filter_ctx = value.IsValid() ? value.Reference : default;
     }
 
     public void Release()

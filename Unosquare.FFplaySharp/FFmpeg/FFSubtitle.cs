@@ -21,6 +21,6 @@ public unsafe sealed class FFSubtitle : CountedReference<AVSubtitle>
 
     public SubtitleRectSet Rects => new(this);
 
-    protected override unsafe void ReleaseInternal(AVSubtitle* pointer) =>
+    protected override unsafe void ReleaseNative(AVSubtitle* pointer) =>
         ffmpeg.avsubtitle_free(pointer);
 }

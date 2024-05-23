@@ -41,6 +41,6 @@ public unsafe sealed class ResamplerContext : CountedReference<SwrContext>
     public int SetOption(string key, string value) =>
         ffmpeg.av_opt_set(Reference, key, value, 0);
 
-    protected override unsafe void ReleaseInternal(SwrContext* pointer) =>
+    protected override unsafe void ReleaseNative(SwrContext* pointer) =>
         ffmpeg.swr_free(&pointer);
 }

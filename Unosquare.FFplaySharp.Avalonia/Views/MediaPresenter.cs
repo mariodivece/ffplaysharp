@@ -1,6 +1,4 @@
-﻿using Avalonia.Controls;
-using Avalonia.Input;
-using Avalonia.LogicalTree;
+﻿using Avalonia.LogicalTree;
 using Avalonia.Media;
 using Avalonia.Media.Imaging;
 using Avalonia.Threading;
@@ -8,7 +6,6 @@ using FFmpeg.AutoGen;
 using System;
 using System.Collections.Generic;
 using System.Diagnostics;
-using System.Threading.Tasks;
 using Unosquare.FFplaySharp.Primitives;
 using Unosquare.FFplaySharp.WinWave;
 using Unosquare.Hpet;
@@ -21,7 +18,7 @@ internal class MediaPresenter : VideoPresenterBase, IPresenter
 
     public double LastAudioCallbackTime { get; set; }
 
-    public IReadOnlyList<AVPixelFormat> PixelFormats { get; } = new[] { AVPixelFormat.AV_PIX_FMT_BGRA };
+    public IReadOnlyList<AVPixelFormat> PixelFormats { get; } = [AVPixelFormat.AV_PIX_FMT_BGRA];
 
     public void CloseAudioDevice() => throw new NotImplementedException();
 

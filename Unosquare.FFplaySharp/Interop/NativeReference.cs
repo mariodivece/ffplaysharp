@@ -9,13 +9,16 @@
 public abstract unsafe class NativeReference<T> : INativeReference<T>
     where T : unmanaged
 {
+    private nint _Address = nint.Zero;
+
     /// <summary>
     /// Initializes a new instance of the <see cref="NativeReference{T}"/> class.
     /// </summary>
     /// <param name="target">The target pointer to wrap.</param>
     protected NativeReference(T* target)
     {
-        UpdatePointer(target);
+        var targetAddress = target is null ? nint.Zero : new(target);
+        Interlocked.Exchange(ref _Address, targetAddress);
     }
 
     /// <summary>
@@ -27,29 +30,44 @@ public abstract unsafe class NativeReference<T> : INativeReference<T>
     }
 
     /// <inheritdoc/>
-    public nint Address { get; protected set; } = nint.Zero;
+    public virtual nint Address
+    {
+        get => Interlocked.CompareExchange(ref _Address, 0, 0);
+        private set => Interlocked.Exchange(ref _Address, value);
+    }
 
     /// <inheritdoc/>
-    public T* Reference => (T*)Address;
+    public virtual T* Reference => (T*)Address;
 
     /// <inheritdoc/>
-    public T? Dereference() => Address == nint.Zero ? default : *Reference;
+    public virtual T? Dereference() => Address == nint.Zero ? default : *Reference;
 
     /// <inheritdoc/>
-    public bool IsEmpty => Address == nint.Zero;
+    public virtual bool IsEmpty => Address == nint.Zero;
 
     /// <inheritdoc/>
-    public void UpdatePointer(nint address) =>
+    public virtual void UpdatePointer(nint address) =>
         Address = address;
 
     /// <inheritdoc/>
-    public void UpdatePointer(T* target) => Address = target is null
+    public virtual void UpdatePointer(T* target) => Address = target is null
         ? nint.Zero
         : new(target);
 
     /// <inheritdoc/>
-    public void ClearPointer() => Address = nint.Zero;
+    public virtual void ClearPointer() => Address = nint.Zero;
 
+    /// <inheritdoc/>
+    public override bool Equals(object? obj) =>
+        obj is INativeReference r && Address == r.Address;
+
+    /// <summary>
+    /// Implicit cast that converts the given <see cref="NativeReference{T}"/> to a T*.
+    /// </summary>
+    /// <param name="reference">The reference.</param>
+    /// <returns>
+    /// The result of the operation.
+    /// </returns>
     public static implicit operator T*(NativeReference<T>? reference) =>
         reference is null ? default : reference.Reference;
 

@@ -1,6 +1,4 @@
-﻿using Unosquare.FFplaySharp.Interop;
-
-namespace FFmpeg;
+﻿namespace FFmpeg;
 
 public unsafe sealed class FFMediaClass : NativeReference<AVClass>
 {
@@ -24,7 +22,7 @@ public unsafe sealed class FFMediaClass : NativeReference<AVClass>
     /// <returns></returns>
     public FFOption? FindOption(string optionName, int optionFlags = default, int searchFlags = ffmpeg.AV_OPT_SEARCH_FAKE_OBJ)
     {
-        if (IsEmpty) return default;
+        if (IsEmpty || string.IsNullOrWhiteSpace(optionName)) return default;
 
         var option = ffmpeg.av_opt_find(this, optionName, null, optionFlags, searchFlags);
         return option is not null && option->flags != (int)AVOptionType.AV_OPT_TYPE_FLAGS
@@ -33,7 +31,7 @@ public unsafe sealed class FFMediaClass : NativeReference<AVClass>
     }
 
     public bool HasOption(string optionName, int optionFlags = default, int searchFlags = ffmpeg.AV_OPT_SEARCH_FAKE_OBJ) =>
-        FindOption(optionName, optionFlags, searchFlags).IsNotNull();
+        FindOption(optionName, optionFlags, searchFlags).IsValid();
 
 
     public static FFMediaClass FromPrivateClass(AVClass* target) => target is null

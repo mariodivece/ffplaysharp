@@ -1,5 +1,6 @@
 ﻿using FFmpeg;
 using FFmpeg.AutoGen;
+using Unosquare.FFplaySharp.Interop;
 using Unosquare.FFplaySharp.Primitives;
 using Unosquare.FFplaySharp.WinWave.Audio;
 using static Unosquare.FFplaySharp.WinWave.Audio.WaveInterop;
@@ -196,7 +197,7 @@ public class WavePlayer : IWaveProvider
 
             var inputStreamPointer = ReadBuffer.Reference + ReadBufferIndex;
 
-            if (!Container.IsMuted && ReadBuffer.IsNotNull())
+            if (!Container.IsMuted && ReadBuffer.IsValid())
             {
                 Buffer.MemoryCopy(inputStreamPointer, outputStreamPointer, readByteCount, readByteCount);
             }

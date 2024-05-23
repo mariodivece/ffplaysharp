@@ -14,7 +14,7 @@ internal unsafe class FFBPrint : CountedReference<AVBPrint>
     {
         get
         {
-            if (this.IsNull())
+            if (IsEmpty)
                 return string.Empty;
 
             var bpStruct = Marshal.PtrToStructure<AVBPrintExtended>(Address);
@@ -41,7 +41,7 @@ internal unsafe class FFBPrint : CountedReference<AVBPrint>
         return (AVBPrint*)bpStructAddress;
     }
 
-    protected override unsafe void ReleaseInternal(AVBPrint* target)
+    protected override unsafe void ReleaseNative(AVBPrint* target)
     {
         var bpStruct = Marshal.PtrToStructure<AVBPrintExtended>((nint)target);
 

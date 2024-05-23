@@ -46,7 +46,7 @@ public unsafe sealed class FFPacket : CountedReference<AVPacket>, ISerialGroupab
         set => Reference->data = value;
     }
 
-    public bool HasData => Address.IsNotNull() && Data is not null;
+    public bool HasData => !IsEmpty && Data is not null;
 
     public static FFPacket CreateFlushPacket()
     {
@@ -77,7 +77,7 @@ public unsafe sealed class FFPacket : CountedReference<AVPacket>, ISerialGroupab
         return new FFPacket(copy, filePath, lineNumber);
     }
 
-    public FFPacket Clone([CallerFilePath] string? filePath = default, [CallerLineNumber] int? lineNumber = default) => Address.IsNull()
+    public FFPacket Clone([CallerFilePath] string? filePath = default, [CallerLineNumber] int? lineNumber = default) => IsEmpty
         ? throw new InvalidOperationException("Cannot clone a null packet pointer")
         : new(ffmpeg.av_packet_clone(Reference), filePath, lineNumber);
 
@@ -85,6 +85,6 @@ public unsafe sealed class FFPacket : CountedReference<AVPacket>, ISerialGroupab
         ? Reference->pts
         : Reference->dts;
 
-    protected override void ReleaseInternal(AVPacket* target) =>
+    protected override void ReleaseNative(AVPacket* target) =>
         ffmpeg.av_packet_free(&target);
 }

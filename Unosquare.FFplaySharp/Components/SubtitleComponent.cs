@@ -26,18 +26,18 @@ public sealed class SubtitleComponent : MediaComponent
             var gotSubtitle = DecodeSubtitleInto(frame);
             if (gotSubtitle < 0)
             {
-                frame.Release();
+                frame.Dispose();
                 break;
             }
             else if (gotSubtitle == 0 || frame.Format != 0)
             {
-                frame.Release();
+                frame.Dispose();
                 continue;
             }
 
             if (!Frames.LeaseFrameForWriting(out var targetFrame))
             {
-                frame.Release();
+                frame.Dispose();
                 break;
             }
 

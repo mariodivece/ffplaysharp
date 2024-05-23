@@ -340,8 +340,8 @@ public unsafe class SdlPresenter : IPresenter
         {
             next = (next + 1) % (int)ShowMode.Last;
         } while (next != (int)Container.ShowMode &&
-            (next == (int)ShowMode.Video && Container.Video.Stream.IsNull() ||
-            next != (int)ShowMode.Video && Container.Audio.Stream.IsNull()));
+            (next == (int)ShowMode.Video && Container.Video.Stream.IsVoid() ||
+            next != (int)ShowMode.Video && Container.Audio.Stream.IsVoid()));
 
         if ((int)Container.ShowMode != next)
         {

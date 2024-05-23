@@ -11,7 +11,7 @@ public unsafe sealed class SubtitleRectSet : NativeChildSet<FFSubtitle, FFSubtit
     public override FFSubtitleRect this[int index]
     {
         get => new(Parent.Reference->rects[index]);
-        set => Parent.Reference->rects[index] = value.IsNotNull() ? value.Reference : default;
+        set => Parent.Reference->rects[index] = value.IsValid() ? value.Reference : default;
     }
 
     public override int Count =>

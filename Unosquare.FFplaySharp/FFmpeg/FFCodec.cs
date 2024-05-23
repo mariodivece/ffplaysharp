@@ -17,7 +17,7 @@ public unsafe sealed class FFCodec : NativeReference<AVCodec>
 
     public int MaxLowResFactor => Reference->max_lowres;
 
-    public string? Name => Address.IsNull() ? default : GetName(Reference->id);
+    public string? Name => IsEmpty ? default : GetName(Reference->id);
 
     public static string GetName(AVCodecID codecId) => ffmpeg.avcodec_get_name(codecId);
 
