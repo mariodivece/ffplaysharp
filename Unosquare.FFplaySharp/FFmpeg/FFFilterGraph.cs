@@ -24,12 +24,15 @@ public unsafe sealed class FFFilterGraph : CountedReference<AVFilterGraph>
 
     public void ParseLiteral(string graphLiteral, FFFilterInOut input, FFFilterInOut output)
     {
-        var inputs = input.Reference;
-        var outputs = output.Reference;
-        var resultCode = ffmpeg.avfilter_graph_parse_ptr(this, graphLiteral, &inputs, &outputs, null);
+        if (input is null || input.IsVoid())
+            throw new ArgumentNullException(nameof(input));
 
-        input.UpdatePointer(inputs);
-        output.UpdatePointer(outputs);
+        if (output is null || output.IsVoid())
+            throw new ArgumentNullException(nameof(output));
+
+        using var inputPtr = input.AsDoublePointer();
+        using var outputPtr = output.AsDoublePointer();
+        var resultCode = ffmpeg.avfilter_graph_parse_ptr(this, graphLiteral, inputPtr, outputPtr, null);
 
         if (resultCode < 0)
             throw new FFmpegException(resultCode, $"Could not parse filtergraph literal: {graphLiteral}");

@@ -40,10 +40,12 @@ public abstract unsafe class NativeReference<T> : INativeReference<T>
     public virtual T* Reference => (T*)Address;
 
     /// <inheritdoc/>
-    public virtual T? Dereference() => Address == nint.Zero ? default : *Reference;
+    public virtual bool IsEmpty => Address == nint.Zero;
 
     /// <inheritdoc/>
-    public virtual bool IsEmpty => Address == nint.Zero;
+    public virtual T? Dereference() => Address == nint.Zero ? default : *Reference;
+
+    public virtual FixedDoublePointer<T> AsDoublePointer() => new(this);
 
     /// <inheritdoc/>
     public virtual void UpdatePointer(nint address) =>

@@ -61,4 +61,19 @@ public unsafe interface INativeReference<T> : INativeReference
     /// a default value of <see cref="T?"/> (null) is returned.
     /// </summary>
     T? Dereference();
+
+    /// <summary>
+    /// Obtains a <see cref="FixedDoublePointer{T}"/> object
+    /// for updating the underlying <see cref="Reference"/>
+    /// outside of managed code. Always call <see cref="IDisposable.Dispose"/>
+    /// method to update the undelying <see cref="Reference"/>.
+    /// It is recommended that you use this pattern so you don't forget
+    /// to call <see cref="UpdatePointer(T*)"/> when a pointer is updated
+    /// outside of managed code.
+    /// </summary>
+    /// <returns>
+    /// A <see cref="FixedDoublePointer{T}"/> that updates this <see cref="INativeReference{T}"/>
+    /// upon disposal.
+    /// </returns>
+    FixedDoublePointer<T> AsDoublePointer();
 }

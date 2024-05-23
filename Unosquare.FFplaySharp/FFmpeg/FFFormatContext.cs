@@ -125,7 +125,9 @@
             var formatOptionsPtr = formatOptions.Reference;
             var resultCode = ffmpeg.avformat_open_input(&context, filePath, format, &formatOptionsPtr);
             UpdatePointer(context);
+
             formatOptions.UpdatePointer(formatOptionsPtr);
+
             if (context is not null)
                 format.UpdatePointer(context->iformat);
 

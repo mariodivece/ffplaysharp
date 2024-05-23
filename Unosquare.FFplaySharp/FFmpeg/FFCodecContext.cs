@@ -86,9 +86,9 @@ public unsafe sealed class FFCodecContext : CountedReference<AVCodecContext>
         if (codec.IsVoid())
             throw new ArgumentNullException(nameof(codec));
 
-        var codecOptionsArg = codecOptions.Reference;
-        var resultCode = ffmpeg.avcodec_open2(this, codec, &codecOptionsArg);
-        codecOptions.UpdatePointer(codecOptionsArg);
+        int resultCode;
+        using var codecOptionsArg = codecOptions.AsDoublePointer();
+        resultCode = ffmpeg.avcodec_open2(this, codec, codecOptionsArg);
 
         if (resultCode < 0)
             throw new FFmpegException(resultCode, $"Could not open codec '{codec.Name}'");

@@ -184,11 +184,12 @@ public unsafe sealed class AudioComponent : FilteringMediaComponent, ISerialGrou
 
             ResampledOutputBuffer = ByteBuffer.Reallocate(ResampledOutputBuffer, (ulong)outputBufferSize);
             var audioBufferIn = audio.Frame.ExtendedData;
-            var audioBufferOut = ResampledOutputBuffer.Reference;
-            var outputSampleCount = ConvertContext.Convert(
-                &audioBufferOut, wantedOutputSize, audioBufferIn, audio.Frame.SampleCount);
 
-            ResampledOutputBuffer.UpdatePointer(audioBufferOut);
+            var audioBufferOut = ResampledOutputBuffer.AsDoublePointer();
+            var outputSampleCount = ConvertContext.Convert(
+                audioBufferOut, wantedOutputSize, audioBufferIn, audio.Frame.SampleCount);
+
+            audioBufferOut.Dispose();
             audio.Frame.ExtendedData = audioBufferIn;
 
             if (outputSampleCount < 0)
