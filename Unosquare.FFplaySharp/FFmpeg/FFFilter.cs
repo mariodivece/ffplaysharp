@@ -1,6 +1,4 @@
-﻿using Unosquare.FFplaySharp.Interop;
-
-namespace FFmpeg;
+﻿namespace FFmpeg;
 
 public unsafe sealed class FFFilter : NativeReference<AVFilter>
 {

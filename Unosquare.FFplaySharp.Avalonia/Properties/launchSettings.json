@@ -2,9 +2,9 @@
   "profiles": {
     "Unosquare.FFplaySharp.Avalonia": {
       "commandName": "Project",
-      "commandLineArgs1": "C:\\Users\\UnoSp\\OneDrive\\ffme-testsuite\\video-framerate-01.mp4",
-      "commandLineArgs": "C:\\Users\\UnoSp\\OneDrive\\ffme-testsuite\\youtube-export-06.mp4",
-      "commandLineArgs0": "C:\\Users\\UnoSp\\OneDrive\\ffme-testsuite\\issue-446-mp460Hz.mp4"
+      "commandLineArgs2": "C:\\Users\\UnoSp\\OneDrive\\ffme-testsuite\\video-framerate-01.mp4",
+      "commandLineArgs1": "C:\\Users\\UnoSp\\OneDrive\\ffme-testsuite\\youtube-export-06.mp4",
+      "commandLineArgs": "C:\\Users\\UnoSp\\OneDrive\\ffme-testsuite\\issue-446-mkv60Hz.mkv"
     }
   }
 }

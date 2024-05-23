@@ -77,6 +77,8 @@ internal class MediaPresenter : VideoPresenterBase, IPresenter
                 return;
 
             TargetBitmap?.Dispose();
+            TargetBitmap = null;
+            GC.Collect();
             TargetBitmap = requestedPictureSize.ToWriteableBitmap();
         }
     }
@@ -90,11 +92,12 @@ internal class MediaPresenter : VideoPresenterBase, IPresenter
                 if (Container is null)
                     return;
 
-                Container.Options.VideoMaxPixelWidth = (int)(Bounds.Width * 96d / 72d);
-                Container.Options.VideoMaxPixelHeight = (int)(Bounds.Height * 96d / 72d);
-
                 if (Bounds.Width <= 0 || Bounds.Height <= 0 || !isRunning)
                     return;
+
+                // TODO: Don't write the options. Write some sort of standard present state field.
+                Container.Options.VideoMaxPixelWidth = (int)(Bounds.Width * 96d / 72d);
+                Container.Options.VideoMaxPixelHeight = (int)(Bounds.Height * 96d / 72d);
 
                 if (TargetBitmap is null || Container.Video.Frames.IsClosed)
                     return;
@@ -221,6 +224,9 @@ internal class MediaPresenter : VideoPresenterBase, IPresenter
         {
             if (TargetBitmap is null)
                 return false;
+
+            Container.Presenter.UpdatePictureSize(
+                source.Width, source.Height, source.Frame.SampleAspectRatio);
 
             using var backBuffer = TargetBitmap.Lock();
             var target = new PictureParams

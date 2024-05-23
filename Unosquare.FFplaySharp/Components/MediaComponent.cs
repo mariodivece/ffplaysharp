@@ -11,10 +11,9 @@ public abstract class MediaComponent
     protected MediaComponent(MediaContainer container)
     {
         Container = container;
-        Packets = new(this);
+        Packets = new();
         m_FrameStore = new(CreateFrameQueue, false);
         ReorderPts = Container.Options.IsPtsReorderingEnabled;
-        StreamIndex = -1;
         LastStreamIndex = -1;
     }
 
@@ -28,19 +27,13 @@ public abstract class MediaComponent
 
     public FFStream? Stream { get; protected set; }
 
-    public int StreamIndex { get; set; }
+    public int StreamIndex => Stream.IsVoid() ? -1 : Stream.Index;
 
     public int LastStreamIndex { get; set; }
 
     public abstract AVMediaType MediaType { get; }
 
     public string MediaTypeString => MediaType.ToName();
-
-    public bool IsAudio => MediaType == AVMediaType.AVMEDIA_TYPE_AUDIO;
-
-    public bool IsVideo => MediaType == AVMediaType.AVMEDIA_TYPE_VIDEO;
-
-    public bool IsSubtitle => MediaType == AVMediaType.AVMEDIA_TYPE_SUBTITLE;
 
     public abstract string? WantedCodecName { get; }
 
@@ -80,7 +73,6 @@ public abstract class MediaComponent
         DisposeDecoder();
         Container.Input.Streams[StreamIndex].DiscardFlags = AVDiscard.AVDISCARD_ALL;
         Stream = default;
-        StreamIndex = -1;
     }
 
     protected int DecodeFrame(FFFrame? decodedFrame, FFSubtitle? decodedSubtitle)
@@ -212,7 +204,6 @@ public abstract class MediaComponent
 
     public virtual void InitializeDecoder(FFCodecContext codecContext, int streamIndex)
     {
-        StreamIndex = streamIndex;
         Stream = Container.Input.Streams[streamIndex];
         CodecContext = codecContext;
         PacketGroupIndex = -1;

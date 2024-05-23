@@ -306,7 +306,6 @@ public unsafe sealed class AudioComponent : FilteringMediaComponent, ISerialGrou
 
         Container.Input.Streams[StreamIndex].DiscardFlags = AVDiscard.AVDISCARD_ALL;
         Stream = default;
-        StreamIndex = -1;
     }
 
     protected override FrameStore CreateFrameQueue() => new(Packets, Constants.AudioFrameQueueCapacity, true);
@@ -368,12 +367,12 @@ public unsafe sealed class AudioComponent : FilteringMediaComponent, ISerialGrou
         {
             var decoderTimeBase = ffmpeg.av_make_q(1, frame.SampleRate);
 
-            if (frame.Pts.IsValidPts())
+            if (frame.Pts.IsValidTimestamp())
                 frame.Pts = ffmpeg.av_rescale_q(frame.Pts, CodecContext.PacketTimeBase, decoderTimeBase);
-            else if (NextPts.IsValidPts())
+            else if (NextPts.IsValidTimestamp())
                 frame.Pts = ffmpeg.av_rescale_q(NextPts, NextPtsTimeBase, decoderTimeBase);
 
-            if (frame.Pts.IsValidPts())
+            if (frame.Pts.IsValidTimestamp())
             {
                 NextPts = frame.Pts + frame.SampleCount;
                 NextPtsTimeBase = decoderTimeBase;
@@ -451,7 +450,7 @@ public unsafe sealed class AudioComponent : FilteringMediaComponent, ISerialGrou
                     break;
                 }
 
-                var frameTime = decodedFrame.Pts.IsValidPts() ? decodedFrame.Pts * OutputFilterTimeBase.ToFactor() : double.NaN;
+                var frameTime = decodedFrame.Pts.IsValidTimestamp() ? decodedFrame.Pts * OutputFilterTimeBase.ToFactor() : double.NaN;
                 var frameDuration = ffmpeg.av_make_q(decodedFrame.SampleCount, decodedFrame.SampleRate).ToFactor();
                 targetFrame.Update(decodedFrame, PacketGroupIndex, frameTime, frameDuration);
                 Frames.EnqueueLeasedFrame();

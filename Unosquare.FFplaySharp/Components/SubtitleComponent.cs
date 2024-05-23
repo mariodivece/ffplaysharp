@@ -41,7 +41,7 @@ public sealed class SubtitleComponent : MediaComponent
                 break;
             }
 
-            var frameTime = frame.Pts.IsValidPts() ? frame.Pts / Clock.TimeBaseMicros : 0;
+            var frameTime = frame.Pts.IsValidTimestamp() ? frame.Pts / Clock.TimeBaseMicros : 0;
 
             // now we can update the picture count
             targetFrame.Update(frame, CodecContext, PacketGroupIndex, frameTime);

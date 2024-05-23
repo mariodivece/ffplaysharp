@@ -40,7 +40,10 @@ public abstract unsafe class NativeReference<T> : INativeReference<T>
     public virtual T* Reference => (T*)Address;
 
     /// <inheritdoc/>
-    public virtual bool IsEmpty => Address == nint.Zero;
+    public virtual bool IsEmpty => Interlocked.CompareExchange(ref _Address, 0, 0) == nint.Zero;
+
+    /// <inheritdoc/>
+    public int StructureSize => sizeof(T);
 
     /// <inheritdoc/>
     public virtual T? Dereference() => Address == nint.Zero ? default : *Reference;
@@ -49,15 +52,14 @@ public abstract unsafe class NativeReference<T> : INativeReference<T>
 
     /// <inheritdoc/>
     public virtual void UpdatePointer(nint address) =>
-        Address = address;
+        Interlocked.Exchange(ref _Address, address);
 
     /// <inheritdoc/>
-    public virtual void UpdatePointer(T* target) => Address = target is null
-        ? nint.Zero
-        : new(target);
+    public virtual void UpdatePointer(T* target) =>
+        Interlocked.Exchange(ref _Address, target is null ? nint.Zero : new(target));
 
     /// <inheritdoc/>
-    public virtual void ClearPointer() => Address = nint.Zero;
+    public virtual void ClearPointer() => Interlocked.Exchange(ref _Address, nint.Zero);
 
     /// <inheritdoc/>
     public override bool Equals(object? obj) =>

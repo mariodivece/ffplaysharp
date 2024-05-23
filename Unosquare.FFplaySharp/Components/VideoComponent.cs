@@ -1,4 +1,5 @@
 ﻿namespace Unosquare.FFplaySharp.Components;
+record struct PixelSize (int Width, int Height);
 
 public sealed class VideoComponent : FilteringMediaComponent
 {
@@ -22,6 +23,15 @@ public sealed class VideoComponent : FilteringMediaComponent
 
     protected override FrameStore CreateFrameQueue() => new(Packets, Constants.VideoFrameQueueCapacity, true);
 
+
+    /// <summary>
+    /// Gets the size of the current display pixel.
+    /// TODO: Read this  from the presenter state (NOT THE friggin options)
+    /// </summary>
+    private PixelSize CurrentDisplayPixelSize => new(
+        Container.Options.VideoMaxPixelWidth / 2 * 2,
+        Container.Options.VideoMaxPixelHeight / 2 * 2);
+
     protected override void DecodingThreadMethod()
     {
         if (Stream.IsVoid())
@@ -29,7 +39,6 @@ public sealed class VideoComponent : FilteringMediaComponent
 
         int resultCode;
         var frameRate = Container.Input.GuessFrameRate(Stream);
-
         var decodedFrame = new FFFrame();
         var lastWidth = 0;
         var lastHeight = 0;
@@ -37,8 +46,7 @@ public sealed class VideoComponent : FilteringMediaComponent
         var lastGroupIndex = -1;
         var lastFilterIndex = 0;
 
-        var lastWantedWidth = Container.Options.VideoMaxPixelWidth;
-        var lastWantedHeight = Container.Options.VideoMaxPixelHeight;
+        PixelSize? lastWantedSize = null;// CurrentDisplayPixelSize;
 
         while (true)
         {
@@ -50,11 +58,28 @@ public sealed class VideoComponent : FilteringMediaComponent
             if (resultCode == 0)
                 continue;
 
+            var currentWantedSize = CurrentDisplayPixelSize;
+
+            // TODO: Let the presenter do the up-scaling (might be faster to do it ourselves)
+#if DEBUG
+            {
+                if (currentWantedSize.Width < 2 && currentWantedSize.Width > decodedFrame.Width)
+                    currentWantedSize.Width = decodedFrame.Width;
+
+                if (currentWantedSize.Height < 2 && currentWantedSize.Height > decodedFrame.Height)
+                    currentWantedSize.Height = decodedFrame.Height;
+            }
+#endif
+
             var isReconfigNeeded = lastWidth != decodedFrame.Width || lastHeight != decodedFrame.Height || lastFormat != (int)decodedFrame.PixelFormat ||
                 lastGroupIndex != PacketGroupIndex || lastFilterIndex != CurrentFilterIndex;
 
-            isReconfigNeeded |= Container.Options.VideoMaxPixelWidth > 0 && lastWantedWidth != Container.Options.VideoMaxPixelWidth;
-            isReconfigNeeded |= Container.Options.VideoMaxPixelHeight > 0 && lastWantedHeight != Container.Options.VideoMaxPixelHeight;
+            if (lastWantedSize is not null)
+            {
+                isReconfigNeeded |= currentWantedSize.Width > 0 && currentWantedSize.Width != lastWantedSize.Value.Width;
+                isReconfigNeeded |= currentWantedSize.Height > 0 && currentWantedSize.Height != lastWantedSize.Value.Height;
+            }
+
 
             if (isReconfigNeeded)
             {
@@ -91,9 +116,7 @@ public sealed class VideoComponent : FilteringMediaComponent
                 lastGroupIndex = PacketGroupIndex;
                 lastFilterIndex = CurrentFilterIndex;
                 frameRate = OutputFilter.FrameRate;
-
-                lastWantedWidth = Container.Options.VideoMaxPixelWidth;
-                lastWantedHeight = Container.Options.VideoMaxPixelHeight;
+                lastWantedSize = new(currentWantedSize.Width, currentWantedSize.Height);
             }
 
             resultCode = EnqueueFilteringFrame(decodedFrame);
@@ -122,7 +145,7 @@ public sealed class VideoComponent : FilteringMediaComponent
                     ? ffmpeg.av_make_q(frameRate.den, frameRate.num).ToFactor()
                     : 0);
 
-                var frameTime = decodedFrame.Pts.IsValidPts()
+                var frameTime = decodedFrame.Pts.IsValidTimestamp()
                     ? decodedFrame.Pts * OutputFilterTimeBase.ToFactor()
                     : double.NaN;
 
@@ -150,9 +173,6 @@ public sealed class VideoComponent : FilteringMediaComponent
         targetFrame.Update(sourceFrame, groupIndex, frameTime, duration);
         Frames.EnqueueLeasedFrame();
 
-        Container.Presenter.UpdatePictureSize(
-            targetFrame.Width, targetFrame.Height, targetFrame.Frame.SampleAspectRatio);
-
         return 0;
     }
 
@@ -170,7 +190,7 @@ public sealed class VideoComponent : FilteringMediaComponent
 
         if (Container.Options.IsFrameDropEnabled > 0 || (Container.Options.IsFrameDropEnabled != 0 && Container.MasterSyncMode != ClockSource.Video))
         {
-            if (frame.Pts.IsValidPts())
+            if (frame.Pts.IsValidTimestamp())
             {
                 var frameTime = Stream.TimeBase.ToFactor() * frame.Pts;
                 var frameDelay = frameTime - Container.MasterTime;
@@ -207,7 +227,7 @@ public sealed class VideoComponent : FilteringMediaComponent
             throw new ArgumentException($"Known filter name '{filterName}' not found.", nameof(filterName));
 
         var insertedFilter = FFFilterContext.Create(
-            FilterGraph, filter!, $"ff_{filterName}", filterArgs);
+            FilterGraph, filter, $"ff_{filterName}", filterArgs);
 
         FFFilterContext.Link(insertedFilter, lastFilter);
 
@@ -216,6 +236,9 @@ public sealed class VideoComponent : FilteringMediaComponent
 
     private void ConfigureFilters(string? filterGraphLiteral, FFFrame decoderFrame)
     {
+        if (Stream.IsVoid())
+            throw new InvalidOperationException($"'{nameof(Stream)}' cannot be null.");
+
         var codecParameters = Stream.CodecParameters;
         var frameRate = Container.Input.GuessFrameRate(Stream);
         var outputPixelFormats = Container.Presenter.PixelFormats.Cast<int>();

@@ -177,7 +177,7 @@ public unsafe class SdlPresenter : IPresenter
                                 if (pos.IsNaN)
                                     pos = Container.SeekAbsoluteTarget / Clock.TimeBaseMicros;
                                 pos += incr;
-                                if (Container.Input.StartTime.IsValidPts() && pos < Container.Input.StartTime / Clock.TimeBaseMicros)
+                                if (Container.Input.StartTime.IsValidTimestamp() && pos < Container.Input.StartTime / Clock.TimeBaseMicros)
                                     pos = Container.Input.StartTime / Clock.TimeBaseMicros;
                                 Container.SeekByTimestamp(Convert.ToInt64(pos * Clock.TimeBaseMicros), Convert.ToInt64(incr * Clock.TimeBaseMicros));
                             }
@@ -244,7 +244,7 @@ public unsafe class SdlPresenter : IPresenter
 
                         ($"Seek to {(seekPercent * 100):0.00} ({targetTime}) of total duration ({totalDuration})").LogInfo();
 
-                        if (Container.Input.StartTime.IsValidPts())
+                        if (Container.Input.StartTime.IsValidTimestamp())
                             targetPosition += Container.Input.StartTime;
 
                         Container.SeekByTimestamp(targetPosition);

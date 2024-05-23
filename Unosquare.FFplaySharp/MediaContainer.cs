@@ -277,7 +277,7 @@ public unsafe class MediaContainer
         var nextStreamIndex = startStreamIndex;
 
         FFProgram? program = default;
-        if (component.IsVideo && component.StreamIndex != -1 && component.Stream.IsValid())
+        if (component.MediaType.IsVideo() && component.StreamIndex != -1 && component.Stream.IsValid())
         {
             var programs = component.Stream.FindPrograms();
             program = programs.Any() ? programs[0] : default;
@@ -502,10 +502,10 @@ public unsafe class MediaContainer
 
             targetComponent.Start();
 
-            if (targetComponent.IsVideo)
+            if (targetComponent.MediaType.IsVideo())
                 IsPictureAttachmentPending = true;
 
-            if (targetComponent.IsAudio)
+            if (targetComponent.MediaType.IsAudio())
                 Presenter.PauseAudioDevice();
         }
         catch
@@ -643,11 +643,11 @@ public unsafe class MediaContainer
                 Title = $"{metadata["title"]} - {Options.InputFileName}";
 
             // if seeking requested, we execute it
-            if (Options.StartOffset.IsValidPts())
+            if (Options.StartOffset.IsValidTimestamp())
             {
                 var startTimestamp = Options.StartOffset;
                 // add the stream start time
-                if (Input.StartTime.IsValidPts())
+                if (Input.StartTime.IsValidTimestamp())
                     startTimestamp += Input.StartTime;
 
                 var seekStoStartResult = Input.SeekFile(long.MinValue, startTimestamp, long.MaxValue);
@@ -797,7 +797,7 @@ public unsafe class MediaContainer
                     {
                         var copy = Video.Stream.CloneAttachedPicture();
                         Video.Packets.Enqueue(copy);
-                        Video.Packets.EnqueueNull();
+                        Video.Packets.EnqueueNull(Video.StreamIndex);
                     }
 
                     IsPictureAttachmentPending = false;
@@ -815,7 +815,7 @@ public unsafe class MediaContainer
                 {
                     if (Options.LoopCount is not 1 && (Options.LoopCount is 0 || (--Options.LoopCount) > 0))
                     {
-                        SeekByTimestamp(Options.StartOffset.IsValidPts() ? Options.StartOffset : 0);
+                        SeekByTimestamp(Options.StartOffset.IsValidTimestamp() ? Options.StartOffset : 0);
                     }
                     else if (Options.ExitOnFinish)
                     {
@@ -885,7 +885,7 @@ public unsafe class MediaContainer
                 foreach (var c in Components)
                 {
                     if (c.StreamIndex >= 0)
-                        c.Packets.EnqueueNull();
+                        c.Packets.EnqueueNull(c.StreamIndex);
                 }
 
                 IsAtEndOfStream = true;
@@ -903,13 +903,13 @@ public unsafe class MediaContainer
         }
 
         // check if packet is in play range specified by user, then queue, otherwise discard.
-        var startOffset = Options.StartOffset.IsValidPts() ? Options.StartOffset : 0;
+        var startOffset = Options.StartOffset.IsValidTimestamp() ? Options.StartOffset : 0;
         var streamTimeBase = Input.Streams[readPacket.StreamIndex].TimeBase.ToFactor();
         var streamStartPts = Input.Streams[readPacket.StreamIndex].StartTime;
-        streamStartPts = streamStartPts.IsValidPts() ? streamStartPts : 0;
-        var packetPtsOffset = readPacket.Pts - streamStartPts;
+        streamStartPts = streamStartPts.IsValidTimestamp() ? streamStartPts : 0;
+        var packetPtsOffset = readPacket.PtsUnits - streamStartPts;
 
-        var isPacketInPlayRange = !Options.Duration.IsValidPts() ||
+        var isPacketInPlayRange = !Options.Duration.IsValidTimestamp() ||
                 (packetPtsOffset * streamTimeBase) - (startOffset / Clock.TimeBaseMicros)
                 <= (Options.Duration / Clock.TimeBaseMicros);
 

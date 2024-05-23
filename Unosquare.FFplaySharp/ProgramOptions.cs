@@ -2,8 +2,8 @@
 
 public unsafe class ProgramOptions
 {
-    private static readonly IReadOnlyList<OptionDef<ProgramOptions>> Definitions = new List<OptionDef<ProgramOptions>>
-    {
+    private static readonly IReadOnlyList<OptionDef<ProgramOptions>> Definitions =
+    [
         Option("x", true, "force displayed width", "width", (t, a) =>
             t.WindowWidth = int.TryParse(a, out var v) ? v : t.WindowWidth),
         Option("y", true, "force displayed height", "height", (t, a) =>
@@ -98,7 +98,7 @@ public unsafe class ProgramOptions
             t.SubtitleForcedCodecName = a),
         Option("autorotate", false, "automatically rotate video", (t, a) =>
             t.IsAutorotateEnabled = true),
-        Option("autorotate", false, "prevent automatic video rotation", (t, a) =>
+        Option("noautorotate", false, "prevent automatic video rotation", (t, a) =>
             t.IsAutorotateEnabled = false),
         Option("find_stream_info", false, "read and decode the streams to fill missing information with heuristics", (t, a) =>
             t.IsStreamInfoEnabled = true),
@@ -106,7 +106,7 @@ public unsafe class ProgramOptions
             t.FilteringThreadCount = int.TryParse(a, out var v) ? v : t.FilteringThreadCount),
         Option("i", true, "read specified file", "input_file", (t, a) =>
             t.InputFileName = a)
-    };
+    ];
 
     public ProgramOptions()
     {
@@ -199,13 +199,13 @@ public unsafe class ProgramOptions
     public int VideoMaxPixelHeight { get; set; } = -1;
 
     // Internal option dictionaries
-    public StringDictionary ScalerOptions { get; } = new();
+    public StringDictionary ScalerOptions { get; } = [];
 
-    public StringDictionary ResamplerOptions { get; } = new();
+    public StringDictionary ResamplerOptions { get; } = [];
 
-    public StringDictionary FormatOptions { get; } = new();
+    public StringDictionary FormatOptions { get; } = [];
 
-    public StringDictionary CodecOptions { get; } = new();
+    public StringDictionary CodecOptions { get; } = [];
 
     public static ProgramOptions FromCommandLineArguments(string[] args)
     {
@@ -235,7 +235,9 @@ public unsafe class ProgramOptions
             }
 
             if (argumentName.StartsWith('-'))
+#pragma warning disable CA1308 // Normalize strings to uppercase
                 argumentName = argumentName.TrimStart('-').ToLowerInvariant();
+#pragma warning restore CA1308 // Normalize strings to uppercase
             else
                 continue;
 
@@ -262,7 +264,7 @@ public unsafe class ProgramOptions
                 i++;
             }
 
-            definition.Apply(options, argumentValue);
+            definition.Apply(options, argumentValue ?? string.Empty);
         }
 
         if (options.InputFileName == "-")

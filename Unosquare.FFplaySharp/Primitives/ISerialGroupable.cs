@@ -1,5 +1,9 @@
 ﻿namespace Unosquare.FFplaySharp.Primitives;
 
+/// <summary>
+/// Defines the members used to designate streaming packets
+/// as being part of the same group.
+/// </summary>
 public interface ISerialGroupable
 {
     /// <summary>

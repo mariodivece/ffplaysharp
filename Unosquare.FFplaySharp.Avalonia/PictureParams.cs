@@ -24,7 +24,7 @@ internal record struct PictureParams()
 
     public AVPixelFormat PixelFormat { get; set; } = AVPixelFormat.AV_PIX_FMT_NONE;
 
-    public PixelSize PixelSize => new(Width, Height);
+    public readonly PixelSize PixelSize => new(Width, Height);
 
     public bool MatchesDimensions(PictureParams other) =>
         Width == other.Width && Height == other.Height && DpiX == other.DpiX && DpiY == other.DpiY;

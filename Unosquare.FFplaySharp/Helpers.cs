@@ -90,8 +90,21 @@ public static class Helpers
     public static unsafe string? PtrToString(nint address) => address == nint.Zero ?
         default : (Marshal.PtrToStringUTF8(address) ?? string.Empty);
 
+    /// <summary>
+    /// Gets a value indicating whether a timestamp does not have a value of
+    /// <see cref="ffmpeg.AV_NOPTS_VALUE"/>.
+    /// </summary>
+    /// <param name="value">The timestamp value.</param>
+    /// <returns>The result.</returns>
     [MethodImpl(MethodImplOptions.AggressiveInlining)]
-    public static bool IsValidPts(this long pts) => pts != ffmpeg.AV_NOPTS_VALUE;
+    public static bool IsValidTimestamp(this long pts) => pts != ffmpeg.AV_NOPTS_VALUE;
+
+    /// <summary>
+    /// Converts a <see cref="ffmpeg.AV_NOPTS_VALUE"/> to a null value.
+    /// </summary>
+    /// <param name="value">The value to convert.</param>
+    /// <returns>The nullable value.</returns>
+    public static long? ToNullable(this long value) => value == ffmpeg.AV_NOPTS_VALUE ? null : value;
 
     [MethodImpl(MethodImplOptions.AggressiveInlining)]
     public static bool IsAuto(this int x) => x < 0;

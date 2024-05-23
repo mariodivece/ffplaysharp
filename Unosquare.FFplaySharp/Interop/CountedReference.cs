@@ -5,13 +5,19 @@ public abstract unsafe class CountedReference<T> : NativeReference<T>, INativeCo
 {
     private long _IsDisposed;
 
-    protected CountedReference(string? filePath, int? lineNumber)
-        : base()
+    protected CountedReference(T* target, string? filePath, int? lineNumber)
+        : base(target)
     {
         filePath ??= "(No file)";
         lineNumber ??= 0;
         Source = $"{Path.GetFileName(filePath)}: {lineNumber}";
         ObjectId = ReferenceCounter.Add(this, Source);
+    }
+
+    protected CountedReference(string? filePath, int? lineNumber)
+        : this(null, filePath, lineNumber)
+    {
+        // placeholder
     }
 
     /// <inheritdoc/>
@@ -46,28 +52,14 @@ public abstract unsafe class CountedReference<T> : NativeReference<T>, INativeCo
     }
 
     /// <inheritdoc/>
-    public override unsafe T* Reference
-    {
-        get
-        {
-            ObjectDisposedException.ThrowIf(IsDisposed, this);
-            return base.Reference;
-        }
-    }
+    public override unsafe T* Reference => IsDisposed ? null : base.Reference;
 
     /// <inheritdoc/>
-    public override nint Address
-    {
-        get
-        {
-            ObjectDisposedException.ThrowIf(IsDisposed, this);
-            return base.Address;
-        }
-    }
+    public override nint Address => IsDisposed ? nint.Zero : base.Address;
 
     /// <inheritdoc/>
     public override bool IsEmpty =>
-        IsDisposed || Address == nint.Zero;
+        IsDisposed || base.Address == nint.Zero;
 
     /// <inheritdoc/>
     public void Dispose()
@@ -100,6 +92,7 @@ public abstract unsafe class CountedReference<T> : NativeReference<T>, INativeCo
     /// <param name="alsoManaged">True if also managed.</param>
     protected virtual void Dispose(bool alsoManaged)
     {
+        var reference = Reference;
         if (Interlocked.Add(ref _IsDisposed, 1) > 1)
             return;
 
@@ -109,8 +102,8 @@ public abstract unsafe class CountedReference<T> : NativeReference<T>, INativeCo
         }
 
         // Free unmanaged resources (unmanaged objects)
-        if (!IsEmpty)
-            ReleaseNative(this);
+        if (reference is not null)
+            ReleaseNative(reference);
 
         ClearPointer();
         ReferenceCounter.Remove(this);

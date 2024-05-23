@@ -48,6 +48,11 @@ public unsafe interface INativeReference<T> : INativeReference
     T* Reference { get; }
 
     /// <summary>
+    /// Gets the size in bytes of the wrapped data structure.
+    /// </summary>
+    int StructureSize { get; }
+
+    /// <summary>
     /// Updates the reference stored in <see cref="Reference"/>.
     /// Conversely, the corresponding <see cref="INativeReference.Address"/>
     /// is also set to <see cref="nint.Zero"/>.
