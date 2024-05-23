@@ -63,7 +63,7 @@ public unsafe interface INativeReference<T> : INativeReference
     T? Dereference();
 
     /// <summary>
-    /// Obtains a <see cref="FixedDoublePointer{T}"/> object
+    /// Obtains a <see cref="DoublePointer{T}"/> object
     /// for updating the underlying <see cref="Reference"/>
     /// outside of managed code. Always call <see cref="IDisposable.Dispose"/>
     /// method to update the undelying <see cref="Reference"/>.
@@ -72,8 +72,8 @@ public unsafe interface INativeReference<T> : INativeReference
     /// outside of managed code.
     /// </summary>
     /// <returns>
-    /// A <see cref="FixedDoublePointer{T}"/> that updates this <see cref="INativeReference{T}"/>
+    /// A <see cref="DoublePointer{T}"/> that updates this <see cref="INativeReference{T}"/>
     /// upon disposal.
     /// </returns>
-    FixedDoublePointer<T> AsDoublePointer();
+    DoublePointer<T> AsDoublePointer();
 }

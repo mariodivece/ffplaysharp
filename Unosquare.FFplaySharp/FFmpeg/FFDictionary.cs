@@ -30,8 +30,7 @@ public unsafe class FFDictionary : CountedReference<AVDictionary>
     public void Set(string key, string? value, int flags)
     {
         var wasNull = IsEmpty;
-        var pointer = Reference;
-        pointer = SetEntry(pointer, key, value, flags);
+        var pointer = SetEntry(this, key, value, flags);
         UpdatePointer(pointer);
 
         if (wasNull && !IsEmpty)

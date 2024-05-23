@@ -1,6 +1,6 @@
 ﻿namespace Unosquare.FFplaySharp.Interop;
 
-public unsafe struct FixedDoublePointer<T> : IDisposable
+public unsafe struct DoublePointer<T> : IDisposable
     where T : unmanaged
 {
     private static readonly nuint DoublePointerSize = (nuint)sizeof(nint);
@@ -8,13 +8,13 @@ public unsafe struct FixedDoublePointer<T> : IDisposable
     private INativeReference<T>? m_NativeReference;
     private T** m_StorageAddress;
 
-    internal FixedDoublePointer(INativeReference<T> reference)
+    internal DoublePointer(INativeReference<T> reference)
     {
         m_NativeReference = reference;
         m_StorageAddress = (T**)NativeMemory.AllocZeroed(DoublePointerSize);
         var referencePointer = m_NativeReference.Reference;
         var pointerAddress = &referencePointer;
-        NativeMemory.Copy(pointerAddress, m_StorageAddress, DoublePointerSize);        
+        NativeMemory.Copy(pointerAddress, m_StorageAddress, DoublePointerSize);
     }
 
     public void Dispose()
@@ -28,5 +28,5 @@ public unsafe struct FixedDoublePointer<T> : IDisposable
         m_NativeReference = null;
     }
 
-    public static implicit operator T**(FixedDoublePointer<T> fixedPointer) => fixedPointer.m_StorageAddress;
+    public static implicit operator T**(DoublePointer<T> fixedPointer) => fixedPointer.m_StorageAddress;
 }

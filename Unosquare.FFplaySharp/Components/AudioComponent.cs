@@ -185,11 +185,13 @@ public unsafe sealed class AudioComponent : FilteringMediaComponent, ISerialGrou
             ResampledOutputBuffer = ByteBuffer.Reallocate(ResampledOutputBuffer, (ulong)outputBufferSize);
             var audioBufferIn = audio.Frame.ExtendedData;
 
-            var audioBufferOut = ResampledOutputBuffer.AsDoublePointer();
-            var outputSampleCount = ConvertContext.Convert(
-                audioBufferOut, wantedOutputSize, audioBufferIn, audio.Frame.SampleCount);
+            int outputSampleCount;
+            using (var audioBufferOut = ResampledOutputBuffer.AsDoublePointer())
+            {
+                outputSampleCount = ConvertContext.Convert(
+                    audioBufferOut, wantedOutputSize, audioBufferIn, audio.Frame.SampleCount);
+            }
 
-            audioBufferOut.Dispose();
             audio.Frame.ExtendedData = audioBufferIn;
 
             if (outputSampleCount < 0)
@@ -205,7 +207,7 @@ public unsafe sealed class AudioComponent : FilteringMediaComponent, ISerialGrou
                     ReleaseConvertContext();
             }
 
-            result.UpdatePointer(ResampledOutputBuffer.Reference);
+            result.UpdatePointer(ResampledOutputBuffer);
             resampledBufferSize = outputSampleCount * HardwareSpec.Channels * HardwareSpec.BytesPerSample;
         }
         else

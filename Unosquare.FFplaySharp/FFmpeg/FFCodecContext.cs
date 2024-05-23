@@ -66,7 +66,7 @@ public unsafe sealed class FFCodecContext : CountedReference<AVCodecContext>
     {
         int gotResult;
         var resultCode = ffmpeg.avcodec_decode_subtitle2(
-            Reference,
+            this,
             frame,
             &gotResult,
             packet);
