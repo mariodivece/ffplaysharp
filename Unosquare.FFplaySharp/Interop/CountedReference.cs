@@ -105,7 +105,7 @@ public abstract unsafe class CountedReference<T> : NativeReference<T>, INativeCo
         if (reference is not null)
             ReleaseNative(reference);
 
-        ClearPointer();
+        base.ClearPointer();
         ReferenceCounter.Remove(this);
 
         // TODO: set large fields to null
