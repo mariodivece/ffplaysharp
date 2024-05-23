@@ -12,11 +12,11 @@ public unsafe sealed class FFFilterContext : NativeReference<AVFilterContext>
         // placeholder
     }
 
-    public AVRational FrameRate => ffmpeg.av_buffersink_get_frame_rate(Reference);
+    public AVRational FrameRate => ffmpeg.av_buffersink_get_frame_rate(this);
 
-    public int SampleRate => ffmpeg.av_buffersink_get_sample_rate(Reference);
+    public int SampleRate => ffmpeg.av_buffersink_get_sample_rate(this);
 
-    public int Channels => ffmpeg.av_buffersink_get_channels(Reference);
+    public int Channels => ffmpeg.av_buffersink_get_channels(this);
 
     public AVChannelLayout ChannelLayout
     {
@@ -39,7 +39,7 @@ public unsafe sealed class FFFilterContext : NativeReference<AVFilterContext>
         if (filter.IsVoid())
             throw new ArgumentNullException(nameof(knownFilterName));
 
-        return Create(graph, filter!, name, options);
+        return Create(graph, filter, name, options);
     }
 
     public static FFFilterContext Create(FFFilterGraph graph, FFFilter filter, string name, string? options = default)

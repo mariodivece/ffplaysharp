@@ -12,9 +12,9 @@ public unsafe sealed class ByteBuffer : CountedReference<byte>
 
     public ulong Length { get; private set; }
 
-    public static ByteBuffer Reallocate(ByteBuffer original, ulong length)
+    public static ByteBuffer Reallocate(ByteBuffer? original, ulong length)
     {
-        if (original.IsVoid() || original.Length < length)
+        if (original is null || original.IsVoid() || original.Length < length)
         {
             original?.Dispose();
             return new(length);
@@ -26,7 +26,7 @@ public unsafe sealed class ByteBuffer : CountedReference<byte>
     public void Write(byte* source, int length)
     {
         var maxLength = Math.Min(Convert.ToInt32(Length), length);
-        Buffer.MemoryCopy(source, Reference, maxLength, maxLength);
+        Buffer.MemoryCopy(source, this, maxLength, maxLength);
     }
 
     protected override void ReleaseNative(byte* target)

@@ -32,7 +32,7 @@ public unsafe sealed class FFStream : NativeReference<AVStream>
     {
         var result = new List<FFProgram>(16);
         AVProgram* program = default;
-        while ((program = ffmpeg.av_find_program_from_stream(FormatContext.Reference, program, Index)) is not null)
+        while ((program = ffmpeg.av_find_program_from_stream(FormatContext, program, Index)) is not null)
             result.Add(new(program));
 
         return result;
@@ -52,7 +52,7 @@ public unsafe sealed class FFStream : NativeReference<AVStream>
     [Obsolete("Use alternative method with same name that takes in a frame as a parameter.")]
     public double ComputeDisplayRotation()
     {
-        var displayMatrix = ffmpeg.av_stream_get_side_data(Reference, AVPacketSideDataType.AV_PKT_DATA_DISPLAYMATRIX, null);
+        var displayMatrix = ffmpeg.av_stream_get_side_data(this, AVPacketSideDataType.AV_PKT_DATA_DISPLAYMATRIX, null);
         var theta = displayMatrix is not null ? -ComputeMatrixRotation((int*)displayMatrix) : 0d;
         theta -= 360 * Math.Floor(theta / 360 + 0.9 / 360);
 
@@ -70,7 +70,7 @@ public unsafe sealed class FFStream : NativeReference<AVStream>
         ArgumentNullException.ThrowIfNull((object?)decoderFrame);
 
         int* displayMatrix = null;
-        var sd = ffmpeg.av_frame_get_side_data(decoderFrame.Reference, AVFrameSideDataType.AV_FRAME_DATA_DISPLAYMATRIX);
+        var sd = ffmpeg.av_frame_get_side_data(decoderFrame, AVFrameSideDataType.AV_FRAME_DATA_DISPLAYMATRIX);
         if (sd is not null)
             displayMatrix = (int*)sd->data;
 

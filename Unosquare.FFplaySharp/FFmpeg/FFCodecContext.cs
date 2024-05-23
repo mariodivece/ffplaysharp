@@ -50,22 +50,26 @@ public unsafe sealed class FFCodecContext : CountedReference<AVCodecContext>
 
     public void ApplyStreamParameters(FFStream stream)
     {
-        var resultCode = ffmpeg.avcodec_parameters_to_context(Reference, stream.CodecParameters.Reference);
+        if (stream is null || stream.IsVoid())
+            throw new ArgumentNullException(nameof(stream));
+
+        var resultCode = ffmpeg.avcodec_parameters_to_context(this, stream.CodecParameters);
         if (resultCode < 0)
             throw new FFmpegException(resultCode, "Unable to apply stream parameters");
     }
 
-    public int ReceiveFrame(FFFrame frame) =>
-        ffmpeg.avcodec_receive_frame(Reference, frame.Reference);
+    public int ReceiveFrame(FFFrame frame) => frame is null || frame.IsVoid()
+        ? throw new ArgumentNullException(nameof(frame))
+        : ffmpeg.avcodec_receive_frame(this, frame);
 
     public int DecodeSubtitle(FFSubtitle frame, FFPacket packet, ref int gotSubtitle)
     {
         int gotResult;
         var resultCode = ffmpeg.avcodec_decode_subtitle2(
             Reference,
-            frame.Reference,
+            frame,
             &gotResult,
-            packet.Reference);
+            packet);
 
         gotSubtitle = gotResult;
         return resultCode;

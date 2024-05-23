@@ -35,7 +35,7 @@ public unsafe sealed class FFFilterInOut : NativeReference<AVFilterInOut>
     public FFFilterContext? Filter
     {
         get => !IsEmpty && Reference->filter_ctx is not null ? new(Reference->filter_ctx) : default;
-        set => Reference->filter_ctx = value.IsValid() ? value.Reference : default;
+        set => Reference->filter_ctx = value is not null && value.IsValid() ? value.Reference : default;
     }
 
     public void Release()

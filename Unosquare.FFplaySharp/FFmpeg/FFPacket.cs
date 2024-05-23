@@ -79,7 +79,7 @@ public unsafe sealed class FFPacket : CountedReference<AVPacket>, ISerialGroupab
 
     public FFPacket Clone([CallerFilePath] string? filePath = default, [CallerLineNumber] int? lineNumber = default) => IsEmpty
         ? throw new InvalidOperationException("Cannot clone a null packet pointer")
-        : new(ffmpeg.av_packet_clone(Reference), filePath, lineNumber);
+        : new(ffmpeg.av_packet_clone(this), filePath, lineNumber);
 
     public long Pts => Reference->pts.IsValidPts()
         ? Reference->pts

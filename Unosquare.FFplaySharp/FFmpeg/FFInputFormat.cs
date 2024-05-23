@@ -19,7 +19,7 @@ public unsafe sealed class FFInputFormat : NativeReference<AVInputFormat>
 
     public int Flags => Reference->flags;
 
-    public IReadOnlyList<string> ShortNames => Reference is null
+    public IReadOnlyList<string> ShortNames => IsEmpty
         ? []
         : Helpers.PtrToString(Reference->name)!.Split(',', SplitOptions);
 

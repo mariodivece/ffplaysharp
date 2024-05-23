@@ -24,6 +24,9 @@ public sealed class VideoComponent : FilteringMediaComponent
 
     protected override void DecodingThreadMethod()
     {
+        if (Stream.IsVoid())
+            throw new InvalidOperationException($"Unable to start video decoding thread without a valid '{nameof(Stream)}'");
+
         int resultCode;
         var frameRate = Container.Input.GuessFrameRate(Stream);
 

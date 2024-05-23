@@ -29,6 +29,9 @@ public class AudioParams
 
     public void ImportFrom(FFFrame frame)
     {
+        if (frame is null || frame.IsVoid())
+            throw new ArgumentNullException(nameof(frame));
+
         SampleFormat = frame.SampleFormat;
         SampleRate = frame.SampleRate;
         Channels = frame.Channels;
@@ -37,6 +40,9 @@ public class AudioParams
 
     public void ImportFrom(FFCodecContext codecContext)
     {
+        if (codecContext is null || codecContext.IsVoid())
+            throw new ArgumentNullException(nameof(codecContext));
+
         SampleFormat = codecContext.SampleFormat;
         SampleRate = codecContext.SampleRate;
         Channels = codecContext.Channels;
@@ -55,11 +61,15 @@ public class AudioParams
         };
     }
 
-    public bool IsDifferentTo(FFFrame audioFrame) =>
-        AreDifferent(SampleFormat, Channels, audioFrame.SampleFormat, audioFrame.Channels);
+    public bool IsDifferentTo(FFFrame audioFrame) => audioFrame is null || audioFrame.IsVoid()
+        ? throw new ArgumentNullException(nameof(audioFrame))
+        : AreDifferent(SampleFormat, Channels, audioFrame.SampleFormat, audioFrame.Channels);
 
     public static AudioParams FromFilterContext(FFFilterContext filter)
     {
+        if (filter is null || filter.IsVoid())
+            throw new ArgumentNullException(nameof(filter));
+
         var result = new AudioParams
         {
             SampleRate = filter.SampleRate,
@@ -79,7 +89,7 @@ public class AudioParams
         const int StringBufferLength = 1024;
         var filterLayoutString = stackalloc byte[StringBufferLength];
         ffmpeg.av_channel_layout_describe(&channelLayout, filterLayoutString, StringBufferLength);
-        return Helpers.PtrToString(filterLayoutString);
+        return Helpers.PtrToString(filterLayoutString) ?? string.Empty;
     }
 
     public static string GetSampleFormatName(AVSampleFormat format) =>
@@ -94,7 +104,7 @@ public class AudioParams
 
     public static AVChannelLayout ComputeChannelLayout(FFFrame frame)
     {
-        if (frame.IsVoid())
+        if (frame is null || frame.IsVoid())
             throw new ArgumentNullException(nameof(frame));
 
         return frame.ChannelLayout.nb_channels > 0 && frame.Channels == ChannelCountFor(frame.ChannelLayout)

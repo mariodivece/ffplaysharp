@@ -30,17 +30,17 @@ public unsafe sealed class ResamplerContext : CountedReference<SwrContext>
     }
 
     public int Convert(byte** output, int outputCount, byte** input, int inputCount) =>
-        ffmpeg.swr_convert(Reference, output, outputCount, input, inputCount);
+        ffmpeg.swr_convert(this, output, outputCount, input, inputCount);
 
     public int SetCompensation(int delta, int distance) =>
-        ffmpeg.swr_set_compensation(Reference, delta, distance);
+        ffmpeg.swr_set_compensation(this, delta, distance);
 
     public int Initialize() =>
-        ffmpeg.swr_init(Reference);
+        ffmpeg.swr_init(this);
 
     public int SetOption(string key, string value) =>
-        ffmpeg.av_opt_set(Reference, key, value, 0);
+        ffmpeg.av_opt_set(this, key, value, 0);
 
-    protected override unsafe void ReleaseNative(SwrContext* pointer) =>
-        ffmpeg.swr_free(&pointer);
+    protected override unsafe void ReleaseNative(SwrContext* target) =>
+        ffmpeg.swr_free(&target);
 }

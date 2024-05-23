@@ -61,6 +61,10 @@ public abstract unsafe class NativeReference<T> : INativeReference<T>
     public override bool Equals(object? obj) =>
         obj is INativeReference r && Address == r.Address;
 
+    /// <inheritdoc/>
+    public override int GetHashCode() =>
+        Interlocked.CompareExchange(ref _Address, 0, 0).GetHashCode();
+
     /// <summary>
     /// Implicit cast that converts the given <see cref="NativeReference{T}"/> to a T*.
     /// </summary>

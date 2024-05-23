@@ -123,7 +123,7 @@
 
             var context = Reference;
             var formatOptionsPtr = formatOptions.Reference;
-            var resultCode = ffmpeg.avformat_open_input(&context, filePath, format.Reference, &formatOptionsPtr);
+            var resultCode = ffmpeg.avformat_open_input(&context, filePath, format, &formatOptionsPtr);
             UpdatePointer(context);
             formatOptions.UpdatePointer(formatOptionsPtr);
             if (context is not null)
@@ -137,7 +137,7 @@
         }
 
         public int MatchStreamSpecifier(FFStream stream, string specifier) =>
-            ffmpeg.avformat_match_stream_specifier(Reference, stream, specifier);
+            ffmpeg.avformat_match_stream_specifier(this, stream, specifier);
 
         /// <summary>
         /// Port of check_stream_specifier.
@@ -242,7 +242,7 @@
             for (var optionIndex = 0; optionIndex < perStreamOptionsList.Count; optionIndex++)
                 perStreamOptions[optionIndex] = perStreamOptionsList[optionIndex].Reference;
 
-            var resultCode = ffmpeg.avformat_find_stream_info(Reference, perStreamOptions);
+            var resultCode = ffmpeg.avformat_find_stream_info(this, perStreamOptions);
             ffmpeg.av_freep(&perStreamOptions);
 
             foreach (var optionsDictionary in perStreamOptionsList)

@@ -314,7 +314,7 @@ public unsafe sealed class AudioComponent : FilteringMediaComponent, ISerialGrou
 
         var wantedSpec = AudioParams.FromFilterContext(OutputFilter);
         var audioHardwareSpec = Container.Presenter.OpenAudioDevice(wantedSpec);
-        if (audioHardwareSpec.BufferSize < 0)
+        if (audioHardwareSpec is null || audioHardwareSpec.BufferSize < 0)
             throw new FFmpegException(-1, "Could not initialize audio hardware buffer.");
 
         HardwareSpec = audioHardwareSpec.Clone();
@@ -334,7 +334,7 @@ public unsafe sealed class AudioComponent : FilteringMediaComponent, ISerialGrou
 
         base.InitializeDecoder(codecContext, streamIndex);
 
-        if (Container.Input.Flags.HasFlag(ffmpeg.AVFMT_NOTIMESTAMPS))
+        if (Container.Input.Flags.HasFlag(ffmpeg.AVFMT_NOTIMESTAMPS) && Stream.IsValid())
         {
             StartPts = Stream.StartTime;
             StartPtsTimeBase = Stream.TimeBase;
