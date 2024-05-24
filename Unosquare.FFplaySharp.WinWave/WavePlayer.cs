@@ -1,5 +1,4 @@
-﻿using FFmpeg;
-using FFmpeg.AutoGen;
+﻿using FFmpeg.AutoGen;
 using Unosquare.FFplaySharp.Interop;
 using Unosquare.FFplaySharp.Primitives;
 using Unosquare.FFplaySharp.WinWave.Audio;
@@ -179,7 +178,7 @@ public class WavePlayer : IWaveProvider
                 if (ReadBuffer.Length < 0)
                 {
                     // if error, just output silence.
-                    ReadBuffer.ClearPointer();
+                    ReadBuffer = BufferReference.NullBuffer;
                     ReadBufferSize = Convert.ToInt32(Container.Audio.HardwareSpec.FrameSize *
                         (double)count / Container.Audio.HardwareSpec.FrameSize);
                 }

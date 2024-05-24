@@ -103,8 +103,7 @@ public class Clock : ISerialGroupable
     /// <param name="slaveClock">The clock to synchronize to.</param>
     public void SyncToSlave(Clock slaveClock)
     {
-        if (slaveClock is null)
-            throw new ArgumentNullException(nameof(slaveClock));
+        ArgumentNullException.ThrowIfNull(slaveClock);
 
         var currentTime = Value;
         var slaveTime = slaveClock.Value;

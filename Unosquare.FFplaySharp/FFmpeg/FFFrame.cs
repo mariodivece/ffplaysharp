@@ -3,11 +3,12 @@
 public unsafe sealed class FFFrame : CountedReference<AVFrame>
 {
     public FFFrame([CallerFilePath] string? filePath = default, [CallerLineNumber] int? lineNumber = default)
-        : base(filePath, lineNumber)
+        : base(ffmpeg.av_frame_alloc(), filePath, lineNumber)
     {
-        UpdatePointer(ffmpeg.av_frame_alloc());
+        // placeholder
     }
 
+    [Obsolete("use AV_CODEC_FLAG_COPY_OPAQUE to pass through arbitrary user data from packets to frames")]
     public long PacketPosition => Reference->pkt_pos;
 
     public AVRational SampleAspectRatio
@@ -75,6 +76,6 @@ public unsafe sealed class FFFrame : CountedReference<AVFrame>
         ffmpeg.av_frame_move_ref(destination, this);
     }
 
-    protected override unsafe void ReleaseNative(AVFrame* target) =>
+    protected override unsafe void DisposeNative(AVFrame* target) =>
         ffmpeg.av_frame_free(&target);
 }

@@ -3,9 +3,9 @@
 public unsafe sealed class FFCodecContext : CountedReference<AVCodecContext>
 {
     public FFCodecContext([CallerFilePath] string? filePath = default, [CallerLineNumber] int? lineNumber = default)
-        : base(filePath, lineNumber)
+        : base(ffmpeg.avcodec_alloc_context3(null), filePath, lineNumber)
     {
-        UpdatePointer(ffmpeg.avcodec_alloc_context3(null));
+        // placeholder
     }
 
     public AVRational PacketTimeBase
@@ -94,6 +94,6 @@ public unsafe sealed class FFCodecContext : CountedReference<AVCodecContext>
             throw new FFmpegException(resultCode, $"Could not open codec '{codec.Name}'");
     }
 
-    protected override unsafe void ReleaseNative(AVCodecContext* target) =>
+    protected override unsafe void DisposeNative(AVCodecContext* target) =>
         ffmpeg.avcodec_free_context(&target);
 }

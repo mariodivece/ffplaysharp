@@ -165,6 +165,6 @@ public unsafe sealed class FFPacket : CountedReference<AVPacket>, ISerialGroupab
     }
 
     /// <inheritdoc />
-    protected override void ReleaseNative(AVPacket* target) =>
+    protected override void DisposeNative(AVPacket* target) =>
         ffmpeg.av_packet_free(&target);
 }

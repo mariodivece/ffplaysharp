@@ -1,6 +1,6 @@
 ﻿namespace Unosquare.FFplaySharp.Interop;
 
-public static class InteropExtensions
+public static unsafe class InteropExtensions
 {
     /// <summary>
     /// Tests if a <see cref="INativeReference"/> is null
@@ -28,4 +28,14 @@ public static class InteropExtensions
     [MethodImpl(MethodImplOptions.AggressiveInlining)]
     public static bool IsValid<T>([NotNullWhen(true)] this T? reference) where T : INativeReference =>
         reference is not null && !reference.IsEmpty;
+
+    public static T* AllocateNativeMemory<T>() where T : unmanaged =>
+        (T*)ffmpeg.av_mallocz((ulong)sizeof(T));
+
+    public static T* AllocateNativeMemory<T>(ulong elementCount) where T : unmanaged =>
+        (T*)ffmpeg.av_mallocz((ulong)sizeof(T) * elementCount);
+
+    public static void FreeNativeMemory(void* target) =>
+        ffmpeg.av_free(target);
+
 }

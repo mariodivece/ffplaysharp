@@ -5,13 +5,13 @@ public unsafe struct DoublePointer<T> : IDisposable
 {
     private static readonly nuint DoublePointerSize = (nuint)sizeof(nint);
     private long m_IsDisposed;
-    private INativeReference<T>? m_NativeReference;
+    private IUpdateableReference<T>? m_NativeReference;
     private T** m_StorageAddress;
 
-    internal DoublePointer(INativeReference<T> reference)
+    internal DoublePointer(IUpdateableReference<T> reference)
     {
         m_NativeReference = reference;
-        m_StorageAddress = (T**)NativeMemory.AllocZeroed(DoublePointerSize);
+        m_StorageAddress = (T**)InteropExtensions.AllocateNativeMemory<byte>(DoublePointerSize);
         var referencePointer = m_NativeReference.Reference;
         var pointerAddress = &referencePointer;
         NativeMemory.Copy(pointerAddress, m_StorageAddress, DoublePointerSize);
@@ -23,7 +23,7 @@ public unsafe struct DoublePointer<T> : IDisposable
             return;
 
         m_NativeReference?.UpdatePointer(*m_StorageAddress);
-        NativeMemory.Free(m_StorageAddress);
+        InteropExtensions.FreeNativeMemory(m_StorageAddress);
         m_StorageAddress = null;
         m_NativeReference = null;
     }

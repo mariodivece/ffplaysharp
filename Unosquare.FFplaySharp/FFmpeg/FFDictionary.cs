@@ -69,7 +69,7 @@ public unsafe class FFDictionary : CountedReference<AVDictionary>
         return result;
     }
 
-    protected override void ReleaseNative(AVDictionary* target) =>
+    protected override void DisposeNative(AVDictionary* target) =>
          ffmpeg.av_dict_free(&target);
 
     private static FFDictionaryEntry? FirstEntry(AVDictionary* dictionary)

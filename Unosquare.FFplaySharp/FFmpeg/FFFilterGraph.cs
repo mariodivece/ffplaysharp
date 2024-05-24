@@ -3,9 +3,9 @@
 public unsafe sealed class FFFilterGraph : CountedReference<AVFilterGraph>
 {
     public FFFilterGraph([CallerFilePath] string? filePath = default, [CallerLineNumber] int? lineNumber = default)
-        : base(filePath, lineNumber)
+        : base(ffmpeg.avfilter_graph_alloc(), filePath, lineNumber)
     {
-        UpdatePointer(ffmpeg.avfilter_graph_alloc());
+        // placeholder
     }
 
     public FilterSet Filters => new(this);
@@ -50,6 +50,6 @@ public unsafe sealed class FFFilterGraph : CountedReference<AVFilterGraph>
     public int SetOption(string key, string value) =>
         ffmpeg.av_opt_set(this, key, value, 0);
 
-    protected override void ReleaseNative(AVFilterGraph* target) =>
+    protected override void DisposeNative(AVFilterGraph* target) =>
         ffmpeg.avfilter_graph_free(&target);
 }

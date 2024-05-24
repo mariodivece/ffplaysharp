@@ -3,9 +3,9 @@
 public unsafe sealed class FFSubtitle : CountedReference<AVSubtitle>
 {
     public FFSubtitle([CallerFilePath] string? filePath = default, [CallerLineNumber] int? lineNumber = default)
-        : base(filePath, lineNumber)
+        : base(InteropExtensions.AllocateNativeMemory<AVSubtitle>(), filePath, lineNumber)
     {
-        UpdatePointer((AVSubtitle*)ffmpeg.av_mallocz((ulong)sizeof(AVSubtitle)));
+        // placeholder
     }
 
     public long Pts
@@ -21,6 +21,6 @@ public unsafe sealed class FFSubtitle : CountedReference<AVSubtitle>
 
     public SubtitleRectSet Rects => new(this);
 
-    protected override unsafe void ReleaseNative(AVSubtitle* pointer) =>
-        ffmpeg.avsubtitle_free(pointer);
+    protected override unsafe void DisposeNative(AVSubtitle* target) =>
+        ffmpeg.avsubtitle_free(target);
 }

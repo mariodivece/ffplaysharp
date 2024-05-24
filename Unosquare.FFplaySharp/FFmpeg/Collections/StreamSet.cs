@@ -1,4 +1,4 @@
-﻿namespace FFmpeg;
+﻿namespace FFmpeg.Collections;
 
 public unsafe sealed class StreamSet : NativeChildSet<FFFormatContext, FFStream>
 {

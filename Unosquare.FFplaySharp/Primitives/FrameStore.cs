@@ -252,8 +252,7 @@ public sealed class FrameStore : IDisposable, ISerialGroupable
         {
             lock (SyncLock)
             {
-                if (item is null)
-                    throw new ArgumentNullException(nameof(item));
+                ArgumentNullException.ThrowIfNull(item);
 
                 if (m_Count == Capacity)
                     throw new InvalidOperationException($"Read frame queue is full. Capacity: {Capacity}");

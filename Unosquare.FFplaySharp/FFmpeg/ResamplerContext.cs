@@ -3,9 +3,9 @@
 public unsafe sealed class ResamplerContext : CountedReference<SwrContext>
 {
     public ResamplerContext([CallerFilePath] string? filePath = default, [CallerLineNumber] int? lineNumber = default)
-        : base(filePath, lineNumber)
+        : base(ffmpeg.swr_alloc(), filePath, lineNumber)
     {
-        UpdatePointer(ffmpeg.swr_alloc());
+        // placeholder
     }
 
     public ResamplerContext(
@@ -17,16 +17,13 @@ public unsafe sealed class ResamplerContext : CountedReference<SwrContext>
         int inSampleRate,
         [CallerFilePath] string? filePath = default,
         [CallerLineNumber] int? lineNumber = default)
-        : base(filePath, lineNumber)
+        : base(ffmpeg.swr_alloc(), filePath, lineNumber)
     {
-        var pointer = ffmpeg.swr_alloc();
-
-        ffmpeg.swr_alloc_set_opts2(&pointer,
+        using var pointer = AsDoublePointer();
+        ffmpeg.swr_alloc_set_opts2(pointer,
                 &outLayout, outFormat, outSampleRate,
                 &inLayout, inFormat, inSampleRate,
                 0, null);
-
-        UpdatePointer(pointer);
     }
 
     public int Convert(byte** output, int outputCount, byte** input, int inputCount) =>
@@ -41,6 +38,6 @@ public unsafe sealed class ResamplerContext : CountedReference<SwrContext>
     public int SetOption(string key, string value) =>
         ffmpeg.av_opt_set(this, key, value, 0);
 
-    protected override unsafe void ReleaseNative(SwrContext* target) =>
+    protected override unsafe void DisposeNative(SwrContext* target) =>
         ffmpeg.swr_free(&target);
 }

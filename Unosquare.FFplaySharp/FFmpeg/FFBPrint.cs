@@ -1,13 +1,13 @@
 ﻿namespace FFmpeg;
 
-internal unsafe class FFBPrint : CountedReference<AVBPrint>
+internal unsafe sealed class FFBPrint : CountedReference<AVBPrint>
 {
     private static readonly nint ReservedFieldOffset = sizeof(nint) + 3 * sizeof(uint);
 
     public FFBPrint([CallerFilePath] string? filePath = default, [CallerLineNumber] int? lineNumber = default) 
-        : base(filePath, lineNumber)
+        : base(AllocateAutoAVBPrint(), filePath, lineNumber)
     {
-        UpdatePointer(AllocateAutoAVBPrint());
+        // placeholder
     }
 
     public string Contents
@@ -41,7 +41,7 @@ internal unsafe class FFBPrint : CountedReference<AVBPrint>
         return (AVBPrint*)bpStructAddress;
     }
 
-    protected override unsafe void ReleaseNative(AVBPrint* target)
+    protected override unsafe void DisposeNative(AVBPrint* target)
     {
         var bpStruct = Marshal.PtrToStructure<AVBPrintExtended>((nint)target);
 

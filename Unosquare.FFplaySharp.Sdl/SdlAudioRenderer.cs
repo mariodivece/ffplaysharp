@@ -173,7 +173,7 @@ public unsafe class SdlAudioRenderer
                 if (ReadBuffer.Length < 0)
                 {
                     // if error, just output silence.
-                    ReadBuffer.ClearPointer();
+                    ReadBuffer = BufferReference.NullBuffer;
                     ReadBufferSize = Convert.ToInt32(Container.Audio.HardwareSpec.FrameSize *
                         (double)Constants.SdlAudioMinBufferSize / Container.Audio.HardwareSpec.FrameSize);
                 }

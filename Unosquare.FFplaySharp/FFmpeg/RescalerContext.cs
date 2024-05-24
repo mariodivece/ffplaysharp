@@ -3,9 +3,9 @@
 public unsafe sealed class RescalerContext : CountedReference<SwsContext>
 {
     public RescalerContext([CallerFilePath] string? filePath = default, [CallerLineNumber] int? lineNumber = default)
-        : base(filePath, lineNumber)
+        : base(ffmpeg.sws_alloc_context(), filePath, lineNumber)
     {
-        UpdatePointer(ffmpeg.sws_alloc_context());
+        // placeholder
     }
 
     public void Reallocate(
@@ -35,6 +35,6 @@ public unsafe sealed class RescalerContext : CountedReference<SwsContext>
         return ffmpeg.sws_scale(Reference, inPlanes, inStrides, 0, inH, targetScan, targetStride);
     }
 
-    protected override unsafe void ReleaseNative(SwsContext* target) =>
+    protected override unsafe void DisposeNative(SwsContext* target) =>
         ffmpeg.sws_freeContext(target);
 }

@@ -29,7 +29,7 @@ public unsafe sealed class FFFilterInOut : NativeReference<AVFilterInOut>
     public FFFilterInOut? Next
     {
         get => !IsEmpty && Reference->next is not null ? new(Reference->next) : default;
-        set => Reference->next = value.IsValid() ? value.Reference : default;
+        set => Reference->next = value is not null && value.IsValid() ? value.Reference : default;
     }
 
     public FFFilterContext? Filter
@@ -40,12 +40,10 @@ public unsafe sealed class FFFilterInOut : NativeReference<AVFilterInOut>
 
     public void Release()
     {
-        if (!IsEmpty)
-        {
-            var pointer = Reference;
-            ffmpeg.avfilter_inout_free(&pointer);
-        }
+        if (IsEmpty)
+            return;
 
-        ClearPointer();
+        using var pointer = AsDoublePointer();
+        ffmpeg.avfilter_inout_free(pointer);
     }
 }

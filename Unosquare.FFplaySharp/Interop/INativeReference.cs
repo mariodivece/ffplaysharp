@@ -12,19 +12,6 @@ public interface INativeReference
     nint Address { get; }
 
     /// <summary>
-    /// Updates the memory location stored in the <see cref="Address">.
-    /// </summary>
-    /// <param name="address">The address (<see cref="nint"/>) of
-    ///                       the wrapped native reference.</param>
-    void UpdatePointer(nint address);
-
-    /// <summary>
-    /// Sets the memory location to <see cref="nint.Zero"/>.
-    /// This effectively makes <see cref="IsEmpty"/> true.
-    /// </summary>
-    void ClearPointer();
-
-    /// <summary>
     /// Gets a value indicating whether <see cref="Address"/>
     /// points to <see cref="nint.Zero"/>
     /// </summary>
@@ -53,14 +40,6 @@ public unsafe interface INativeReference<T> : INativeReference
     int StructureSize { get; }
 
     /// <summary>
-    /// Updates the reference stored in <see cref="Reference"/>.
-    /// Conversely, the corresponding <see cref="INativeReference.Address"/>
-    /// is also set to <see cref="nint.Zero"/>.
-    /// </summary>
-    /// <param name="target">The typed pointer.</param>
-    void UpdatePointer(T* target);
-
-    /// <summary>
     /// Dereferences the pointer and copies its data by value.
     /// If the wrapped object <see cref="INativeReference.IsEmpty"/>,
     /// a default value of <see cref="T?"/> (null) is returned.
@@ -69,12 +48,9 @@ public unsafe interface INativeReference<T> : INativeReference
 
     /// <summary>
     /// Obtains a <see cref="DoublePointer{T}"/> object
-    /// for updating the underlying <see cref="Reference"/>
-    /// outside of managed code. Always call <see cref="IDisposable.Dispose"/>
+    /// for the purpose of updating the underlying <see cref="Reference"/>
+    /// typically outside of managed code. Always call <see cref="IDisposable.Dispose"/>
     /// method to update the undelying <see cref="Reference"/>.
-    /// It is recommended that you use this pattern so you don't forget
-    /// to call <see cref="UpdatePointer(T*)"/> when a pointer is updated
-    /// outside of managed code.
     /// </summary>
     /// <returns>
     /// A <see cref="DoublePointer{T}"/> that updates this <see cref="INativeReference{T}"/>

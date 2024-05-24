@@ -97,7 +97,7 @@ public unsafe sealed class AudioComponent : FilteringMediaComponent, ISerialGrou
     /// <returns>The size in bytes of the output buffer.</returns>
     public BufferReference RefillOutputBuffer()
     {
-        var result = new BufferReference(null, -1);
+        var result = BufferReference.NullBuffer;
         FrameHolder? audio;
 
         if (Container.IsPaused)
@@ -156,8 +156,6 @@ public unsafe sealed class AudioComponent : FilteringMediaComponent, ISerialGrou
             StreamSpec.ChannelLayout = audio.Frame.ChannelLayout;
         }
 
-        int resampledBufferSize;
-
         if (ConvertContext.IsValid())
         {
             var wantedOutputSize = wantedSampleCount * HardwareSpec.SampleRate / audio.Frame.SampleRate + 256;
@@ -186,10 +184,10 @@ public unsafe sealed class AudioComponent : FilteringMediaComponent, ISerialGrou
             var audioBufferIn = audio.Frame.ExtendedData;
 
             int outputSampleCount;
-            using (var audioBufferOut = ResampledOutputBuffer.AsDoublePointer())
+            using (var audioBufferOutPtr = ResampledOutputBuffer.AsDoublePointer())
             {
                 outputSampleCount = ConvertContext.Convert(
-                    audioBufferOut, wantedOutputSize, audioBufferIn, audio.Frame.SampleCount);
+                    audioBufferOutPtr, wantedOutputSize, audioBufferIn, audio.Frame.SampleCount);
             }
 
             audio.Frame.ExtendedData = audioBufferIn;
@@ -207,13 +205,13 @@ public unsafe sealed class AudioComponent : FilteringMediaComponent, ISerialGrou
                     ReleaseConvertContext();
             }
 
-            result.UpdatePointer(ResampledOutputBuffer);
-            resampledBufferSize = outputSampleCount * HardwareSpec.Channels * HardwareSpec.BytesPerSample;
+            var bufferLength = outputSampleCount * HardwareSpec.Channels * HardwareSpec.BytesPerSample;
+            result = new(ResampledOutputBuffer, bufferLength);
         }
         else
         {
-            result.UpdatePointer(audio.Frame.Data[0]);
-            resampledBufferSize = audio.Frame.SamplesBufferSize;
+            var bufferLength = audio.Frame.SamplesBufferSize;
+            result = new(audio.Frame.Data[0], bufferLength);
         }
 
         // Used for debugging message below
@@ -233,7 +231,6 @@ public unsafe sealed class AudioComponent : FilteringMediaComponent, ISerialGrou
         }
 
         LastFrameTime = FrameTime;
-        result.Length = resampledBufferSize;
         return result;
     }
 

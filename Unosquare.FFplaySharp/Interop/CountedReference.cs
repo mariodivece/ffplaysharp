@@ -38,28 +38,13 @@ public abstract unsafe class CountedReference<T> : NativeReference<T>, INativeCo
     }
 
     /// <inheritdoc/>
-    public override void UpdatePointer(nint address)
-    {
-        ObjectDisposedException.ThrowIf(IsDisposed, this);
-        base.UpdatePointer(address);
-    }
-
-    /// <inheritdoc/>
-    public override unsafe void UpdatePointer(T* target)
-    {
-        ObjectDisposedException.ThrowIf(IsDisposed, this);
-        base.UpdatePointer(target);
-    }
-
-    /// <inheritdoc/>
-    public override unsafe T* Reference => IsDisposed ? null : base.Reference;
+    public override T* Reference => IsDisposed ? null : base.Reference;
 
     /// <inheritdoc/>
     public override nint Address => IsDisposed ? nint.Zero : base.Address;
 
     /// <inheritdoc/>
-    public override bool IsEmpty =>
-        IsDisposed || base.Address == nint.Zero;
+    public override bool IsEmpty => Address == nint.Zero;
 
     /// <inheritdoc/>
     public void Dispose()
@@ -83,7 +68,7 @@ public abstract unsafe class CountedReference<T> : NativeReference<T>, INativeCo
     /// or <see cref="Dispose()"/>. These are called automatically.
     /// </summary>
     /// <param name="target">The non-null pointer to be released.</param>
-    protected abstract void ReleaseNative(T* target);
+    protected abstract void DisposeNative(T* target);
 
     /// <summary>
     /// Releases the unmanaged resources used by the <see cref="CountedReference{T}"/> and optionally
@@ -92,7 +77,7 @@ public abstract unsafe class CountedReference<T> : NativeReference<T>, INativeCo
     /// <param name="alsoManaged">True if also managed.</param>
     protected virtual void Dispose(bool alsoManaged)
     {
-        var reference = Reference;
+        var address = Address;
         if (Interlocked.Add(ref _IsDisposed, 1) > 1)
             return;
 
@@ -102,10 +87,10 @@ public abstract unsafe class CountedReference<T> : NativeReference<T>, INativeCo
         }
 
         // Free unmanaged resources (unmanaged objects)
-        if (reference is not null)
-            ReleaseNative(reference);
+        if (address != nint.Zero)
+            DisposeNative((T*)address);
 
-        base.ClearPointer();
+        Address = nint.Zero;
         ReferenceCounter.Remove(this);
 
         // TODO: set large fields to null

@@ -610,7 +610,7 @@ public unsafe class MediaContainer
         var formatOptions = Options.FormatOptions.ToUnmanaged();
         try
         {
-            Input.OpenInput(FileName, InputFormat, formatOptions);
+            Input.OpenInput(FileName, ref InputFormat, formatOptions);
             var invalidOptionKey = formatOptions.First?.Key;
             if (invalidOptionKey is not null)
             {

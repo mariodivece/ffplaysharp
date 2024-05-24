@@ -1,12 +1,10 @@
-﻿namespace FFmpeg;
+﻿namespace Unosquare.FFplaySharp.Interop;
 
 public unsafe sealed class ByteBuffer : CountedReference<byte>
 {
     public ByteBuffer(ulong length, [CallerFilePath] string? filePath = default, [CallerLineNumber] int? lineNumber = default)
-        : base(filePath, lineNumber)
+        : base(InteropExtensions.AllocateNativeMemory<byte>(length), filePath, lineNumber)
     {
-        var pointer = (byte*)ffmpeg.av_mallocz(length);
-        UpdatePointer(pointer);
         Length = length;
     }
 
@@ -29,9 +27,9 @@ public unsafe sealed class ByteBuffer : CountedReference<byte>
         Buffer.MemoryCopy(source, this, maxLength, maxLength);
     }
 
-    protected override void ReleaseNative(byte* target)
+    protected override void DisposeNative(byte* target)
     {
-        ffmpeg.av_free(target);
+        InteropExtensions.FreeNativeMemory(this);
         Length = 0;
     }
 }

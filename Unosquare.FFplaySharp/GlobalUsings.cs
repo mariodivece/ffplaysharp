@@ -1,4 +1,5 @@
 ﻿global using FFmpeg;
+global using FFmpeg.Collections;
 global using FFmpeg.AutoGen;
 global using System.Collections;
 global using System.Diagnostics;

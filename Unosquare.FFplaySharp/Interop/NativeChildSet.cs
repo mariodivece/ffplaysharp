@@ -1,6 +1,4 @@
-﻿using Unosquare.FFplaySharp.Interop;
-
-namespace Unosquare.FFplaySharp.Primitives;
+﻿namespace Unosquare.FFplaySharp.Interop;
 
 public abstract unsafe class NativeChildSet<TParent, TChild> : IReadOnlyList<TChild>
     where TParent : INativeReference
