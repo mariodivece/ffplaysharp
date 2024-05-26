@@ -8,24 +8,26 @@ using Unosquare.FFplaySharp;
 using Unosquare.FFplaySharp.Interop;
 using Unosquare.FFplaySharp.Primitives;
 
-public unsafe sealed class FFFormatContext : CountedReference<AVFormatContext>
+public unsafe sealed class FFFormatContext :
+    CountedReference<AVFormatContext>
 {
+    private readonly AVIOInterruptCB_callback NativeInterruptCallback;
+
     public FFFormatContext([CallerFilePath] string? filePath = default, [CallerLineNumber] int? lineNumber = default)
         : base(ffmpeg.avformat_alloc_context(), filePath, lineNumber)
     {
-        Streams = new(this);
-        Chapters = new(this);
+        NativeInterruptCallback = new(InputInterrupt);
+        Reference->interrupt_callback.callback = NativeInterruptCallback;
     }
 
-    public AVIOInterruptCB_callback_func InterruptCallback
-    {
-        get => Reference->interrupt_callback.callback;
-        set => Reference->interrupt_callback.callback = value;
-    }
+    /// <summary>
+    /// Gets or sets the IO interrupt callback delegate.
+    /// </summary>
+    public FormatContextInterruptCallback? InterruptCallback { get; set; }
 
-    public StreamSet Streams { get; }
+    public StreamSet Streams => new(this);
 
-    public ChapterSet Chapters { get; }
+    public ChapterSet Chapters => new(this);
 
     public FFInputFormat? InputFormat => Reference->iformat is not null
         ? new(Reference->iformat)
@@ -277,5 +279,19 @@ public unsafe sealed class FFFormatContext : CountedReference<AVFormatContext>
         }
 
         return result;
+    }
+
+    /// <summary>
+    /// A managed wrapper for <see cref="AVIOInterruptCB"/>.
+    /// </summary>
+    /// <param name="opaque">An opaque reference that is set when a function is blocking.</param>
+    /// <returns>0 to continue. Anything non-zero to break.</returns>
+    private int InputInterrupt(void* opaque)
+    {
+        var callback = InterruptCallback;
+        if (callback is null)
+            return 0;
+
+        return callback(new OpaqueReference(opaque));
     }
 }

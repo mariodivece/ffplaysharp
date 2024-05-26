@@ -1,12 +1,13 @@
 ﻿namespace Unosquare.FFplaySharp.Interop;
 
-
 /// <summary>
 /// A base implementation of a class that wraps a
 /// pointer to an unmanaged data structure.
 /// </summary>
 /// <typeparam name="T">Generic type parameter.</typeparam>
-public abstract unsafe class NativeReference<T> : INativeReference<T>, IUpdateableReference<T>
+public abstract unsafe class NativeReference<T> :
+    INativeReference<T>,
+    IUpdateableReference<T>
     where T : unmanaged
 {
     private nint _Address = nint.Zero;

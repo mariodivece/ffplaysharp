@@ -2,7 +2,7 @@
 
 public unsafe class MediaContainer
 {
-    private readonly AVIOInterruptCB_callback InputInterruptCallback;
+    private readonly FormatContextInterruptCallback InputInterruptCallback;
 
     private FFInputFormat InputFormat;
     private Thread ReadingThread;
@@ -556,7 +556,7 @@ public unsafe class MediaContainer
         ReadingThread.Start();
     }
 
-    private int InputInterrupt(void* opaque) => IsAbortRequested ? 1 : 0;
+    private int InputInterrupt(INativeReference blockingObject) => IsAbortRequested ? 1 : 0;
 
     /// <summary>
     /// Port of stream_seek. Not exposed to improve on code readability.
