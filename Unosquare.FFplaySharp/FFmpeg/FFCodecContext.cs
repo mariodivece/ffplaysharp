@@ -54,8 +54,7 @@ public unsafe sealed class FFCodecContext : CountedReference<AVCodecContext>
             throw new ArgumentNullException(nameof(stream));
 
         var resultCode = ffmpeg.avcodec_parameters_to_context(this, stream.CodecParameters);
-        if (resultCode < 0)
-            throw new FFmpegException(resultCode, "Unable to apply stream parameters");
+        FFmpegException.ThrowOnError(resultCode, "Unable to apply stream parameters");
     }
 
     public int ReceiveFrame(FFFrame frame) => frame is null || frame.IsVoid()
@@ -81,17 +80,13 @@ public unsafe sealed class FFCodecContext : CountedReference<AVCodecContext>
 
     public void Open(FFCodec codec, FFDictionary codecOptions)
     {
-        ArgumentNullException.ThrowIfNull((object?)codecOptions);
-
-        if (codec.IsVoid())
-            throw new ArgumentNullException(nameof(codec));
+        NativeArgumentException.ThrowIfNullOrEmpty(codec);
+        NativeArgumentException.ThrowIfNull(codecOptions);
 
         int resultCode;
-        using var codecOptionsArg = codecOptions.AsDoublePointer();
-        resultCode = ffmpeg.avcodec_open2(this, codec, codecOptionsArg);
-
-        if (resultCode < 0)
-            throw new FFmpegException(resultCode, $"Could not open codec '{codec.Name}'");
+        using var codecOptionsPtr = codecOptions.AsDoublePointer();
+        resultCode = ffmpeg.avcodec_open2(this, codec, codecOptionsPtr);
+        FFmpegException.ThrowOnError(resultCode, $"Could not open codec '{codec.Name}'");
     }
 
     protected override unsafe void DisposeNative(AVCodecContext* target) =>

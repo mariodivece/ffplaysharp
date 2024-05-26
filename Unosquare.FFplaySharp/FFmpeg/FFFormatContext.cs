@@ -110,8 +110,8 @@ public unsafe sealed class FFFormatContext : CountedReference<AVFormatContext>
         const string ScanAllPmtsKey = "scan_all_pmts";
 
         ArgumentNullException.ThrowIfNull(filePath);
-        ArgumentNullException.ThrowIfNull((object?)format);
-        ArgumentNullException.ThrowIfNull((object?)formatOptions);
+        NativeArgumentException.ThrowIfNull(format);
+        NativeArgumentException.ThrowIfNull(formatOptions);
 
         var isScanAllPmtsSet = false;
         if (!formatOptions.ContainsKey(ScanAllPmtsKey))
@@ -125,7 +125,7 @@ public unsafe sealed class FFFormatContext : CountedReference<AVFormatContext>
         using (var formatOptionsPtr = formatOptions.AsDoublePointer())
             resultCode = ffmpeg.avformat_open_input(contextPtr, filePath, format, formatOptionsPtr);
         
-        if (this.IsValid())
+        if (!IsEmpty)
             format = new(Reference->iformat);
 
         if (isScanAllPmtsSet)

@@ -35,7 +35,11 @@ public static unsafe class InteropExtensions
     public static T* AllocateNativeMemory<T>(ulong elementCount) where T : unmanaged =>
         (T*)ffmpeg.av_mallocz((ulong)sizeof(T) * elementCount);
 
-    public static void FreeNativeMemory(void* target) =>
-        ffmpeg.av_free(target);
+    public static void FreeNativeMemory(void* target)
+    {
+        if (target is null)
+            return;
 
+        ffmpeg.av_free(target);
+    }
 }

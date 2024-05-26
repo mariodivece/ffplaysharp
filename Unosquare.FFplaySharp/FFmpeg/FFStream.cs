@@ -67,7 +67,7 @@ public unsafe sealed class FFStream : NativeReference<AVStream>
 
     public double ComputeDisplayRotation(FFFrame decoderFrame)
     {
-        ArgumentNullException.ThrowIfNull((object?)decoderFrame);
+        NativeArgumentException.ThrowIfNullOrEmpty(decoderFrame);
 
         int* displayMatrix = null;
         var sd = ffmpeg.av_frame_get_side_data(decoderFrame, AVFrameSideDataType.AV_FRAME_DATA_DISPLAYMATRIX);

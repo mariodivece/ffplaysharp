@@ -6,19 +6,42 @@ public unsafe sealed class ByteBuffer : CountedReference<byte>
         : base(InteropExtensions.AllocateNativeMemory<byte>(length), filePath, lineNumber)
     {
         Length = length;
+        AllocatedLength = length;
     }
 
     public ulong Length { get; private set; }
 
-    public static ByteBuffer Reallocate(ByteBuffer? original, ulong length)
+    public ulong AllocatedLength { get; private set; }
+
+    public void Reallocate(ulong length)
     {
-        if (original is null || original.IsVoid() || original.Length < length)
+        ObjectDisposedException.ThrowIf(IsDisposed, this);
+
+        if (AllocatedLength < length)
         {
-            original?.Dispose();
-            return new(length);
+            var buffer = InteropExtensions.AllocateNativeMemory<byte>(length);
+            if (!IsEmpty && Length > 0)
+            {
+                Buffer.MemoryCopy(this, buffer, Length, Length);
+                DisposeNative(this);
+                AllocatedLength = length;
+                UpdatePointer(buffer);
+            }
         }
 
-        return original;
+        Length = length;
+    }
+
+    public void Clear()
+    {
+        ObjectDisposedException.ThrowIf(IsDisposed, this);
+        NativeMemory.Clear(this, (nuint)AllocatedLength);
+    }
+
+    public Span<byte> AsSpan()
+    {
+        ObjectDisposedException.ThrowIf(IsDisposed, this);
+        return new(this, (int)Length);
     }
 
     public void Write(byte* source, int length)
@@ -31,5 +54,6 @@ public unsafe sealed class ByteBuffer : CountedReference<byte>
     {
         InteropExtensions.FreeNativeMemory(this);
         Length = 0;
+        AllocatedLength = 0;
     }
 }

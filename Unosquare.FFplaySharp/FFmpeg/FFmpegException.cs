@@ -16,6 +16,20 @@ public class FFmpegException : Exception
 
     public int ErrorCode { get; }
 
+    [MethodImpl(MethodImplOptions.AggressiveInlining)]
+    public static void ThrowOnError(int resultCode)
+    {
+        if (resultCode < 0)
+            throw new FFmpegException(resultCode);
+    }
+
+    [MethodImpl(MethodImplOptions.AggressiveInlining)]
+    public static void ThrowOnError(int resultCode, string userMessage)
+    {
+        if (resultCode < 0)
+            throw new FFmpegException(resultCode, userMessage);
+    }
+
     /// <summary>
     /// Port of print_error. Gets a string representation of an FFmpeg error code.
     /// </summary>

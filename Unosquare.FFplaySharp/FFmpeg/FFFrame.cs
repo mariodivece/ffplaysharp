@@ -71,8 +71,7 @@ public unsafe sealed class FFFrame : CountedReference<AVFrame>
 
     public void MoveTo(FFFrame? destination)
     {
-        ArgumentNullException.ThrowIfNull((object?)destination);
-        ArgumentNullException.ThrowIfNull((void*)destination);
+        NativeArgumentException.ThrowIfNullOrEmpty(destination);
         ffmpeg.av_frame_move_ref(destination, this);
     }
 

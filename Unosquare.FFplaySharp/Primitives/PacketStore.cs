@@ -141,7 +141,7 @@ public sealed class PacketStore :
     /// <returns>True when the operation succeeds. False otherwise.</returns>
     public bool Enqueue(FFPacket packet)
     {
-        ArgumentNullException.ThrowIfNull((object?)packet);
+        NativeArgumentException.ThrowIfNullOrEmpty(packet);
 
         if (IsClosed)
         {
