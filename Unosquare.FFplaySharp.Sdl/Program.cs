@@ -1,4 +1,8 @@
-﻿Helpers.SetFFmpegRootPath(@"C:\ffmpeg\x64");
+﻿using FFmpegBindings = FFmpeg.AutoGen.Bindings.DynamicallyLoaded.DynamicallyLoadedBindings;
+
+FFmpegBindings.LibrariesPath = @"C:\ffmpeg\x64";
+FFmpegBindings.Initialize();
+
 FFLog.Flags = ffmpeg.AV_LOG_SKIP_REPEATED;
 FFLog.Level = ffmpeg.AV_LOG_VERBOSE;
 

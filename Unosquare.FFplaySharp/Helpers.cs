@@ -1,13 +1,7 @@
-﻿using Unosquare.FFplaySharp.Interop;
-
-namespace Unosquare.FFplaySharp;
+﻿namespace Unosquare.FFplaySharp;
 
 public static class Helpers
 {
-    private const string FFmpegDirectory = @"c:\ffmpeg\x64";
-
-    public static void SetFFmpegRootPath(string path = FFmpegDirectory) => ffmpeg.RootPath = path;
-
     [MethodImpl(MethodImplOptions.AggressiveInlining)]
     public static bool HasFlag(this int flagsVariable, int flagValue) => (flagsVariable & flagValue) != 0;
 

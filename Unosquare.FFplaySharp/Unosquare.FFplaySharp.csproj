@@ -10,7 +10,7 @@
 	</PropertyGroup>
 
 	<ItemGroup>
-		<PackageReference Include="FFmpeg.AutoGen" Version="7.0.0" />
+		<PackageReference Include="FFmpeg.AutoGen.Abstractions" Version="7.0.0" />
 		<PackageReference Include="Unosquare.Hpet" Version="1.0.0-alpha.4" />
 	</ItemGroup>
 

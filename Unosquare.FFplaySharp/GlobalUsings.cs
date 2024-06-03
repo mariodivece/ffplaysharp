@@ -1,6 +1,6 @@
 ﻿global using FFmpeg;
 global using FFmpeg.Collections;
-global using FFmpeg.AutoGen;
+global using FFmpeg.AutoGen.Abstractions;
 global using System.Collections;
 global using System.Diagnostics;
 global using System.Diagnostics.CodeAnalysis;

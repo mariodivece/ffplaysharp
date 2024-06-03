@@ -1,4 +1,4 @@
-﻿using FFmpeg.AutoGen;
+﻿using FFmpeg.AutoGen.Abstractions;
 using Unosquare.FFplaySharp.Interop;
 using Unosquare.FFplaySharp.Primitives;
 using Unosquare.FFplaySharp.WinWave.Audio;

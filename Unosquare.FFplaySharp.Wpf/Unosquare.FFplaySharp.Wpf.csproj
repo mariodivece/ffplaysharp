@@ -14,4 +14,8 @@
 		<ProjectReference Include="..\Unosquare.FFplaySharp\Unosquare.FFplaySharp.csproj" />
 	</ItemGroup>
 
+	<ItemGroup>
+		<PackageReference Include="FFmpeg.AutoGen.Bindings.DynamicallyLoaded" Version="7.0.0" />
+	</ItemGroup>
+	
 </Project>

@@ -18,7 +18,7 @@ public unsafe sealed class FFSubtitleRect : NativeReference<AVSubtitleRect>
 
     public int H => Reference->h;
 
-    public byte_ptrArray4 Data => Reference->data;
+    public byte_ptr4 Data => Reference->data;
 
-    public int_array4 LineSize => Reference->linesize;
+    public int4 LineSize => Reference->linesize;
 }

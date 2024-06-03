@@ -1,7 +1,7 @@
 using Avalonia;
 using Avalonia.Controls.ApplicationLifetimes;
 using Avalonia.Markup.Xaml;
-using FFmpeg.AutoGen;
+using FFmpegBindings = FFmpeg.AutoGen.Bindings.DynamicallyLoaded.DynamicallyLoadedBindings;
 using FFmpeg;
 
 namespace Unosquare.FFplaySharp.Avalonia
@@ -26,7 +26,9 @@ namespace Unosquare.FFplaySharp.Avalonia
 
         private void HandleStartup(object? sender, ControlledApplicationLifetimeStartupEventArgs e)
         {
-            Helpers.SetFFmpegRootPath(@"C:\ffmpeg\x64");
+            FFmpegBindings.LibrariesPath = @"C:\ffmpeg\x64";
+            FFmpegBindings.Initialize();
+            
             FFLog.Flags = ffmpeg.AV_LOG_SKIP_REPEATED;
             FFLog.Level = ffmpeg.AV_LOG_VERBOSE;
 

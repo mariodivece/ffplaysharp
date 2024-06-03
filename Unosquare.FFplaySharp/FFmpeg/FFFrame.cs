@@ -23,11 +23,11 @@ public unsafe sealed class FFFrame : CountedReference<AVFrame>
 
     public AVPixelFormat PixelFormat => (AVPixelFormat)Reference->format;
 
-    public int_array8 LineSize => Reference->linesize;
+    public int8 LineSize => Reference->linesize;
 
-    public int_array8 PixelStride => LineSize;
+    public int8 PixelStride => LineSize;
 
-    public byte_ptrArray8 Data => Reference->data;
+    public byte_ptr8 Data => Reference->data;
 
     public int Width => Reference->width;
 

@@ -14,6 +14,10 @@
 	</ItemGroup>
 
 	<ItemGroup>
+		<PackageReference Include="FFmpeg.AutoGen.Bindings.DynamicallyLoaded" Version="7.0.0" />
+	</ItemGroup>
+	
+	<ItemGroup>
 	  <None Update="SDL2.dll">
 	    <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
 	  </None>

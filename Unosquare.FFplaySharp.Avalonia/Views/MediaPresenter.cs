@@ -257,10 +257,10 @@ internal class MediaPresenter : VideoPresenterBase, IPresenter
                 return true;
             }
 
-            var sourceData = new byte_ptrArray4() { [0] = source.Frame.Data[0] };
-            var targetData = new byte_ptrArray4() { [0] = (byte*)target.Buffer };
-            var sourceStride = new long_array4() { [0] = source.Frame.LineSize[0] };
-            var targetStride = new long_array4() { [0] = target.Stride };
+            var sourceData = new byte_ptr4() { [0] = source.Frame.Data[0] };
+            var targetData = new byte_ptr4() { [0] = (byte*)target.Buffer };
+            var sourceStride = new long4() { [0] = source.Frame.LineSize[0] };
+            var targetStride = new long4() { [0] = target.Stride };
 
             // This is FFmpeg's way of copying pictures.
             // The av_image_copy_uc_from is slightly faster than

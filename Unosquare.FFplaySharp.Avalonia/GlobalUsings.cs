@@ -1,0 +1,1 @@
+﻿global using FFmpeg.AutoGen.Abstractions;

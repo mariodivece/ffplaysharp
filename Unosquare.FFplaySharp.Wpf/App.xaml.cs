@@ -1,4 +1,5 @@
 ﻿namespace Unosquare.FFplaySharp.Wpf;
+using FFmpegBindings = FFmpeg.AutoGen.Bindings.DynamicallyLoaded.DynamicallyLoadedBindings;
 
 /// <summary>
 /// Interaction logic for App.xaml
@@ -7,7 +8,9 @@ public partial class App : Application
 {
     protected override void OnStartup(StartupEventArgs e)
     {
-        Helpers.SetFFmpegRootPath(@"C:\ffmpeg\x64");
+        FFmpegBindings.LibrariesPath = @"C:\ffmpeg\x64";
+        FFmpegBindings.Initialize();
+
         FFLog.Flags = ffmpeg.AV_LOG_SKIP_REPEATED;
         FFLog.Level = ffmpeg.AV_LOG_VERBOSE;
 

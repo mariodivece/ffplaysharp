@@ -29,7 +29,7 @@ public unsafe sealed class RescalerContext : CountedReference<SwsContext>
     public int Convert(byte*[] inPlanes, int[] inStrides, int inH, IntPtr outPixels, int outStride)
     {
         var targetStride = new[] { outStride };
-        var targetScan = default(byte_ptrArray8);
+        var targetScan = default(byte_ptr8);
         targetScan[0] = (byte*)outPixels.ToPointer();
 
         return ffmpeg.sws_scale(Reference, inPlanes, inStrides, 0, inH, targetScan, targetStride);
